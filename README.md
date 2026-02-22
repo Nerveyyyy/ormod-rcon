@@ -122,7 +122,7 @@ cd ormod-rcon
 # Place game binary in docker/game-binary/
 mkdir -p docker/game-binary
 cp -r /path/to/ormod-server/* docker/game-binary/
-chmod +x docker/game-binary/ORMODDirective
+chmod +x docker/game-binary/ORMODDirective   # adjust if your binary has a different name
 
 # Configure (GAME_BINARY_PATH and SAVES_PATH can be left at defaults)
 cp .env.example .env
@@ -143,10 +143,12 @@ All settings live in `.env` (copied from `.env.example`):
 |---|---|---|
 | `JWT_SECRET` | *(required)* | Random secret for sessions — run `openssl rand -hex 32` |
 | `SERVER_NAME` | `MyOrmodServer` | Passed as `-servername` to the game binary |
-| `GAME_PORT` | `27015` | UDP port Docker forwards from the host (actual value set in `serversettings.json`) |
-| `QUERY_PORT` | `27016` | UDP query port Docker forwards from the host |
-| `GAME_CONTAINER_NAME` | `ormod-game` | Docker container name for the game |
+| `GAME_BINARY_NAME` | `ORMODDirective` | Filename of the server executable inside `GAME_BINARY_PATH`. Change if your binary has a different name (e.g. `dedicated`) |
 | `GAME_BINARY_PATH` | `./docker/game-binary` | Host path to the game binary directory |
+| `GAME_PORT` | `27015` | UDP game port. Must match `serversettings.json` — Docker forwards this port from the host |
+| `QUERY_PORT` | `27016` | UDP query port. Must match `serversettings.json` |
+| `GAME_HOST` | `0.0.0.0` | Host IP to bind game ports to. Set to a specific IP to expose game traffic on one NIC only |
+| `GAME_CONTAINER_NAME` | `ormod-game` | Docker container name for the game |
 | `SAVES_PATH` | *(named volume)* | Host path for save data. Leave unset for a Docker-managed named volume, or set to a host path (e.g. `../configs`) for direct access |
 | `DASHBOARD_HOST` | `0.0.0.0` | Host IP the dashboard binds to. Set to a specific IP to restrict to one interface |
 | `DASHBOARD_PORT` | `3000` | Host port for the dashboard |
@@ -156,20 +158,24 @@ All settings live in `.env` (copied from `.env.example`):
 
 ## IP Binding
 
-`DASHBOARD_HOST` controls which network interface the dashboard is exposed on:
+Both services support independent host IP binding so you can expose them on different network interfaces:
 
 ```env
-# All interfaces (default — reachable from any IP on the machine)
-DASHBOARD_HOST=0.0.0.0
+# Game server — bind to a specific public NIC
+GAME_HOST=203.0.113.5
 
-# LAN interface only
+# Dashboard — bind to LAN only (players never need to reach this)
 DASHBOARD_HOST=10.0.0.1
-
-# Localhost only (useful behind a reverse proxy)
-DASHBOARD_HOST=127.0.0.1
 ```
 
-The game server ports (`GAME_PORT`, `QUERY_PORT`) are bound to all interfaces by default. To restrict them, edit the `ports:` entries in `docker-compose.yml` directly.
+Common patterns:
+
+| Scenario | `GAME_HOST` | `DASHBOARD_HOST` |
+|---|---|---|
+| All interfaces (default) | `0.0.0.0` | `0.0.0.0` |
+| Public game, LAN dashboard | `0.0.0.0` | `10.0.0.1` |
+| Single public NIC | `203.0.113.5` | `203.0.113.5` |
+| Behind reverse proxy | `0.0.0.0` | `127.0.0.1` |
 
 ---
 

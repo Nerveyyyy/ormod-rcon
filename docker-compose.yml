@@ -4,8 +4,12 @@ services:
   # Thin container running the ORMOD: Directive dedicated server binary.
   #
   # GAME_BINARY_PATH  — host path to the game binary directory (bind-mounted
-  #                     read-only into the container). Default: ./docker/game-binary
+  #                     into the container). Default: ./docker/game-binary
   #                     Dedi-box layout: set to ../server in .env
+  #
+  # GAME_BINARY_NAME  — filename of the server executable inside that directory.
+  #                     Default: ORMODDirective
+  #                     Change if your binary has a different name (e.g. dedicated).
   #
   # SAVES_PATH        — host path for save data / server config files.
   #                     Default: named volume `game-saves` (Docker managed).
@@ -13,6 +17,15 @@ services:
   #                     When set to a host path, files are directly accessible
   #                     on the host filesystem. Ensure the directory is writable
   #                     by UID 1000 (steam) before starting.
+  #
+  # GAME_HOST         — host IP to bind the game ports to.
+  #                     Default: 0.0.0.0 (all interfaces).
+  #                     Set to a specific IP to bind game traffic to one NIC,
+  #                     e.g. a public interface while the dashboard is LAN-only.
+  #
+  # GAME_PORT /       — UDP ports the game listens on (set in serversettings.json).
+  # QUERY_PORT          These values tell Docker which ports to forward from the
+  #                     host. Keep them in sync with serversettings.json.
   #
   # Future: when the game ships on Steam, swap Dockerfile.gameserver to
   # SteamCMD and remove the GAME_BINARY_PATH volume entry below.
@@ -24,12 +37,16 @@ services:
     restart: unless-stopped
     environment:
       SERVER_NAME: ${SERVER_NAME:-MyOrmodServer}
+      GAME_BINARY_NAME: ${GAME_BINARY_NAME:-ORMODDirective}
     volumes:
-      - ${GAME_BINARY_PATH:-./docker/game-binary}:/home/steam/ormod     # game binary (read-only recommended)
-      - ${SAVES_PATH:-game-saves}:/home/steam/.config/ORMOD/Saves        # save data / server configs
+      - ${GAME_BINARY_PATH:-./docker/game-binary}:/home/steam/ormod         # game binary directory
+      - ${SAVES_PATH:-game-saves}:/home/steam/.config/ORMOD/Saves            # save data / server configs
     ports:
-      - "${GAME_PORT:-27015}:27015/udp"
-      - "${QUERY_PORT:-27016}:27016/udp"
+      # Host:container ports use the same value — the game's actual port is set
+      # in serversettings.json; GAME_PORT / QUERY_PORT just document that value
+      # and tell Docker which ports to forward.
+      - "${GAME_HOST:-0.0.0.0}:${GAME_PORT:-27015}:${GAME_PORT:-27015}/udp"
+      - "${GAME_HOST:-0.0.0.0}:${QUERY_PORT:-27016}:${QUERY_PORT:-27016}/udp"
     stdin_open: true   # Required: Docker exec writes to stdin for commands
     tty: true
 
@@ -61,10 +78,10 @@ services:
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
       DASHBOARD_HOST: ${DASHBOARD_HOST:-0.0.0.0}
     volumes:
-      - ./data:/data                                                       # SQLite database
-      - ${SAVES_PATH:-game-saves}:/saves                                   # Shared save files (read-write)
-      - ./backups:/backups                                                 # Pre-wipe backup archives
-      - /var/run/docker.sock:/var/run/docker.sock                         # Docker API (process mgmt)
+      - ./data:/data                                                         # SQLite database
+      - ${SAVES_PATH:-game-saves}:/saves                                     # Shared save files (read-write)
+      - ./backups:/backups                                                   # Pre-wipe backup archives
+      - /var/run/docker.sock:/var/run/docker.sock                           # Docker API (process mgmt)
     ports:
       - "${DASHBOARD_HOST:-0.0.0.0}:${DASHBOARD_PORT:-3000}:3000"
 
