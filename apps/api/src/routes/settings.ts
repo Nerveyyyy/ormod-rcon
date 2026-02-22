@@ -22,6 +22,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     if (!server) return reply.status(404).send({ error: 'Server not found' });
     const io = new FileIOService(server.savePath);
     await io.writeSettings(req.body);
+    // Keep server.mode in sync so Dashboard shows the correct game type after
+    // a page refresh even if the game recreates serversettings.json on restart.
+    if (req.body.ServerType !== undefined) {
+      await prisma.server.update({
+        where: { id: req.params.id },
+        data:  { mode: String(req.body.ServerType) },
+      });
+    }
     return { ok: true };
   });
 
@@ -33,6 +41,14 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     const current = await io.readSettings();
     current[req.params.key] = req.body.value;
     await io.writeSettings(current);
+    // Keep server.mode in sync so Dashboard shows the correct game type after
+    // a page refresh even if the game recreates serversettings.json on restart.
+    if (req.params.key === 'ServerType') {
+      await prisma.server.update({
+        where: { id: req.params.id },
+        data:  { mode: String(req.body.value) },
+      });
+    }
     return { ok: true, key: req.params.key, value: req.body.value };
   });
 };

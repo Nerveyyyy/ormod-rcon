@@ -40,7 +40,8 @@ export default function Dashboard() {
   };
 
   const maxPlayers       = settings?.MaxPlayers ?? '—';
-  const gameType         = settings?.ServerType  ?? '—';
+  // Prefer mode from DB (persists across game restarts) with file as fallback
+  const gameType         = activeServer?.mode || settings?.ServerType || '—';
   const enabledSchedules = schedules.filter(s => s.enabled);
 
   return (

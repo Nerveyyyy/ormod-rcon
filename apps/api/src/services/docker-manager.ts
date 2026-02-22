@@ -120,55 +120,71 @@ class DockerManager {
     return this.runningContainers.has(serverId);
   }
 
-  // ── Command dispatch (Docker exec → /proc/1/fd/0 → game stdin) ──────────
+  // ── Command dispatch (Docker attach → PTY master → game stdin) ───────────
 
   /**
-   * Write a command to the game container's stdin via Docker exec.
+   * Write a command to the game container's stdin via Docker attach.
    *
-   * Spawns a short-lived `sh` process inside the container that writes the
-   * command to /proc/1/fd/0 — the game binary's stdin file descriptor (PID 1
-   * because the entrypoint uses `exec`).  The command is passed via an env
-   * var to avoid any shell-escaping issues with special characters.
+   * With tty: true the container has a pseudo-terminal.  PID 1 (the game)
+   * holds the PTY slave as its stdin; Docker holds the PTY master.
    *
-   * This approach is more reliable than the Docker attach+HTTP-Upgrade method
-   * because it goes through the standard exec API (proper HTTP status codes,
-   * no raw socket protocol) and writes directly to the kernel pipe that the
-   * game is already reading from.
+   * The attach API (POST /containers/{name}/attach?stdin=1&stream=1) performs
+   * an HTTP Upgrade so the caller gets direct socket access to the PTY master.
+   * Writing cmd\n to that socket is identical to the user typing the command
+   * in `docker attach` — the PTY line discipline delivers it to the game's
+   * Console.ReadLine() call.
    *
-   * Requires: sh available in the game container (true for Ubuntu base).
+   * /proc/1/fd/0 is the PTY slave — writing there goes in the OUTPUT direction
+   * and never reaches the game's read(), which is why it was silently ignored.
    */
   async sendCommand(serverId: string, cmd: string): Promise<void> {
     const name = await this.getContainerName(serverId);
 
-    // Step 1: Create an exec instance.
-    const createRes = await dockerRequest(
-      'POST',
-      `/containers/${name}/exec`,
-      {
-        Cmd:          ['sh', '-c', 'printf "%s\n" "$ORMOD_CMD" > /proc/1/fd/0'],
-        Env:          [`ORMOD_CMD=${cmd}`],
-        AttachStdin:  false,
-        AttachStdout: false,
-        AttachStderr: false,
-      }
-    ) as { Id?: string; message?: string };
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: (() => void) | ((e: Error) => void), arg?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        arg ? (fn as (e: Error) => void)(arg) : (fn as () => void)();
+      };
 
-    if (!createRes.Id) {
-      throw new Error(
-        createRes.message ?? 'Docker exec create failed — container may not be running'
-      );
-    }
+      const timer = setTimeout(() => {
+        req.destroy();
+        settle(reject, new Error('sendCommand: timed out after 5 s'));
+      }, 5000);
 
-    // Step 2: Start detached — fire and forget, sh exits immediately.
-    const startRes = await dockerRequest(
-      'POST',
-      `/exec/${createRes.Id}/start`,
-      { Detach: true }
-    ) as { message?: string };
+      const req = http.request({
+        socketPath: DOCKER_SOCKET,
+        method:     'POST',
+        path:       `/containers/${name}/attach?stdin=1&stream=1&stdout=0&stderr=0`,
+        headers: {
+          'Content-Type': 'application/vnd.docker.raw-stream',
+          'Connection':   'Upgrade',
+          'Upgrade':      'tcp',
+        },
+      });
 
-    if (startRes.message) {
-      throw new Error(startRes.message);
-    }
+      // 101 Switching Protocols → socket is now the raw PTY master connection
+      req.on('upgrade', (_res, socket) => {
+        socket.write(`${cmd}\n`, (err) => {
+          socket.end();
+          if (err) settle(reject, err as Error); else settle(resolve);
+        });
+      });
+
+      // Non-101 response means the container isn't running or attach failed
+      req.on('response', (res) => {
+        let body = '';
+        res.on('data', (chunk: string) => { body += chunk; });
+        res.on('end', () =>
+          settle(reject, new Error(`Docker attach ${res.statusCode}: ${body.trim()}`))
+        );
+      });
+
+      req.on('error', (err: Error) => settle(reject, err));
+      req.end();
+    });
   }
 
   // ── Log streaming ─────────────────────────────────────────────────────
