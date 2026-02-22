@@ -76,7 +76,9 @@ services:
       PORT: 3000
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
-      DASHBOARD_HOST: ${DASHBOARD_HOST:-0.0.0.0}
+      # DASHBOARD_HOST is intentionally NOT passed into the container — it is
+      # used only by the ports: mapping below to control host-side IP binding.
+      # Fastify always binds to 0.0.0.0 inside the container.
     volumes:
       - ./data:/data                                                         # SQLite database
       - ${SAVES_PATH:-game-saves}:/saves                                     # Shared save files (read-write)

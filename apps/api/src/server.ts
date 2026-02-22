@@ -17,9 +17,8 @@ import { consoleRoutes, consoleWsRoutes } from './routes/console.js';
 import { wipeRoutes }        from './routes/wipe.js';
 import { scheduleRoutes, registerCronJob } from './routes/schedule.js';
 
-const PORT           = Number(process.env.PORT ?? 3001);
-const HOST           = process.env.DASHBOARD_HOST ?? '0.0.0.0';
-const CORS_ORIGIN    = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
+const PORT        = Number(process.env.PORT ?? 3001);
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
 const STATIC_PATH    = process.env.STATIC_PATH; // set in Docker; absent in local dev
 
 const app = Fastify({ logger: true });
@@ -60,7 +59,9 @@ if (STATIC_PATH) {
 }
 
 try {
-  await app.listen({ port: PORT, host: HOST });
+  // Always bind to 0.0.0.0 inside the container — host-level IP restriction
+  // is handled by Docker's ports: mapping (DASHBOARD_HOST in docker-compose.yml).
+  await app.listen({ port: PORT, host: '0.0.0.0' });
 
   // Reconnect log streams for any game containers already running
   await dockerManager.reconnect();
