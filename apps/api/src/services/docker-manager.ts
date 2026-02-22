@@ -13,6 +13,7 @@
  */
 
 import http from 'http';
+import net  from 'net';
 import { EventEmitter } from 'events';
 import prisma from '../db/prisma-client.js';
 
@@ -120,33 +121,55 @@ class DockerManager {
     return this.runningContainers.has(serverId);
   }
 
-  // ── Command dispatch (docker exec → /proc/1/fd/0) ─────────────────────
+  // ── Command dispatch (Docker attach → container stdin) ────────────────
 
   /**
-   * Write a command to the game container's stdin via docker exec.
-   * Uses /proc/1/fd/0 to write to the game process (PID 1) stdin.
+   * Write a command to the game container's stdin via the Docker attach API.
    *
-   * cmd is passed as a shell positional argument ($1) to prevent injection.
-   * Requires: `stdin_open: true` and `tty: true` in docker-compose.yml.
+   * Uses a raw TCP socket to the Docker Unix socket to send an HTTP Upgrade
+   * request (the attach endpoint hijacks the connection after the 101
+   * response), then writes the command line directly to container stdin.
+   *
+   * This is the correct approach for non-TTY containers (tty: false in
+   * docker-compose.yml). The /proc/1/fd/0 exec trick only works reliably
+   * for TTY containers and breaks log stream framing if tty: true is set.
+   *
+   * Requires: `stdin_open: true` in docker-compose.yml.
    */
   async sendCommand(serverId: string, cmd: string): Promise<void> {
     const name = await this.getContainerName(serverId);
 
-    // Create exec instance — cmd passed as $1, not interpolated into script
-    const execCreate = await dockerRequest('POST', `/containers/${name}/exec`, {
-      AttachStdin:  false,
-      AttachStdout: false,
-      AttachStderr: false,
-      Tty:          false,
-      Cmd: ['sh', '-c', 'printf "%s\\n" "$1" > /proc/1/fd/0', 'sh', cmd],
-    }) as { Id?: string };
+    return new Promise<void>((resolve, reject) => {
+      const socket = net.createConnection(DOCKER_SOCKET);
 
-    if (!execCreate?.Id) {
-      throw new Error(`Failed to create exec instance on container "${name}"`);
-    }
+      // HTTP/1.1 upgrade request — Docker responds with 101 then keeps the
+      // connection open as a bidirectional raw stream to container stdin.
+      const httpRequest =
+        `POST /containers/${name}/attach?stream=1&stdin=1 HTTP/1.1\r\n` +
+        `Host: localhost\r\n` +
+        `Connection: Upgrade\r\n` +
+        `Upgrade: tcp\r\n` +
+        `\r\n`;
 
-    // Start the exec (detached — we don't await output)
-    await dockerRequest('POST', `/exec/${execCreate.Id}/start`, { Detach: true });
+      let headerConsumed = false;
+
+      socket.once('connect', () => socket.write(httpRequest));
+
+      socket.on('data', () => {
+        if (headerConsumed) return;
+        headerConsumed = true;
+        // HTTP 101 received — stream is live. Write command then close cleanly.
+        socket.write(`${cmd}\n`, () => {
+          socket.end();
+          resolve();
+        });
+      });
+
+      socket.on('error', (err: Error) => {
+        socket.destroy();
+        reject(err);
+      });
+    });
   }
 
   // ── Log streaming ─────────────────────────────────────────────────────
