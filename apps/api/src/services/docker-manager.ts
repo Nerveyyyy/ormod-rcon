@@ -142,6 +142,21 @@ class DockerManager {
     return new Promise<void>((resolve, reject) => {
       const socket = net.createConnection(DOCKER_SOCKET);
 
+      // Guard: only settle the promise once (prevents double-resolve/reject).
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        fn();
+      };
+
+      // Reject if Docker never responds within 10 s.
+      const timeoutId = setTimeout(() => {
+        socket.destroy();
+        settle(() => reject(new Error('Docker attach timed out after 10s')));
+      }, 10_000);
+
       // HTTP/1.1 upgrade request — Docker responds with 101 then keeps the
       // connection open as a bidirectional raw stream to container stdin.
       const httpRequest =
@@ -151,23 +166,43 @@ class DockerManager {
         `Upgrade: tcp\r\n` +
         `\r\n`;
 
-      let headerConsumed = false;
+      let headerBuf  = '';
+      let headersDone = false;
 
       socket.once('connect', () => socket.write(httpRequest));
 
-      socket.on('data', () => {
-        if (headerConsumed) return;
-        headerConsumed = true;
-        // HTTP 101 received — stream is live. Write command then close cleanly.
+      socket.on('data', (chunk: Buffer) => {
+        if (headersDone) return;
+
+        // Accumulate until we have a complete HTTP response header block.
+        headerBuf += chunk.toString('binary');
+        const headerEnd = headerBuf.indexOf('\r\n\r\n');
+        if (headerEnd === -1) return;
+
+        headersDone = true;
+
+        // Check HTTP status — must be 101 (upgrade) or 200 (older Docker).
+        const statusLine = headerBuf.split('\r\n')[0];
+        const statusCode = parseInt(statusLine.split(' ')[1] ?? '0', 10);
+
+        if (statusCode !== 101 && statusCode !== 200) {
+          socket.destroy();
+          settle(() => reject(new Error(
+            `Docker attach failed (${statusCode}): ${statusLine.trim()}`
+          )));
+          return;
+        }
+
+        // Successfully hijacked — write command then close cleanly.
         socket.write(`${cmd}\n`, () => {
           socket.end();
-          resolve();
+          settle(() => resolve());
         });
       });
 
       socket.on('error', (err: Error) => {
         socket.destroy();
-        reject(err);
+        settle(() => reject(err));
       });
     });
   }

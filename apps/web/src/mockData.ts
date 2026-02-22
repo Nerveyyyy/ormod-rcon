@@ -82,7 +82,7 @@ export const settingGroups = [
       { key: 'WorldName',       name: 'World Name',         desc: 'Save name for this world',                                              type: 'text',   value: 'My Survival World'           },
       { key: 'SaveInterval',    name: 'Save Interval',      desc: 'How often the world auto-saves (seconds)',                             type: 'number', value: 120                           },
       { key: 'IsHardcore',      name: 'Hardcore Mode',      desc: 'Enable unforgiving Hardcore rules',                                    type: 'bool',   value: false                         },
-      { key: 'GameType',        name: 'Game Type',          desc: 'Cooperative (PvE focused), PVP, Creative, or Arena',                  type: 'select', value: 'ServerType.Cooperative', options: ['ServerType.Cooperative','ServerType.PVP','ServerType.Creative','ServerType.Arena'] },
+      { key: 'ServerType',      name: 'Game Type',          desc: 'Cooperative (PvE focused), PVP, Creative, or Arena',                  type: 'select', value: 'ServerType.Cooperative', options: ['ServerType.Cooperative','ServerType.PVP','ServerType.Creative','ServerType.Arena'] },
       { key: 'Description',     name: 'Server Description', desc: 'Shown in the server browser',                                         type: 'text',   value: 'A community survival server'  },
       { key: 'IsOnline',        name: 'Visible in Browser', desc: 'Allow players to find server in server browser',                       type: 'bool',   value: true                          },
       { key: 'IsWhitelisted',   name: 'Whitelisted',        desc: 'Restrict joins to players in whitelist.txt',                           type: 'bool',   value: false                         },
