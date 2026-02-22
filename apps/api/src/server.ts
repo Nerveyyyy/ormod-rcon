@@ -47,7 +47,6 @@ if (STATIC_PATH) {
   await app.register(fastifyStatic, {
     root: STATIC_PATH,
     prefix: '/',
-    decorateReply: false,
   });
   // SPA fallback — serve index.html for all unmatched non-API routes
   app.setNotFoundHandler(async (req, reply) => {

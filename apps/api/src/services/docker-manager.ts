@@ -13,7 +13,6 @@
  */
 
 import http from 'http';
-import net  from 'net';
 import { EventEmitter } from 'events';
 import prisma from '../db/prisma-client.js';
 
@@ -121,90 +120,55 @@ class DockerManager {
     return this.runningContainers.has(serverId);
   }
 
-  // ── Command dispatch (Docker attach → container stdin) ────────────────
+  // ── Command dispatch (Docker exec → /proc/1/fd/0 → game stdin) ──────────
 
   /**
-   * Write a command to the game container's stdin via the Docker attach API.
+   * Write a command to the game container's stdin via Docker exec.
    *
-   * Uses a raw TCP socket to the Docker Unix socket to send an HTTP Upgrade
-   * request (the attach endpoint hijacks the connection after the 101
-   * response), then writes the command line directly to container stdin.
+   * Spawns a short-lived `sh` process inside the container that writes the
+   * command to /proc/1/fd/0 — the game binary's stdin file descriptor (PID 1
+   * because the entrypoint uses `exec`).  The command is passed via an env
+   * var to avoid any shell-escaping issues with special characters.
    *
-   * This is the correct approach for non-TTY containers (tty: false in
-   * docker-compose.yml). The /proc/1/fd/0 exec trick only works reliably
-   * for TTY containers and breaks log stream framing if tty: true is set.
+   * This approach is more reliable than the Docker attach+HTTP-Upgrade method
+   * because it goes through the standard exec API (proper HTTP status codes,
+   * no raw socket protocol) and writes directly to the kernel pipe that the
+   * game is already reading from.
    *
-   * Requires: `stdin_open: true` in docker-compose.yml.
+   * Requires: sh available in the game container (true for Ubuntu base).
    */
   async sendCommand(serverId: string, cmd: string): Promise<void> {
     const name = await this.getContainerName(serverId);
 
-    return new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection(DOCKER_SOCKET);
+    // Step 1: Create an exec instance.
+    const createRes = await dockerRequest(
+      'POST',
+      `/containers/${name}/exec`,
+      {
+        Cmd:          ['sh', '-c', 'printf "%s\n" "$ORMOD_CMD" > /proc/1/fd/0'],
+        Env:          [`ORMOD_CMD=${cmd}`],
+        AttachStdin:  false,
+        AttachStdout: false,
+        AttachStderr: false,
+      }
+    ) as { Id?: string; message?: string };
 
-      // Guard: only settle the promise once (prevents double-resolve/reject).
-      let settled = false;
-      const settle = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        fn();
-      };
+    if (!createRes.Id) {
+      throw new Error(
+        createRes.message ?? 'Docker exec create failed — container may not be running'
+      );
+    }
 
-      // Reject if Docker never responds within 10 s.
-      const timeoutId = setTimeout(() => {
-        socket.destroy();
-        settle(() => reject(new Error('Docker attach timed out after 10s')));
-      }, 10_000);
+    // Step 2: Start detached — fire and forget, sh exits immediately.
+    const startRes = await dockerRequest(
+      'POST',
+      `/exec/${createRes.Id}/start`,
+      { Detach: true }
+    ) as { message?: string };
 
-      // HTTP/1.1 upgrade request — Docker responds with 101 then keeps the
-      // connection open as a bidirectional raw stream to container stdin.
-      const httpRequest =
-        `POST /containers/${name}/attach?stream=1&stdin=1 HTTP/1.1\r\n` +
-        `Host: localhost\r\n` +
-        `Connection: Upgrade\r\n` +
-        `Upgrade: tcp\r\n` +
-        `\r\n`;
-
-      let headerBuf  = '';
-      let headersDone = false;
-
-      socket.once('connect', () => socket.write(httpRequest));
-
-      socket.on('data', (chunk: Buffer) => {
-        if (headersDone) return;
-
-        // Accumulate until we have a complete HTTP response header block.
-        headerBuf += chunk.toString('binary');
-        const headerEnd = headerBuf.indexOf('\r\n\r\n');
-        if (headerEnd === -1) return;
-
-        headersDone = true;
-
-        // Check HTTP status — must be 101 (upgrade) or 200 (older Docker).
-        const statusLine = headerBuf.split('\r\n')[0];
-        const statusCode = parseInt(statusLine.split(' ')[1] ?? '0', 10);
-
-        if (statusCode !== 101 && statusCode !== 200) {
-          socket.destroy();
-          settle(() => reject(new Error(
-            `Docker attach failed (${statusCode}): ${statusLine.trim()}`
-          )));
-          return;
-        }
-
-        // Successfully hijacked — write command then close cleanly.
-        socket.write(`${cmd}\n`, () => {
-          socket.end();
-          settle(() => resolve());
-        });
-      });
-
-      socket.on('error', (err: Error) => {
-        socket.destroy();
-        settle(() => reject(err));
-      });
-    });
+    if (startRes.message) {
+      throw new Error(startRes.message);
+    }
   }
 
   // ── Log streaming ─────────────────────────────────────────────────────
