@@ -175,8 +175,10 @@ class DockerManager {
 
   /**
    * Start streaming logs from a Docker container.
-   * Docker multiplexes stdout+stderr using 8-byte frame headers:
-   *   [stream_type(1), 0, 0, 0, payload_size(4 bytes BE)]
+   *
+   * With tty: true (required for game console input) Docker streams raw PTY
+   * bytes — no 8-byte multiplexing frame headers.  We buffer across TCP chunks
+   * and split on \r\n or \n (PTY uses \r\n).
    */
   private startLogStream(serverId: string, containerName: string): void {
     this.stopLogStream(serverId); // clean up any existing stream
@@ -203,27 +205,21 @@ class DockerManager {
         path: `/containers/${containerName}/logs?follow=true&stdout=true&stderr=true&tail=100`,
       },
       (res) => {
-        let frameBuffer = Buffer.alloc(0);
+        // tty: true → raw PTY bytes, no Docker stream multiplexing headers.
+        // Buffer incomplete lines across chunks (PTY uses \r\n line endings).
+        let lineBuffer = '';
 
         res.on('data', (chunk: Buffer) => {
-          frameBuffer = Buffer.concat([frameBuffer, chunk]);
-
-          // Parse Docker multiplexing frames
-          while (frameBuffer.length >= 8) {
-            const frameSize = frameBuffer.readUInt32BE(4);
-            if (frameBuffer.length < 8 + frameSize) break;
-
-            const payload = frameBuffer.subarray(8, 8 + frameSize).toString('utf-8');
-            frameBuffer   = frameBuffer.subarray(8 + frameSize);
-
-            // Split payload into lines and push each
-            for (const raw of stripAnsi(payload).split('\n')) {
-              pushLine(raw.trimEnd());
-            }
+          lineBuffer += stripAnsi(chunk.toString('utf-8'));
+          const lines = lineBuffer.split(/\r?\n/);
+          lineBuffer  = lines.pop() ?? ''; // last element may be incomplete
+          for (const line of lines) {
+            pushLine(line.trimEnd());
           }
         });
 
         res.on('end', () => {
+          if (lineBuffer) pushLine(lineBuffer.trimEnd()); // flush incomplete line
           // Container stopped (externally or via stop/restart)
           this.runningContainers.delete(serverId);
           pushLine(`# Container stopped.`);

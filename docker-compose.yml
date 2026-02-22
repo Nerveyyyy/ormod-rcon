@@ -47,10 +47,10 @@ services:
       # and tell Docker which ports to forward.
       - "${GAME_HOST:-0.0.0.0}:${GAME_PORT:-27015}:${GAME_PORT:-27015}/udp"
       - "${GAME_HOST:-0.0.0.0}:${QUERY_PORT:-27016}:${QUERY_PORT:-27016}/udp"
-    stdin_open: true   # Required: dashboard writes to container stdin for commands
-    # tty: false (default) — must NOT be true. TTY mode changes Docker's log stream
-    # from a framed format (with 8-byte headers) to raw bytes, which breaks log
-    # parsing. stdin_open: true is sufficient for accepting stdin commands.
+    stdin_open: true   # Keep stdin pipe open so the dashboard can write to it
+    tty: true          # Required: game reads console commands from a PTY, not a plain
+                       # pipe. With tty: true Docker streams raw bytes for logs (no
+                       # 8-byte frame headers) — docker-manager handles this correctly.
 
   # ── Dashboard (API + frontend) ────────────────────────────────────────────
   # Single container: Fastify REST/WebSocket API + built React UI.

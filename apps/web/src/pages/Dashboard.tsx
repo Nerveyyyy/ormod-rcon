@@ -25,17 +25,9 @@ export default function Dashboard() {
     api.get<Schedule[]>(`/servers/${activeServer.id}/schedules`)
       .then(setSchedules)
       .catch(console.error);
-  }, [activeServer?.id]);
-
-  useEffect(() => {
-    if (!activeServer?.id) return;
-    const fetchSettings = () =>
-      api.get<Record<string, unknown>>(`/servers/${activeServer.id}/settings`)
-        .then(setSettings)
-        .catch(console.error);
-    fetchSettings();
-    const interval = setInterval(fetchSettings, 30_000);
-    return () => clearInterval(interval);
+    api.get<Record<string, unknown>>(`/servers/${activeServer.id}/settings`)
+      .then(setSettings)
+      .catch(console.error);
   }, [activeServer?.id]);
 
   useEffect(() => {
