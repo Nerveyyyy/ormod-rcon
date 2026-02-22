@@ -1,0 +1,79 @@
+services:
+
+  # ── Game server ───────────────────────────────────────────────────────────
+  # Thin container running the ORMOD: Directive dedicated server binary.
+  #
+  # GAME_BINARY_PATH  — host path to the game binary directory (bind-mounted
+  #                     read-only into the container). Default: ./docker/game-binary
+  #                     Dedi-box layout: set to ../server in .env
+  #
+  # SAVES_PATH        — host path for save data / server config files.
+  #                     Default: named volume `game-saves` (Docker managed).
+  #                     Dedi-box layout: set to ../configs in .env
+  #                     When set to a host path, files are directly accessible
+  #                     on the host filesystem. Ensure the directory is writable
+  #                     by UID 1000 (steam) before starting.
+  #
+  # Future: when the game ships on Steam, swap Dockerfile.gameserver to
+  # SteamCMD and remove the GAME_BINARY_PATH volume entry below.
+  ormod-game:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gameserver
+    container_name: ${GAME_CONTAINER_NAME:-ormod-game}
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-MyOrmodServer}
+    volumes:
+      - ${GAME_BINARY_PATH:-./docker/game-binary}:/home/steam/ormod     # game binary (read-only recommended)
+      - ${SAVES_PATH:-game-saves}:/home/steam/.config/ORMOD/Saves        # save data / server configs
+    ports:
+      - "${GAME_PORT:-27015}:27015/udp"
+      - "${QUERY_PORT:-27016}:27016/udp"
+    stdin_open: true   # Required: Docker exec writes to stdin for commands
+    tty: true
+
+  # ── Dashboard (API + frontend) ────────────────────────────────────────────
+  # Single container: Fastify REST/WebSocket API + built React UI.
+  # The Docker socket grants control over the game container (start/stop/exec).
+  # Save files are shared via the same volume/path as the game container.
+  #
+  # DASHBOARD_HOST    — host IP to bind the dashboard port to.
+  #                     Default: 0.0.0.0 (all interfaces).
+  #                     Set to a specific IP to restrict access, e.g. 10.0.0.1
+  #
+  # DASHBOARD_PORT    — host port the dashboard is exposed on (default: 3000).
+  ormod-dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: ormod-dashboard
+    restart: unless-stopped
+    depends_on:
+      - ormod-game
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/data/ormod-rcon.db}
+      SAVE_BASE_PATH: /saves
+      BACKUP_PATH: /backups
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+      STATIC_PATH: /app/apps/web/dist
+      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
+      DASHBOARD_HOST: ${DASHBOARD_HOST:-0.0.0.0}
+    volumes:
+      - ./data:/data                                                       # SQLite database
+      - ${SAVES_PATH:-game-saves}:/saves                                   # Shared save files (read-write)
+      - ./backups:/backups                                                 # Pre-wipe backup archives
+      - /var/run/docker.sock:/var/run/docker.sock                         # Docker API (process mgmt)
+    ports:
+      - "${DASHBOARD_HOST:-0.0.0.0}:${DASHBOARD_PORT:-3000}:3000"
+
+# Named volume used when SAVES_PATH is not set.
+# Docker Compose treats strings starting with ./ ../ or / as bind mounts;
+# everything else (like the default "game-saves") is a named volume.
+volumes:
+  game-saves:
+
+networks:
+  default:
+    name: ormod-network

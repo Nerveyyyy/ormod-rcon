@@ -1,0 +1,58 @@
+# ── ORMOD: Directive — Game Server ────────────────────────────────────────
+#
+# ┌─ CURRENT: Manual binary (bind-mounted at runtime) ───────────────────┐
+# │  The game is in early access and is not yet on SteamCMD.             │
+# │                                                                       │
+# │  The game binary is NOT baked into this image — it is mounted from   │
+# │  the host at runtime via GAME_BINARY_PATH in .env (default:          │
+# │  ./docker/game-binary).                                               │
+# │                                                                       │
+# │  Before starting, ensure the binary exists and is executable:        │
+# │    chmod +x ./docker/game-binary/ORMODDirective                      │
+# │    (or wherever GAME_BINARY_PATH points)                              │
+# └───────────────────────────────────────────────────────────────────────┘
+#
+# ┌─ FUTURE: SteamCMD (when the game is published on Steam) ─────────────┐
+# │  Replace the FROM line and add:                                       │
+# │                                                                       │
+# │    FROM cm2network/steamcmd:latest                                    │
+# │    RUN /home/steam/steamcmd/steamcmd.sh \                             │
+# │        +force_install_dir /home/steam/ormod \                         │
+# │        +login anonymous \                                             │
+# │        +app_update <STEAM_APP_ID> validate \                          │
+# │        +quit                                                          │
+# │                                                                       │
+# │  Remove the GAME_BINARY_PATH volume mount from docker-compose.yml.    │
+# │  The entrypoint and saves volume setup remain identical.              │
+# └───────────────────────────────────────────────────────────────────────┘
+
+FROM ubuntu:22.04
+
+# Install runtime dependencies for the game binary
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libstdc++6 \
+    libgcc-s1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user (matches SteamCMD image convention for future migration)
+RUN useradd -m -d /home/steam steam
+
+USER steam
+WORKDIR /home/steam
+
+# Binary is bind-mounted at /home/steam/ormod from GAME_BINARY_PATH on the host.
+# Save data is bind-mounted or named-volume at /home/steam/.config/ORMOD/Saves.
+RUN mkdir -p /home/steam/ormod \
+ && mkdir -p /home/steam/.config/ORMOD/Saves
+
+ENV HOME=/home/steam
+
+# Both ports are UDP — actual values configured in serversettings.json
+EXPOSE 27015/udp
+EXPOSE 27016/udp
+
+COPY --chown=steam:steam docker/entrypoint-gameserver.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

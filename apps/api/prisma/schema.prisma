@@ -1,0 +1,135 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")  // "file:./ormod-rcon.db"
+}
+
+// SQLite does not support native enums — all enum-like fields use String with defined values.
+// TypeScript types for these are in src/types.ts
+
+// ── Dashboard users ──────────────────────────────
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         String    @default("VIEWER")  // OWNER | ADMIN | VIEWER
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+}
+
+// ── Managed game servers ─────────────────────────
+model Server {
+  id             String   @id @default(cuid())
+  name           String                          // Display name in UI
+  serverName     String   @unique               // Matches -servername flag
+  savePath       String                          // Absolute path to save dir
+  executablePath String   @default("")          // Absolute path to ORMODDirective.exe
+  mode           String   @default("LOCAL")     // LOCAL | REMOTE
+  gamePort       Int      @default(27015)
+  queryPort      Int      @default(27016)
+  rconPort       Int?                            // null until RCON is added to the game
+  rconPass       String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  players     PlayerRecord[]
+  wipeLogs    WipeLog[]
+  schedules   ScheduledTask[]
+  listLinks   ServerListLink[]
+}
+
+// ── Player records (populated from PlayerData/ files) ──
+model PlayerRecord {
+  id        String   @id @default(cuid())
+  steamId   String
+  serverId  String
+  server    Server   @relation(fields: [serverId], references: [id])
+  lastSeen  DateTime @default(now())
+  totalTime Int      @default(0)  // seconds
+  notes     String?
+
+  @@unique([steamId, serverId])
+}
+
+// ── Access lists (shareable across servers) ──────
+model AccessList {
+  id          String   @id @default(cuid())
+  name        String                               // e.g. "Global Ban List"
+  type        String                               // BAN | WHITELIST | ADMIN
+  scope       String   @default("SERVER")         // GLOBAL | SERVER | EXTERNAL
+  description String?
+  externalUrl String?                              // EXTERNAL scope: URL to fetch list from
+  syncedAt    DateTime?                            // Last external sync timestamp
+  createdAt   DateTime @default(now())
+
+  entries     ListEntry[]
+  serverLinks ServerListLink[]
+}
+
+model ListEntry {
+  id         String    @id @default(cuid())
+  steamId    String
+  playerName String?                        // cached display name
+  reason     String?
+  addedBy    String?
+  permission String?                        // for admin lists: server/admin/operator/client
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  listId     String
+  list       AccessList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([steamId, listId])
+}
+
+// Link a server to one or more access lists
+model ServerListLink {
+  serverId String
+  listId   String
+  server   Server     @relation(fields: [serverId], references: [id])
+  list     AccessList @relation(fields: [listId], references: [id])
+
+  @@id([serverId, listId])
+}
+
+// ── Wipe history ──────────────────────────────────
+model WipeLog {
+  id          String   @id @default(cuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id])
+  wipeType    String                        // FULL | MAP_ONLY | MAP_PLAYERS | CUSTOM
+  triggeredBy String                        // dashboard user id
+  notes       String?
+  backupPath  String?                       // path to pre-wipe backup
+  success     Boolean
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+}
+
+// ── Scheduled tasks ───────────────────────────────
+model ScheduledTask {
+  id        String    @id @default(cuid())
+  serverId  String
+  server    Server    @relation(fields: [serverId], references: [id])
+  type      String                          // WIPE | COMMAND | ANNOUNCEMENT | RESTART
+  cronExpr  String                          // e.g. "0 6 * * 1" = every Monday 6am
+  label     String
+  payload   String                          // JSON - command string, wipe config, etc.
+  enabled   Boolean   @default(true)
+  lastRun   DateTime?
+  nextRun   DateTime?
+  createdAt DateTime  @default(now())
+}

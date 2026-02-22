@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:communitybanlist.com)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(pnpm add:*)",
+      "Bash(\"E:/ormod-crcon/apps/api/src/routes/players.ts\":*)",
+      "Bash(\"E:/ormod-crcon/apps/api/src/routes/wipe.ts\":*)"
+    ]
+  }
+}

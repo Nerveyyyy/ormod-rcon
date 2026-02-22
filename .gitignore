@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.js.map
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Prisma generated
+apps/api/src/generated/
+
+# Backups (runtime)
+backups/
+
+# Game binary — copy your server files here before building, do not commit
+docker/game-binary/*
+!docker/game-binary/.gitkeep
+
+# pnpm lockfile — commit this in your own workflow
+# pnpm-lock.yaml
