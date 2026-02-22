@@ -1,50 +1,66 @@
 # ── ORMOD: Directive — Game Server ────────────────────────────────────────
 #
-# ┌─ CURRENT: Manual binary (bind-mounted at runtime) ───────────────────┐
-# │  The game is in early access and is not yet on SteamCMD.             │
+# ┌─ CURRENT: Manual binary + SteamCMD runtime ─────────────────────────┐
+# │  The game is in early access and not yet on Steam as a dedicated    │
+# │  server app. SteamCMD is installed at build time to provide the     │
+# │  Steam client runtime (steamclient.so) that the Steamworks SDK      │
+# │  inside the binary requires. The game binary itself is NOT baked    │
+# │  into this image — it is mounted from the host at runtime via       │
+# │  GAME_BINARY_PATH in .env (default: ./docker/game-binary).          │
 # │                                                                       │
-# │  The game binary is NOT baked into this image — it is mounted from   │
-# │  the host at runtime via GAME_BINARY_PATH in .env (default:          │
-# │  ./docker/game-binary).                                               │
-# │                                                                       │
-# │  Before starting, ensure the binary exists and is executable:        │
-# │    chmod +x ./docker/game-binary/ORMODDirective                      │
-# │    (or wherever GAME_BINARY_PATH points)                              │
+# │  Before starting, ensure the binary is executable on the host:      │
+# │    chmod +x ./docker/game-binary/ORMODDirective                     │
+# │    (or wherever GAME_BINARY_PATH points)                             │
 # └───────────────────────────────────────────────────────────────────────┘
 #
-# ┌─ FUTURE: SteamCMD (when the game is published on Steam) ─────────────┐
-# │  Replace the FROM line and add:                                       │
+# ┌─ FUTURE: SteamCMD app_update (when the game ships on Steam) ─────────┐
+# │  SteamCMD is already installed — just add the app_update call:      │
 # │                                                                       │
-# │    FROM cm2network/steamcmd:latest                                    │
-# │    RUN /home/steam/steamcmd/steamcmd.sh \                             │
-# │        +force_install_dir /home/steam/ormod \                         │
-# │        +login anonymous \                                             │
-# │        +app_update <STEAM_APP_ID> validate \                          │
-# │        +quit                                                          │
+# │    RUN steamcmd/steamcmd.sh \                                        │
+# │        +force_install_dir /home/steam/ormod \                        │
+# │        +login anonymous \                                            │
+# │        +app_update <STEAM_APP_ID> validate \                         │
+# │        +quit                                                         │
 # │                                                                       │
-# │  Remove the GAME_BINARY_PATH volume mount from docker-compose.yml.    │
-# │  The entrypoint and saves volume setup remain identical.              │
+# │  Then remove the GAME_BINARY_PATH volume mount from                  │
+# │  docker-compose.yml. Entrypoint and saves setup stay identical.     │
 # └───────────────────────────────────────────────────────────────────────┘
 
 FROM ubuntu:22.04
 
-# Install runtime dependencies for the game binary
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Add i386 architecture and install:
+#   - SteamCMD runtime (lib32gcc-s1 — SteamCMD itself is a 32-bit binary)
+#   - Game binary runtime (libstdc++6, libgcc-s1)
+#   - curl to download SteamCMD
+RUN dpkg --add-architecture i386 \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
+    lib32gcc-s1 \
     libstdc++6 \
     libgcc-s1 \
  && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user (matches SteamCMD image convention for future migration)
+# Create non-root user matching SteamCMD convention
 RUN useradd -m -d /home/steam steam
 
 USER steam
 WORKDIR /home/steam
 
-# Binary is bind-mounted at /home/steam/ormod from GAME_BINARY_PATH on the host.
-# Save data is bind-mounted or named-volume at /home/steam/.config/ORMOD/Saves.
-RUN mkdir -p /home/steam/ormod \
- && mkdir -p /home/steam/.config/ORMOD/Saves
+# Install SteamCMD and run it once to download the Steam client runtime.
+# After the first run, steamcmd creates linux64/steamclient.so which the
+# Steamworks SDK inside the game binary looks for at ~/.steam/sdk64/.
+RUN mkdir -p steamcmd \
+ && curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
+    | tar zxf - -C steamcmd \
+ && steamcmd/steamcmd.sh +quit \
+ && mkdir -p .steam/sdk64 .steam/sdk32 \
+ && ln -sf /home/steam/steamcmd/linux64/steamclient.so .steam/sdk64/steamclient.so \
+ && ln -sf /home/steam/steamcmd/linux32/steamclient.so .steam/sdk32/steamclient.so
+
+# Mount points — populated via docker-compose.yml volumes at runtime
+RUN mkdir -p ormod .config/ORMOD/Saves
 
 ENV HOME=/home/steam
 
