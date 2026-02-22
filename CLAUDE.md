@@ -57,7 +57,7 @@ ormod-game container    ←── shared volume (SAVES_PATH) ──→    ormod-
 - Survival mechanics: hunger, thirst, temperature, health, wellness
 
 **Server paths (inside game container):**
-- `$HOME/.config/ORMOD/Saves/<ServerName>/` (set `HOME=/home/steam`)
+- `$HOME/.config/ORMOD/Playtest/<ServerName>/` (set `HOME=/home/steam`)
 
 **Server startup:**
 ```bash
@@ -74,7 +74,7 @@ Docker exposes them via the `GAME_PORT`/`QUERY_PORT` variables in `.env` (used o
 
 ## Save Directory Contents
 ```
-ChunkData/          RegionData/         PlayerData/
+RegionData/
 adminlist.txt       banlist.txt         whitelist.txt
 buildareas.json     entitydata.json     loottables.json
 mapdata.json        networkentities.json partialchunkdata.dat

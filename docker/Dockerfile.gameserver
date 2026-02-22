@@ -60,7 +60,7 @@ RUN mkdir -p steamcmd \
  && ln -sf /home/steam/steamcmd/linux32/steamclient.so .steam/sdk32/steamclient.so
 
 # Mount points — populated via docker-compose.yml volumes at runtime
-RUN mkdir -p ormod .config/ORMOD/Saves
+RUN mkdir -p ormod .config/ORMOD/Playtest
 
 ENV HOME=/home/steam
 

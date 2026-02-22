@@ -181,7 +181,17 @@ Common patterns:
 
 ## Registering Additional Servers
 
-Add more servers through the **Servers** page in the dashboard UI. Each server entry stores its own `savePath` and Docker container name. Access lists can be shared and synced across all registered servers simultaneously.
+Add more servers through the **Servers** page in the dashboard UI. When prompted for **Save Path**, enter the path as seen by the dashboard container:
+
+```
+/saves/<ServerName>
+```
+
+For example, if `SERVER_NAME=MyOrmodServer`, the save path is `/saves/MyOrmodServer`.
+
+The game writes its files to `/home/steam/.config/ORMOD/Playtest/<ServerName>/` inside the game container. Both containers mount the same volume — the game writes to `/home/steam/.config/ORMOD/Playtest` and the dashboard reads from `/saves`, but they point to the same underlying storage.
+
+Access lists can be shared and synced across all registered servers simultaneously.
 
 ---
 
