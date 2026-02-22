@@ -85,4 +85,7 @@ ENV STATIC_PATH=/app/apps/web/dist
 
 EXPOSE 3000
 
-CMD ["node", "dist/server.js"]
+# prisma db push runs at container startup (not build time) because the
+# /data volume — where the SQLite file lives — is only mounted at runtime.
+# It creates missing tables and is safe to re-run on every restart.
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]
