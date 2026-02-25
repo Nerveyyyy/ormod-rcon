@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { requireOwner } from '../plugins/auth.js';
 import * as ctrl from '../controllers/wipe.js';
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ const wipeBody = {
 
 const wipeRoutes: FastifyPluginAsync = async (app) => {
 
+  // Read wipe history — any authenticated user
   app.route({
     method:  'GET',
     url:     '/servers/:id/wipes',
@@ -40,13 +42,16 @@ const wipeRoutes: FastifyPluginAsync = async (app) => {
     handler: ctrl.listWipes,
   });
 
+  // Execute wipe — OWNER only (destructive)
   app.route({
-    method:  'POST',
-    url:     '/servers/:id/wipe',
-    schema:  { params: serverParams, body: wipeBody },
-    handler: ctrl.executeWipe,
+    method:     'POST',
+    url:        '/servers/:id/wipe',
+    schema:     { params: serverParams, body: wipeBody },
+    preHandler: [requireOwner],
+    handler:    ctrl.executeWipe,
   });
 
+  // Read single wipe log — any authenticated user
   app.route({
     method:  'GET',
     url:     '/servers/:id/wipes/:wipeId',

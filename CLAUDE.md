@@ -219,7 +219,10 @@ Future flow: route → `getAdapter()` → `WebSocketRconAdapter` → RCON TCP
 - ✅ `@fastify/static` registered in `app.ts` for Docker static serving
 - ✅ Bind-mount support for game binary and saves (`GAME_BINARY_PATH`, `SAVES_PATH`)
 - ✅ `DASHBOARD_HOST` for per-interface port binding
-- ⏳ **TODO:** Auth (Better Auth) — all routes currently open for local/Docker dev
+- ✅ Auth (BetterAuth) — session-based, login/setup pages, HTTP-only cookies
+- ✅ RBAC enforcement — OWNER/ADMIN/VIEWER roles checked per-route via `requireWrite`/`requireOwner` preHandlers
+- ✅ WebSocket auth — explicit session validation on WS upgrade (not relying on preHandler hooks)
+- ✅ CSRF protection — double-submit cookie pattern with auto-fetch/retry on frontend
 - ⏳ **TODO:** Live player online status (requires RCON or stdin-response parsing)
 
 ---

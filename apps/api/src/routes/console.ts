@@ -1,5 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
+import { fromNodeHeaders } from 'better-auth/node';
+import { auth } from '../lib/auth.js';
+import { requireWrite } from '../plugins/auth.js';
 import { dockerManager } from '../services/docker-manager.js';
 import * as ctrl from '../controllers/console.js';
 
@@ -26,11 +29,13 @@ const logQuerystring = {
 
 const consoleRoutes: FastifyPluginAsync = async (app) => {
 
+  // Send command — ADMIN+ (commands can have destructive effects)
   app.route({
-    method:  'POST',
-    url:     '/servers/:id/console/command',
-    schema:  { params: serverParams, body: commandBody },
-    handler: ctrl.sendCommand,
+    method:     'POST',
+    url:        '/servers/:id/console/command',
+    schema:     { params: serverParams, body: commandBody },
+    preHandler: [requireWrite],
+    handler:    ctrl.sendCommand,
   });
 
   app.route({
@@ -49,7 +54,17 @@ export const consoleWsRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { serverId: string } }>(
     '/ws/log/:serverId',
     { websocket: true },
-    (socket: WebSocket, req) => {
+    async (socket: WebSocket, req) => {
+      // WebSocket upgrades bypass Fastify preHandler hooks, so we
+      // validate the session explicitly using the request cookies.
+      const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+      });
+      if (!session?.user) {
+        socket.close(1008, 'Unauthorized');
+        return;
+      }
+
       const { serverId } = req.params;
 
       const send = (line: string) => {

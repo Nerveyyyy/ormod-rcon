@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { requireWrite } from '../plugins/auth.js';
 import * as ctrl from '../controllers/settings.js';
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ const settingKeyBody = {
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
 
-  // Returns the full serversettings.json as a parsed JSON object.
+  // Read — any authenticated user
   app.route({
     method:  'GET',
     url:     '/servers/:id/settings',
@@ -36,20 +37,22 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     handler: ctrl.getSettings,
   });
 
-  // Replaces the entire serversettings.json. The game hot-reloads this file.
+  // Replace entire settings — ADMIN+
   app.route({
-    method:  'PUT',
-    url:     '/servers/:id/settings',
-    schema:  { params: serverParams },
-    handler: ctrl.replaceSettings,
+    method:     'PUT',
+    url:        '/servers/:id/settings',
+    schema:     { params: serverParams },
+    preHandler: [requireWrite],
+    handler:    ctrl.replaceSettings,
   });
 
-  // Updates a single key in serversettings.json (read-modify-write).
+  // Update single key — ADMIN+
   app.route({
-    method:  'PUT',
-    url:     '/servers/:id/settings/:key',
-    schema:  { params: settingKeyParams, body: settingKeyBody },
-    handler: ctrl.updateSettingKey,
+    method:     'PUT',
+    url:        '/servers/:id/settings/:key',
+    schema:     { params: settingKeyParams, body: settingKeyBody },
+    preHandler: [requireWrite],
+    handler:    ctrl.updateSettingKey,
   });
 };
 
