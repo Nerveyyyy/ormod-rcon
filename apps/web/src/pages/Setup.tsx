@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { authClient } from '../lib/auth-client.js';
 import { api } from '../api/client.js';
 

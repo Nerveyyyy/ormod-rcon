@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useServer } from '../hooks/useServer.js';
 import { useLiveLog } from '../hooks/useLiveLog.js';
 import { api } from '../api/client.js';

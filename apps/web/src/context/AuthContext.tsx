@@ -13,7 +13,7 @@
 import {
   createContext, useContext, useState, useEffect, type ReactNode,
 } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { authClient } from '../lib/auth-client.js';
 import { clearCsrfToken } from '../api/client.js';
 

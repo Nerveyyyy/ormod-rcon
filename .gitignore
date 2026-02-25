@@ -5,6 +5,10 @@ node_modules/
 dist/
 out-tsc/
 *.tsbuildinfo
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map
+apps/web/src/**/*.d.ts
+apps/web/src/**/*.d.ts.map
 
 # Environment
 .env
@@ -14,6 +18,9 @@ out-tsc/
 # Database
 *.db
 *.db-journal
+
+# Prisma generated client (regenerated via `prisma generate`)
+apps/api/src/generated/
 
 # Backups (generated at runtime)
 backups/

@@ -99,7 +99,7 @@ export default function Settings() {
                       {s.type === 'select' && (
                         <select className="sel-input" value={vals[s.key] as string}
                           onChange={e => set(s.key, e.target.value)}>
-                          {s.options?.map(o => <option key={o}>{o}</option>)}
+                          {(s as { options?: string[] }).options?.map((o: string) => <option key={o}>{o}</option>)}
                         </select>
                       )}
                       {s.type === 'text' && (

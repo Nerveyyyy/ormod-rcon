@@ -1,15 +1,12 @@
 // prisma/schema.prisma
 
 generator client {
-  provider      = "prisma-client-js"
-  // "native"               → local dev (macOS / Linux, detected at generate time)
-  // "debian-openssl-3.0.x" → Docker runtime (node:20-slim = Debian Bookworm = OpenSSL 3.x)
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")  // "file:./ormod-rcon.db"
 }
 
 // SQLite does not support native enums — all enum-like fields use String with defined values.

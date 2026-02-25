@@ -58,7 +58,7 @@ export default function AccessControl() {
     api.get<AccessList[]>('/lists')
       .then(data => {
         setLists(data);
-        if (!selectedId && data.length > 0) setSelectedId(data[0].id);
+        if (!selectedId && data.length > 0) setSelectedId(data[0]!.id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
