@@ -1,20 +1,15 @@
 {
-  "name": "ormod-rcon",
+  "name": "ormod-crcon",
+  "version": "1.0.0",
+  "description": "Self-hosted RCON dashboard for ORMOD: Directive dedicated servers. Manage players, settings, access lists, wipes, and scheduled tasks from a single web UI.",
   "private": true,
-  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
-    "build": "pnpm -r build",
-    "lint": "pnpm -r lint"
+    "build": "tsc"
   },
+  "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.4.0"
-  },
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
+    "typescript": "^5.5.3"
   }
 }

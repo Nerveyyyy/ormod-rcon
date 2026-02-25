@@ -1,16 +1,24 @@
 {
   "compilerOptions": {
+    "types": ["node"],
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
+    "incremental": true,
     "declaration": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
     "declarationMap": true,
-    "sourceMap": true
+    "composite": true,
+    "sourceMap": true,
+    "emitDeclarationOnly": false,
+    "forceConsistentCasingInFileNames": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   }
 }

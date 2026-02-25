@@ -75,28 +75,35 @@ export const mockAdmins = [
 ];
 
 // ── Server settings ────────────────────────────────────────────────────
+// Keys match the actual ORMOD: Directive serversettings.json format (Playtest 1.9.0).
+// Read-only fields (written by the game, not editable) are marked type: 'readonly'.
 export const settingGroups = [
   {
     label: 'General',
     settings: [
-      { key: 'WorldName',       name: 'World Name',         desc: 'Save name for this world',                                              type: 'text',   value: 'My Survival World'           },
-      { key: 'SaveInterval',    name: 'Save Interval',      desc: 'How often the world auto-saves (seconds)',                             type: 'number', value: 120                           },
-      { key: 'IsHardcore',      name: 'Hardcore Mode',      desc: 'Enable unforgiving Hardcore rules',                                    type: 'bool',   value: false                         },
-      { key: 'ServerType',      name: 'Game Type',          desc: 'Cooperative (PvE focused), PVP, Creative, or Arena',                  type: 'select', value: 'ServerType.Cooperative', options: ['ServerType.Cooperative','ServerType.PVP','ServerType.Creative','ServerType.Arena'] },
-      { key: 'Description',     name: 'Server Description', desc: 'Shown in the server browser',                                         type: 'text',   value: 'A community survival server'  },
-      { key: 'IsOnline',        name: 'Visible in Browser', desc: 'Allow players to find server in server browser',                       type: 'bool',   value: true                          },
-      { key: 'IsWhitelisted',   name: 'Whitelisted',        desc: 'Restrict joins to players in whitelist.txt',                           type: 'bool',   value: false                         },
-      { key: 'FriendsOnly',     name: 'Friends Only',       desc: 'Only Steam friends can join',                                          type: 'bool',   value: false                         },
-      { key: 'MaxPlayers',      name: 'Max Players',        desc: 'Maximum concurrent player slots',                                      type: 'number', value: 16                            },
-      { key: 'WorldOvergrowth', name: 'World Overgrowth',   desc: '0 = fresh apocalypse · 1 = years in (affects loot scarcity & decay)', type: 'number', value: 0.4                           },
+      { key: 'WorldName',    name: 'World Name',    desc: 'Save folder name for this world (set by -servername flag at launch)',  type: 'readonly', value: '' },
+      { key: 'IsOnline',     name: 'Server Browser',desc: 'List this server in the public browser',                              type: 'bool',     value: true  },
+      { key: 'FriendsOnly',  name: 'Friends Only',  desc: 'Only Steam friends of the host can join',                             type: 'bool',     value: false },
+      { key: 'MaxPlayers',   name: 'Max Players',   desc: 'Maximum concurrent player slots',                                     type: 'number',   value: 8     },
+      { key: 'Description',  name: 'Description',   desc: 'Shown in the server browser',                                         type: 'text',     value: ''    },
     ],
   },
   {
-    label: 'Map',
+    label: 'Difficulty',
     settings: [
-      { key: 'LimitMapSize',    name: 'Limit Map Size',    desc: 'Add a world border — disabled = infinite world',     type: 'bool',   value: false },
-      { key: 'MapSizeLimit',    name: 'Map Size Limit',    desc: 'Border-to-border size in units when limiting is on', type: 'number', value: 4000  },
-      { key: 'SpawnRegionSize', name: 'Spawn Region Size', desc: 'Radius players can respawn within',                  type: 'number', value: 500   },
+      { key: 'WorldRobotDensity', name: 'Robot Density',       desc: 'Multiplier for ORMOD robot spawn density (1.0 = default)',     type: 'number', value: 1.0 },
+      { key: 'RobotPlating',      name: 'Robot Plating',       desc: 'Robot armour thickness multiplier (1.0 = default)',            type: 'number', value: 1.0 },
+      { key: 'RobotDifficulty',   name: 'Robot Difficulty',    desc: 'Overall ORMOD AI difficulty multiplier (1.0 = default)',       type: 'number', value: 1.0 },
+      { key: 'SkuttlerSpeed',     name: 'Skuttler Speed (Day)',   desc: 'Skuttler movement speed during daytime',                   type: 'number', value: 2   },
+      { key: 'SkuttlerNightSpeed',name: 'Skuttler Speed (Night)', desc: 'Skuttler movement speed at night — usually higher',        type: 'number', value: 4   },
+    ],
+  },
+  {
+    label: 'Server Info (read-only)',
+    settings: [
+      { key: 'ServerVersion',  name: 'Server Version', desc: 'Game build version — set by the server binary',           type: 'readonly', value: '' },
+      { key: 'ServerGamePort', name: 'Game Port',      desc: 'UDP port configured in serversettings.json',              type: 'readonly', value: '' },
+      { key: 'ServerQueryPort',name: 'Query Port',     desc: 'UDP query port configured in serversettings.json',        type: 'readonly', value: '' },
     ],
   },
 ];

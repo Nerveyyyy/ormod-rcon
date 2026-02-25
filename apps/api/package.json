@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "db:migrate": "prisma migrate dev",
@@ -11,13 +11,22 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@fastify/autoload": "^6.3.1",
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^9.0.0",
+    "@fastify/csrf-protection": "^7.1.0",
+    "@fastify/env": "^5.0.3",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/sensible": "^6.0.4",
     "@fastify/static": "^7.0.0",
+    "@fastify/under-pressure": "^9.0.3",
     "@fastify/websocket": "^10.0.0",
     "@prisma/client": "^5.0.0",
     "better-auth": "^1.0.0",
     "cron-parser": "^5.5.0",
     "fastify": "^4.28.0",
+    "fastify-plugin": "^5.1.0",
     "node-cron": "^3.0.3"
   },
   "devDependencies": {

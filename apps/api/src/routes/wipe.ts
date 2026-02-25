@@ -1,35 +1,58 @@
 import type { FastifyPluginAsync } from 'fastify';
-import prisma from '../db/prisma-client.js';
-import { WipeService } from '../services/wipe-service.js';
-import type { WipeConfig } from '../services/wipe-service.js';
+import * as ctrl from '../controllers/wipe.js';
 
-const wipeService = new WipeService();
+// ── Schemas ──────────────────────────────────────────────────────────────────
 
-export const wipeRoutes: FastifyPluginAsync = async (app) => {
+const serverParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string' } },
+} as const;
 
-  // GET /api/servers/:id/wipes
-  app.get<{ Params: { id: string } }>('/servers/:id/wipes', async (req) => {
-    return prisma.wipeLog.findMany({
-      where: { serverId: req.params.id },
-      orderBy: { createdAt: 'desc' },
-    });
+const wipeLogParams = {
+  type: 'object',
+  required: ['id', 'wipeId'],
+  properties: {
+    id:     { type: 'string' },
+    wipeId: { type: 'string' },
+  },
+} as const;
+
+const wipeBody = {
+  type: 'object',
+  required: ['type'],
+  properties: {
+    type:       { type: 'string', enum: ['FULL', 'MAP_ONLY', 'MAP_PLAYERS', 'CUSTOM'] },
+    files:      { type: 'array', items: { type: 'string' } },
+    backup:     { type: 'boolean' },
+    stopFirst:  { type: 'boolean' },
+  },
+} as const;
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+const wipeRoutes: FastifyPluginAsync = async (app) => {
+
+  app.route({
+    method:  'GET',
+    url:     '/servers/:id/wipes',
+    schema:  { params: serverParams },
+    handler: ctrl.listWipes,
   });
 
-  // POST /api/servers/:id/wipe
-  app.post<{ Params: { id: string }; Body: WipeConfig }>('/servers/:id/wipe', async (req, reply) => {
-    reply.raw.setTimeout(300_000); // 5 min timeout for long wipes
-    try {
-      const log = await wipeService.executeWipe(req.params.id, req.body, 'dashboard');
-      return log;
-    } catch (err) {
-      return reply.status(500).send({ error: String(err) });
-    }
+  app.route({
+    method:  'POST',
+    url:     '/servers/:id/wipe',
+    schema:  { params: serverParams, body: wipeBody },
+    handler: ctrl.executeWipe,
   });
 
-  // GET /api/servers/:id/wipes/:wipeId
-  app.get<{ Params: { id: string; wipeId: string } }>('/servers/:id/wipes/:wipeId', async (req, reply) => {
-    const log = await prisma.wipeLog.findUnique({ where: { id: req.params.wipeId } });
-    if (!log) return reply.status(404).send({ error: 'Wipe log not found' });
-    return log;
+  app.route({
+    method:  'GET',
+    url:     '/servers/:id/wipes/:wipeId',
+    schema:  { params: wipeLogParams },
+    handler: ctrl.getWipeLog,
   });
 };
+
+export default wipeRoutes;

@@ -95,7 +95,7 @@ cd /opt/ormod/rcon
 ```bash
 cp .env.example .env
 # Edit .env — at minimum set:
-#   JWT_SECRET    (run: openssl rand -hex 32)
+#   BETTER_AUTH_SECRET    (run: openssl rand -hex 32)
 #   SERVER_NAME
 #   GAME_BINARY_PATH=../server
 #   SAVES_PATH=../configs
@@ -126,7 +126,7 @@ chmod +x docker/game-binary/ORMODDirective   # adjust if your binary has a diffe
 
 # Configure (GAME_BINARY_PATH and SAVES_PATH can be left at defaults)
 cp .env.example .env
-# Edit .env — set JWT_SECRET and SERVER_NAME
+# Edit .env — set BETTER_AUTH_SECRET and SERVER_NAME
 
 docker compose up -d
 ```
@@ -141,7 +141,7 @@ All settings live in `.env` (copied from `.env.example`):
 
 | Variable | Default | Description |
 |---|---|---|
-| `JWT_SECRET` | *(required)* | Random secret for sessions — run `openssl rand -hex 32` |
+| `BETTER_AUTH_SECRET` | *(required)* | Random secret for session tokens — run `openssl rand -hex 32` |
 | `SERVER_NAME` | `MyOrmodServer` | Passed as `-servername` to the game binary |
 | `GAME_BINARY_NAME` | `ORMODDirective` | Filename of the server executable inside `GAME_BINARY_PATH`. Change if your binary has a different name (e.g. `dedicated`) |
 | `GAME_BINARY_PATH` | `./docker/game-binary` | Host path to the game binary directory |
@@ -152,6 +152,9 @@ All settings live in `.env` (copied from `.env.example`):
 | `SAVES_PATH` | *(named volume)* | Host path for save data. Leave unset for a Docker-managed named volume, or set to a host path (e.g. `../configs`) for direct access |
 | `DASHBOARD_HOST` | `0.0.0.0` | Host IP the dashboard binds to. Set to a specific IP to restrict to one interface |
 | `DASHBOARD_PORT` | `3000` | Host port for the dashboard |
+| `PORT` | `3001` | Internal API port (Fastify) |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed origins for CORS (comma-separated) |
+| `BACKUP_PATH` | `./backups` | Directory for pre-wipe backups |
 | `DATABASE_URL` | `file:/data/ormod-rcon.db` | SQLite path inside the dashboard container |
 
 ---
@@ -198,15 +201,22 @@ Access lists can be shared and synced across all registered servers simultaneous
 ## Repo Layout
 
 ```
-ormod-rcon/                       (clone here — this is the rcon/ directory)
+ormod-rcon/
 ├── apps/
 │   ├── api/                      # Fastify backend (TypeScript)
+│   │   └── src/
+│   │       ├── app.ts            # Builds Fastify instance (testable)
+│   │       ├── server.ts         # Entry point (listen + startup tasks)
+│   │       ├── config.ts         # Env schema + Fastify type augmentation
+│   │       ├── plugins/          # Autoloaded (fp dependency graph)
+│   │       ├── routes/           # Route definitions (fastify.route + schemas)
+│   │       ├── controllers/      # Handler logic (business logic + DB)
+│   │       └── services/         # Domain services (Docker, file I/O, wipe)
 │   └── web/                      # React frontend (Vite + Tailwind)
 ├── docker/
 │   ├── Dockerfile.dashboard      # API + React static (combined container)
 │   ├── Dockerfile.gameserver     # Game binary container
-│   ├── entrypoint-gameserver.sh
-│   └── game-binary/              # Optional: place binary here if not using GAME_BINARY_PATH
+│   └── entrypoint-gameserver.sh
 ├── docs/
 │   ├── ORMOD_RCON_ARCHITECTURE.md
 │   └── UI_DESIGN_SYSTEM.md
@@ -237,7 +247,7 @@ When the game is published on Steam, `docker/Dockerfile.gameserver` will switch 
 
 ## Contributing
 
-Issues and pull requests are welcome. If you want to add a feature, open an issue first to discuss the approach.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and guidelines.
 
 ---
 

@@ -644,8 +644,9 @@ Page components → api.get/post('/api/servers/${id}/...') → Fastify routes
 
 - The dashboard should **never** be exposed to the public internet without a reverse proxy (nginx/Caddy) and HTTPS
 - The Docker socket mount (`/var/run/docker.sock`) grants root-equivalent access — do not expose it beyond the dashboard container
-- The `JWT_SECRET` must be changed from the default before deployment
-- Auth (Better Auth) is stubbed; all routes are currently open. Add the `preHandler` auth guard before exposing the dashboard publicly.
+- The `BETTER_AUTH_SECRET` must be changed from the default before deployment (server refuses to start in production if left as the default)
+- Auth (Better Auth) is fully implemented; all `/api/*` routes require a valid session. First-run `/api/setup` creates the initial OWNER account.
+- Use `docker-compose.secure.yml` (recommended) to avoid mounting the raw Docker socket into the dashboard — socket proxy filters API access to container-control only.
 - All wipe operations are logged to the DB with the user ID who triggered them
 
 ---

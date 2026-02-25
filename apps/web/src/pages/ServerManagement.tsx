@@ -40,7 +40,7 @@ export default function ServerManagement() {
         name,
         serverName,
         savePath,
-        executablePath: execPath || '',   // container name (empty = use GAME_CONTAINER_NAME env)
+        containerName: execPath || null,  // null = use GAME_CONTAINER_NAME env default
         gamePort:  parseInt(gamePort,  10),
         queryPort: parseInt(queryPort, 10),
         notes:     notes || null,
@@ -198,11 +198,11 @@ export default function ServerManagement() {
                 <div className="card-body-0">
                   {([
                     ['Server Name',  server.serverName],
+                    ['Container',    server.containerName || server.executablePath || '(default from env)'],
+                    ['Save Path',    server.savePath      || '— not set'],
                     ['Game Port',    `${server.gamePort} (UDP)`],
                     ['Query Port',   `${server.queryPort} (UDP)`],
-                    ['Container',    server.executablePath || '(default from env)'],
-                    ['Save Path',    server.savePath       || '— not set'],
-                    ['Notes',        server.notes          ?? '—'],
+                    ['Notes',        server.notes         ?? '—'],
                   ] as [string, string][]).map(([k, v]) => (
                     <div key={k} className="setting-row">
                       <span className="setting-key" style={{ minWidth: '100px' }}>{k}</span>

@@ -74,7 +74,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-file:/data/ormod-rcon.db}
       SAVE_BASE_PATH: /saves
       BACKUP_PATH: /backups
-      JWT_SECRET: ${JWT_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       PORT: 3000
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}

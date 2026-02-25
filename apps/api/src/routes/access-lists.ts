@@ -1,147 +1,172 @@
 import type { FastifyPluginAsync } from 'fastify';
-import prisma from '../db/prisma-client.js';
-import { syncListToServer, syncAllLists } from '../services/list-service.js';
+import * as ctrl from '../controllers/access-lists.js';
 
-export const accessListsRoutes: FastifyPluginAsync = async (app) => {
+// ── Schemas ──────────────────────────────────────────────────────────────────
 
-  // GET /api/lists
-  app.get('/lists', async () => {
-    const lists = await prisma.accessList.findMany({
-      include: { _count: { select: { entries: true } } },
-      orderBy: { createdAt: 'asc' },
-    });
-    return lists.map(l => ({ ...l, entryCount: l._count.entries }));
+const listParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string' } },
+} as const;
+
+const listBody = {
+  type: 'object',
+  required: ['name', 'type'],
+  properties: {
+    name:        { type: 'string', minLength: 1 },
+    type:        { type: 'string', enum: ['BAN', 'WHITELIST', 'ADMIN'] },
+    scope:       { type: 'string', enum: ['GLOBAL', 'SERVER', 'EXTERNAL'] },
+    description: { type: 'string' },
+    externalUrl: { type: 'string' },
+  },
+} as const;
+
+const entryParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string' } },
+} as const;
+
+const entryBody = {
+  type: 'object',
+  required: ['steamId'],
+  properties: {
+    steamId:    { type: 'string', pattern: '^\\d{17}$' },
+    playerName: { type: 'string' },
+    reason:     { type: 'string' },
+    addedBy:    { type: 'string' },
+    permission: { type: 'string' },
+    expiresAt:  { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const entryDeleteParams = {
+  type: 'object',
+  required: ['id', 'steamId'],
+  properties: {
+    id:      { type: 'string' },
+    steamId: { type: 'string' },
+  },
+} as const;
+
+const syncParams = {
+  type: 'object',
+  required: ['id', 'serverId'],
+  properties: {
+    id:       { type: 'string' },
+    serverId: { type: 'string' },
+  },
+} as const;
+
+const serverParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string' } },
+} as const;
+
+const assignmentsBody = {
+  type: 'object',
+  required: ['listIds'],
+  properties: {
+    listIds: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+const accessListsRoutes: FastifyPluginAsync = async (app) => {
+
+  // ── List CRUD ──────────────────────────────────────────────────────────────
+
+  app.route({
+    method:  'GET',
+    url:     '/lists',
+    handler: ctrl.listAccessLists,
   });
 
-  // POST /api/lists
-  app.post<{ Body: { name: string; type: string; scope?: string; description?: string; externalUrl?: string } }>('/lists', async (req, reply) => {
-    const list = await prisma.accessList.create({ data: req.body });
-    reply.status(201);
-    return list;
+  app.route({
+    method:  'POST',
+    url:     '/lists',
+    schema:  { body: listBody },
+    handler: ctrl.createAccessList,
   });
 
-  // GET /api/lists/:id
-  app.get<{ Params: { id: string } }>('/lists/:id', async (req, reply) => {
-    const list = await prisma.accessList.findUnique({
-      where: { id: req.params.id },
-      include: { entries: { orderBy: { createdAt: 'desc' } } },
-    });
-    if (!list) return reply.status(404).send({ error: 'List not found' });
-    return list;
+  app.route({
+    method:  'GET',
+    url:     '/lists/:id',
+    schema:  { params: listParams },
+    handler: ctrl.getAccessList,
   });
 
-  // PUT /api/lists/:id
-  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>('/lists/:id', async (req, reply) => {
-    const list = await prisma.accessList.findUnique({ where: { id: req.params.id } });
-    if (!list) return reply.status(404).send({ error: 'List not found' });
-    return prisma.accessList.update({ where: { id: req.params.id }, data: req.body });
+  app.route({
+    method:  'PUT',
+    url:     '/lists/:id',
+    schema:  { params: listParams },
+    handler: ctrl.updateAccessList,
   });
 
-  // DELETE /api/lists/:id
-  app.delete<{ Params: { id: string } }>('/lists/:id', async (req, reply) => {
-    const list = await prisma.accessList.findUnique({ where: { id: req.params.id } });
-    if (!list) return reply.status(404).send({ error: 'List not found' });
-    await prisma.accessList.delete({ where: { id: req.params.id } });
-    return { ok: true };
+  app.route({
+    method:  'DELETE',
+    url:     '/lists/:id',
+    schema:  { params: listParams },
+    handler: ctrl.deleteAccessList,
   });
 
-  // POST /api/lists/:id/entries
-  app.post<{ Params: { id: string }; Body: { steamId: string; playerName?: string; reason?: string; addedBy?: string; permission?: string; expiresAt?: string } }>('/lists/:id/entries', async (req, reply) => {
-    const { steamId, expiresAt, ...rest } = req.body;
-    const entry = await prisma.listEntry.upsert({
-      where: { steamId_listId: { steamId, listId: req.params.id } },
-      create: { steamId, listId: req.params.id, expiresAt: expiresAt ? new Date(expiresAt) : undefined, ...rest },
-      update: { expiresAt: expiresAt ? new Date(expiresAt) : undefined, ...rest },
-    });
-    return entry;
+  // ── Entries ────────────────────────────────────────────────────────────────
+
+  app.route({
+    method:  'POST',
+    url:     '/lists/:id/entries',
+    schema:  { params: entryParams, body: entryBody },
+    handler: ctrl.upsertEntry,
   });
 
-  // DELETE /api/lists/:id/entries/:steamId
-  app.delete<{ Params: { id: string; steamId: string } }>('/lists/:id/entries/:steamId', async (req, reply) => {
-    try {
-      await prisma.listEntry.delete({
-        where: { steamId_listId: { steamId: req.params.steamId, listId: req.params.id } },
-      });
-      return { ok: true };
-    } catch {
-      return reply.status(404).send({ error: 'Entry not found' });
-    }
+  app.route({
+    method:  'DELETE',
+    url:     '/lists/:id/entries/:steamId',
+    schema:  { params: entryDeleteParams },
+    handler: ctrl.deleteEntry,
   });
 
-  // POST /api/lists/:id/sync/:serverId
-  app.post<{ Params: { id: string; serverId: string } }>('/lists/:id/sync/:serverId', async (req, reply) => {
-    try {
-      await syncListToServer(req.params.id, req.params.serverId);
-      return { ok: true, syncedAt: new Date().toISOString() };
-    } catch (err) {
-      return reply.status(500).send({ error: String(err) });
-    }
+  // ── Sync ───────────────────────────────────────────────────────────────────
+
+  app.route({
+    method:  'POST',
+    url:     '/lists/:id/sync/:serverId',
+    schema:  { params: syncParams },
+    handler: ctrl.syncListToSingleServer,
   });
 
-  // POST /api/lists/sync-all
-  app.post('/lists/sync-all', async (_, reply) => {
-    try {
-      await syncAllLists();
-      return { ok: true };
-    } catch (err) {
-      return reply.status(500).send({ error: String(err) });
-    }
+  app.route({
+    method:  'POST',
+    url:     '/lists/sync-all',
+    handler: ctrl.syncAll,
   });
 
-  // POST /api/lists/:id/refresh  (fetch external URL and import SteamIDs)
-  app.post<{ Params: { id: string } }>('/lists/:id/refresh', async (req, reply) => {
-    const list = await prisma.accessList.findUnique({ where: { id: req.params.id } });
-    if (!list) return reply.status(404).send({ error: 'List not found' });
-    if (list.scope !== 'EXTERNAL' || !list.externalUrl) {
-      return reply.status(400).send({ error: 'List is not an EXTERNAL scope list with a URL' });
-    }
+  // ── External URL refresh ───────────────────────────────────────────────────
 
-    let text: string;
-    try {
-      const resp = await fetch(list.externalUrl);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      text = await resp.text();
-    } catch (err) {
-      return reply.status(502).send({ error: `Failed to fetch external URL: ${err}` });
-    }
-
-    const steamIds = text
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => /^\d{17}$/.test(l));
-
-    await prisma.$transaction([
-      prisma.listEntry.deleteMany({ where: { listId: list.id } }),
-      prisma.listEntry.createMany({
-        data: steamIds.map(steamId => ({ steamId, listId: list.id, addedBy: 'external-feed' })),
-      }),
-      prisma.accessList.update({
-        where: { id: list.id },
-        data: { syncedAt: new Date() },
-      }),
-    ]);
-
-    return { ok: true, imported: steamIds.length, syncedAt: new Date() };
+  app.route({
+    method:  'POST',
+    url:     '/lists/:id/refresh',
+    schema:  { params: listParams },
+    handler: ctrl.refreshExternal,
   });
 
-  // GET /api/servers/:id/list-assignments
-  app.get<{ Params: { id: string } }>('/servers/:id/list-assignments', async (req) => {
-    return prisma.serverListLink.findMany({
-      where: { serverId: req.params.id },
-      include: { list: true },
-    });
+  // ── Server-list assignments ────────────────────────────────────────────────
+
+  app.route({
+    method:  'GET',
+    url:     '/servers/:id/list-assignments',
+    schema:  { params: serverParams },
+    handler: ctrl.getAssignments,
   });
 
-  // PUT /api/servers/:id/list-assignments
-  app.put<{ Params: { id: string }; Body: { listIds: string[] } }>('/servers/:id/list-assignments', async (req) => {
-    const { id: serverId } = req.params;
-    const { listIds } = req.body;
-    await prisma.$transaction([
-      prisma.serverListLink.deleteMany({ where: { serverId } }),
-      prisma.serverListLink.createMany({
-        data: listIds.map(listId => ({ serverId, listId })),
-      }),
-    ]);
-    return { ok: true };
+  app.route({
+    method:  'PUT',
+    url:     '/servers/:id/list-assignments',
+    schema:  { params: serverParams, body: assignmentsBody },
+    handler: ctrl.setAssignments,
   });
 };
+
+export default accessListsRoutes;

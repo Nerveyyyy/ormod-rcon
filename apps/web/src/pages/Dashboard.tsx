@@ -40,8 +40,9 @@ export default function Dashboard() {
   };
 
   const maxPlayers       = settings?.MaxPlayers ?? '—';
-  // Prefer mode from DB (persists across game restarts) with file as fallback
-  const gameType         = activeServer?.mode || settings?.ServerType || '—';
+  // WorldName comes directly from serversettings.json — shows as soon as the
+  // game creates the file and is selected in the switcher.
+  const worldName        = settings?.WorldName  ?? '—';
   const enabledSchedules = schedules.filter(s => s.enabled);
 
   return (
@@ -59,11 +60,11 @@ export default function Dashboard() {
           <div className="stat-sub">{activeServer?.name ?? 'No server selected'}</div>
         </div>
         <div className="stat-item">
-          <div className="stat-label">Game Type</div>
+          <div className="stat-label">World</div>
           <div className="stat-value" style={{ fontSize: '16px', paddingTop: '6px', color: 'var(--orange)' }}>
-            {String(gameType)}
+            {String(worldName)}
           </div>
-          <div className="stat-sub">ServerType</div>
+          <div className="stat-sub">WorldName</div>
         </div>
         <div className="stat-item">
           <div className="stat-label">Max Players</div>
@@ -132,12 +133,12 @@ export default function Dashboard() {
           </div>
           <div className="card-body-0">
             {([
-              ['Display Name', activeServer?.name           ?? '—'],
-              ['Server Name',  activeServer?.serverName     ?? '—'],
+              ['Display Name', activeServer?.name                              ?? '—'],
+              ['Server Name',  activeServer?.serverName                        ?? '—'],
+              ['World Name',   String(settings?.WorldName ?? '—')              ],
               ['Game Port',    activeServer ? `${activeServer.gamePort} (UDP)` : '—'],
-              ['Query Port',   activeServer ? `${activeServer.queryPort} (UDP)` : '—'],
-              ['Mode',         activeServer?.mode           ?? '—'],
-              ['Save Path',    activeServer?.savePath       ?? '—'],
+              ['Query Port',   activeServer ? `${activeServer.queryPort} (UDP)`: '—'],
+              ['Save Path',    activeServer?.savePath                          ?? '—'],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k} className="setting-row">
                 <span className="setting-key" style={{ minWidth: '110px' }}>{k}</span>

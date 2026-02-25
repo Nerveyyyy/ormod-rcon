@@ -1,3 +1,9 @@
-// CORS is registered directly in server.ts via @fastify/cors
-// This file is a placeholder for any additional CORS logic
-export {};
+import fp from 'fastify-plugin';
+import cors from '@fastify/cors';
+
+export default fp(async function corsPlugin(fastify) {
+  await fastify.register(cors, {
+    origin:      fastify.config.CORS_ORIGIN.split(',').map(o => o.trim()),
+    credentials: true,
+  });
+}, { name: 'cors', dependencies: ['env'] });
