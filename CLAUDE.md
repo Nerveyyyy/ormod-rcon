@@ -16,9 +16,9 @@ When building any React component, open this file and match it exactly.
 ---
 
 ## Tech Stack
-- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS v4
-- **API:** Node.js + Fastify + TypeScript
-- **Database:** SQLite via Prisma ORM (`file:/data/ormod-rcon.db` in Docker, `file:./ormod-rcon.db` in dev)
+- **Frontend:** React 19 + TypeScript + Vite 7 + Tailwind CSS v4
+- **API:** Node.js + Fastify 5 + TypeScript
+- **Database:** SQLite via Prisma 7 ORM (`file:/data/ormod-rcon.db` in Docker, `file:./ormod-rcon.db` in dev)
 - **Realtime:** WebSocket (`ws` library + `@fastify/websocket`)
 - **Auth:** Better Auth (session-based, self-hosted)
 - **Process mgmt:** Docker socket via native Node.js `http` module (no external package)
@@ -173,12 +173,14 @@ Three scopes implemented in `AccessList` Prisma model and AccessControl UI:
 ---
 
 ## Known Gotchas
-- React Router v6 future flags are set in `App.tsx` (`v7_startTransition`, `v7_relativeSplatPath`) — do not remove
 - Expandable table rows: use `<Fragment key={id}>` for the outer wrapper, add `key={\`detail-${id}\`}` to the conditional `<tr>`
 - `preview_console_logs` accumulates across page reloads — use `performance.getEntriesByType('resource')` to confirm which Vite file version is active
 - cron-parser v4/v5 API: use `CronExpressionParser.parse(expr).next().toDate()` (not `parseExpression`)
 - Prisma array-form `$transaction` does not support `skipDuplicates: true` at TypeScript level — remove it and use `deleteMany` before `createMany` instead
 - `@fastify/static` is registered in `app.ts` when `STATIC_PATH` env var is set (Docker production). Uses `prefix: '/'` and a catch-all 404 handler to serve `index.html` for SPA routing.
+- Prisma 7 uses driver adapters — `@prisma/adapter-better-sqlite3` is required. Client is generated to `src/generated/prisma/` (not `node_modules`). Config lives in `prisma.config.ts`. The `prisma db push --skip-generate` flag was removed in v7.
+- Fastify 5 requires async hooks — no callback-style `done` parameter. The `csrfProtection` callback is wrapped in a Promise in `plugins/csrf.ts`.
+- React Router v7 uses `react-router` package (not `react-router-dom`). The v6 future flags (`v7_startTransition`, `v7_relativeSplatPath`) are now defaults and were removed from `App.tsx`.
 
 ---
 

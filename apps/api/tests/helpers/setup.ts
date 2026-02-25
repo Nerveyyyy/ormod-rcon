@@ -172,7 +172,7 @@ export async function setupTestContext(): Promise<TestContext> {
 
   // 3. Push schema to DB (creates tables without migrations)
   const schemaPath = path.join(API_ROOT, 'prisma', 'schema.prisma');
-  execSync(`npx prisma db push --skip-generate --accept-data-loss`, {
+  execSync(`npx prisma db push --accept-data-loss`, {
     cwd: API_ROOT,
     env: { ...process.env, DATABASE_URL: dbUrl },
     stdio: 'pipe',
