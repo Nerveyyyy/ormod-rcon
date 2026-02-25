@@ -103,7 +103,7 @@ export default function Console() {
                     }
                     if (e.key === 'ArrowDown') {
                       const n = Math.max(hi - 1, -1);
-                      setHi(n); setInput(n < 0 ? '' : hist[n]);
+                      setHi(n); setInput(n < 0 ? '' : hist[n] ?? '');
                     }
                   }}
                   placeholder="type a command..."

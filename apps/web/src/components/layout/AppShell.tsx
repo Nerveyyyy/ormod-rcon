@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 import NavTabs from './NavTabs.js';
 import ServerSwitcher from './ServerSwitcher.js';
 import { useServer } from '../../hooks/useServer.js';

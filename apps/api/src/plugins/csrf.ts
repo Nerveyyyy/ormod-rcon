@@ -19,10 +19,12 @@ export default fp(async function csrfPlugin(fastify) {
   });
 
   // Validate CSRF token on all state-changing requests
-  fastify.addHook('onRequest', (request: FastifyRequest, reply: FastifyReply, done: () => void) => {
-    if (SAFE_METHODS.has(request.method)) return done();
-    if (CSRF_SKIP_PREFIXES.some(p => request.url.startsWith(p))) return done();
+  fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (SAFE_METHODS.has(request.method)) return;
+    if (CSRF_SKIP_PREFIXES.some(p => request.url.startsWith(p))) return;
 
-    fastify.csrfProtection(request, reply, done);
+    return new Promise<void>((resolve, reject) => {
+      fastify.csrfProtection(request, reply, (err?: Error) => err ? reject(err) : resolve());
+    });
   });
 }, { name: 'csrf', dependencies: ['cookie', 'env'] });

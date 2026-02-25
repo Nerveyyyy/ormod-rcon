@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider } from './context/AuthContext.js';
 import { ServerProvider } from './context/ServerContext.js';
 import AppShell from './components/layout/AppShell.js';
@@ -15,7 +15,7 @@ import ServerManagement from './pages/ServerManagement.js';
 
 export default function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter>
       {/*
         AuthProvider wraps everything inside BrowserRouter so it can use
         useNavigate/useLocation.  It checks session on route changes and
