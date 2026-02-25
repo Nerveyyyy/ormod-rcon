@@ -5,7 +5,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 // Paths that bypass CSRF validation (BetterAuth handles its own protection)
-const CSRF_SKIP_PREFIXES = ['/api/auth'];
+const CSRF_SKIP_PREFIXES = ['/api/auth', '/api/setup'];
 
 export default fp(async function csrfPlugin(fastify) {
   await fastify.register(csrf, {
