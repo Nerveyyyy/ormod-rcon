@@ -58,10 +58,17 @@ RUN pnpm --filter @ormod-rcon/api build
 # ── Stage 3: Runtime ───────────────────────────────────────────────────────
 FROM node:20-slim
 
-# openssl required at runtime by the Prisma query engine (libssl.so.3).
-# Also needed before the `prisma generate` call below.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+# openssl  — required at runtime by the Prisma query engine (libssl.so.3).
+# gosu     — minimal setuid helper used by entrypoint-dashboard.sh to drop
+#             from root (which fixes volume ownership) to the dashboard user.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl gosu \
  && rm -rf /var/lib/apt/lists/*
+
+# Non-root user for the dashboard process.
+# UID/GID 1001 avoids collision with the host's typical first user (1000).
+# docker-compose.secure.yml relies on this UID being 1001.
+RUN groupadd -g 1001 dashboard \
+ && useradd  -u 1001 -g 1001 -s /bin/sh -M dashboard
 
 RUN npm install -g pnpm
 
@@ -79,13 +86,19 @@ COPY --from=web-builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/api
 RUN npx prisma generate
 
+# Give the dashboard user ownership of the entire app directory.
+# Volume mounts (/data, /backups, /saves) are chowned at runtime by the entrypoint.
+RUN chown -R dashboard:dashboard /app
+
 ENV NODE_ENV=production
 # STATIC_PATH tells server.ts where to serve the React build from
 ENV STATIC_PATH=/app/apps/web/dist
 
+# Entrypoint: briefly runs as root to fix volume mount ownership, then drops
+# to UID 1001 (dashboard) for the actual server process.
+COPY docker/entrypoint-dashboard.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 3000
 
-# prisma db push runs at container startup (not build time) because the
-# /data volume — where the SQLite file lives — is only mounted at runtime.
-# It creates missing tables and is safe to re-run on every restart.
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]
+ENTRYPOINT ["/entrypoint.sh"]

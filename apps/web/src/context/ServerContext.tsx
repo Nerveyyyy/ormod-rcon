@@ -6,10 +6,11 @@ export type Server = {
   name: string;
   serverName: string;
   savePath: string;
-  executablePath: string;
+  containerName: string | null;  // Docker container name (null = uses env default)
+  executablePath: string;        // Legacy field — prefer containerName
+  mode: string;                  // DOCKER | RCON
   gamePort: number;
   queryPort: number;
-  mode: string;
   running: boolean;
   notes?: string | null;
 };

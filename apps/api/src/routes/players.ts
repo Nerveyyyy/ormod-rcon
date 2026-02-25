@@ -1,40 +1,37 @@
 import type { FastifyPluginAsync } from 'fastify';
-import prisma from '../db/prisma-client.js';
-import { FileIOService } from '../services/file-io.js';
+import * as ctrl from '../controllers/players.js';
 
-export const playersRoutes: FastifyPluginAsync = async (app) => {
+// ── Schemas ──────────────────────────────────────────────────────────────────
 
-  // GET /api/servers/:id/players
-  app.get<{ Params: { id: string } }>('/servers/:id/players', async (req, reply) => {
-    const server = await prisma.server.findUnique({ where: { id: req.params.id } });
-    if (!server) return reply.status(404).send({ error: 'Server not found' });
+const serverParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string' } },
+} as const;
 
-    const io = new FileIOService(server.savePath);
+const steamIdParams = {
+  type: 'object',
+  required: ['steamId'],
+  properties: { steamId: { type: 'string' } },
+} as const;
 
-    let filePlayers: { steamId: string; data: unknown }[] = [];
-    try { filePlayers = await io.listPlayers(); } catch { /* PlayerData dir may not exist yet */ }
+// ── Routes ───────────────────────────────────────────────────────────────────
 
-    const adminLines = await io.readList('adminlist.txt');
-    const permMap = new Map<string, string>();
-    for (const line of adminLines) {
-      const [steamId, perm] = line.split(':');
-      if (steamId && perm) permMap.set(steamId.trim(), perm.trim());
-    }
+const playersRoutes: FastifyPluginAsync = async (app) => {
 
-    return filePlayers.map(p => ({
-      steamId: p.steamId,
-      permission: permMap.get(p.steamId) ?? 'client',
-      online: false,
-      data: p.data,
-    }));
+  app.route({
+    method:  'GET',
+    url:     '/servers/:id/players',
+    schema:  { params: serverParams },
+    handler: ctrl.listPlayers,
   });
 
-  // GET /api/players/:steamId
-  app.get<{ Params: { steamId: string } }>('/players/:steamId', async (req) => {
-    return prisma.playerRecord.findMany({
-      where: { steamId: req.params.steamId },
-      include: { server: { select: { id: true, name: true } } },
-      orderBy: { lastSeen: 'desc' },
-    });
+  app.route({
+    method:  'GET',
+    url:     '/players/:steamId',
+    schema:  { params: steamIdParams },
+    handler: ctrl.getPlayerHistory,
   });
 };
+
+export default playersRoutes;

@@ -13,37 +13,83 @@ datasource db {
 }
 
 // SQLite does not support native enums — all enum-like fields use String with defined values.
-// TypeScript types for these are in src/types.ts
 
-// ── Dashboard users ──────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth — BetterAuth schema (email + password, sessions, OAuth-ready)
+// Roles: OWNER | ADMIN | VIEWER
+// ─────────────────────────────────────────────────────────────────────────────
+
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  role         String    @default("VIEWER")  // OWNER | ADMIN | VIEWER
-  createdAt    DateTime  @default(now())
-  sessions     Session[]
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String    @default("VIEWER")  // OWNER | ADMIN | VIEWER
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
 }
 
+// BetterAuth session — token stored in HTTP-only cookie
 model Session {
   id        String   @id @default(cuid())
-  token     String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ── Managed game servers ─────────────────────────
+// BetterAuth account — holds credentials per provider (password stored here)
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// BetterAuth verification tokens (email verification, password reset)
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game servers
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Server {
   id             String   @id @default(cuid())
   name           String                          // Display name in UI
   serverName     String   @unique               // Matches -servername flag
-  savePath       String                          // Absolute path to save dir
-  executablePath String   @default("")          // Absolute path to ORMODDirective.exe
-  mode           String   @default("LOCAL")     // LOCAL | REMOTE
+  savePath       String                          // Abs path inside dashboard container
+  containerName  String?                         // Docker container name (null = env default)
+  executablePath String   @default("")          // Legacy — kept for DB compat; prefer containerName
+  mode           String   @default("DOCKER")    // DOCKER | RCON (RCON reserved for future)
   gamePort       Int      @default(27015)
   queryPort      Int      @default(27016)
-  rconPort       Int?                            // null until RCON is added to the game
+  rconPort       Int?                            // null until the game ships RCON
   rconPass       String?
   notes          String?
   createdAt      DateTime @default(now())
@@ -54,7 +100,10 @@ model Server {
   listLinks   ServerListLink[]
 }
 
-// ── Player records (populated from PlayerData/ files) ──
+// ─────────────────────────────────────────────────────────────────────────────
+// Player records (populated from PlayerData/ files)
+// ─────────────────────────────────────────────────────────────────────────────
+
 model PlayerRecord {
   id        String   @id @default(cuid())
   steamId   String
@@ -67,7 +116,10 @@ model PlayerRecord {
   @@unique([steamId, serverId])
 }
 
-// ── Access lists (shareable across servers) ──────
+// ─────────────────────────────────────────────────────────────────────────────
+// Access lists (shareable across servers)
+// ─────────────────────────────────────────────────────────────────────────────
+
 model AccessList {
   id          String   @id @default(cuid())
   name        String                               // e.g. "Global Ban List"
@@ -108,7 +160,10 @@ model ServerListLink {
   @@id([serverId, listId])
 }
 
-// ── Wipe history ──────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Wipe history
+// ─────────────────────────────────────────────────────────────────────────────
+
 model WipeLog {
   id          String   @id @default(cuid())
   serverId    String
@@ -122,7 +177,10 @@ model WipeLog {
   createdAt   DateTime @default(now())
 }
 
-// ── Scheduled tasks ───────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled tasks
+// ─────────────────────────────────────────────────────────────────────────────
+
 model ScheduledTask {
   id        String    @id @default(cuid())
   serverId  String

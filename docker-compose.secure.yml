@@ -1,0 +1,146 @@
+# docker-compose.secure.yml — Hardened deployment (recommended)
+#
+# Key hardening measures vs docker-compose.yml:
+#
+#   1. SOCKET PROXY — The raw Docker socket is NOT mounted into the dashboard.
+#      A dedicated socket-proxy container (tecnativa/docker-socket-proxy) acts
+#      as a filtered HTTP gateway, exposing ONLY the container-control API
+#      paths the dashboard actually uses:
+#        GET  /containers/{name}/json       (inspect / TTY detection)
+#        POST /containers/{name}/start|stop|restart
+#        GET  /containers/{name}/logs       (log streaming)
+#        POST /containers/{name}/attach     (command dispatch → PTY master)
+#        POST /containers/{name}/exec       (exec session creation)
+#        GET  /exec/{id}/json               (exec inspect)
+#        POST /exec/{id}/start              (exec start)
+#      All other Docker API endpoints (images, networks, volumes, build,
+#      events, swarm, secrets, etc.) are blocked at the proxy level.
+#
+#   2. NON-ROOT DASHBOARD — The dashboard container process runs as UID 1001
+#      (the `dashboard` user created in Dockerfile.dashboard). The entrypoint
+#      script briefly chowns the three volume-mount paths as root, then drops
+#      privileges before starting Prisma and the Fastify server.
+#
+#   3. INTERNAL PROXY NETWORK — The socket-proxy container is reachable only
+#      via the `ormod-proxy-internal` network, which is marked `internal: true`
+#      (no outbound internet access). The dashboard connects to the proxy over
+#      this network; the proxy connects to the host Docker socket.
+#
+# Usage:
+#   docker compose -f docker-compose.secure.yml up -d
+#
+# First-time setup (volume ownership):
+#   mkdir -p ./data ./backups
+#   The entrypoint automatically runs `chown -R 1001:1001 /data /backups /saves`
+#   at container startup, so no manual chown is required on the host.
+#
+# If you previously used docker-compose.yml the existing SQLite database in
+# ./data will continue to work — Prisma's db push is non-destructive.
+
+services:
+
+  # ── Socket proxy ─────────────────────────────────────────────────────────────
+  # Sits between /var/run/docker.sock (mounted read-only here) and the dashboard.
+  # Implemented by tecnativa/docker-socket-proxy (HAProxy-based HTTP filter).
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: ormod-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # read-only on the proxy side
+    environment:
+      # ── Allowed API sections ─────────────────────────────────────────────────
+      CONTAINERS: 1   # /containers/* — inspect, logs, start, stop, restart, attach
+      EXEC: 1         # /exec/*       — create, inspect, start exec sessions
+      POST: 1         # allow HTTP POST (needed for start/stop/restart/attach/exec)
+
+      # ── Everything else explicitly disabled ─────────────────────────────────
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      INFO: 0
+      PING: 0
+      SERVICES: 0
+      SWARM: 0
+      TASKS: 0
+      SECRETS: 0
+      NODES: 0
+      BUILD: 0
+      EVENTS: 0
+      AUTH: 0
+      DISTRIBUTION: 0
+      PLUGINS: 0
+      SYSTEM: 0
+
+    networks:
+      - proxy-internal  # only reachable from dashboard, not from outside
+
+  # ── Game server ───────────────────────────────────────────────────────────────
+  ormod-game:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gameserver
+    container_name: ${GAME_CONTAINER_NAME:-ormod-game}
+    restart: unless-stopped
+    environment:
+      SERVER_NAME:       ${SERVER_NAME:-MyOrmodServer}
+      GAME_BINARY_NAME:  ${GAME_BINARY_NAME:-ORMODDirective}
+    volumes:
+      - ${GAME_BINARY_PATH:-./docker/game-binary}:/home/steam/ormod
+      - ${SAVES_PATH:-game-saves}:/home/steam/.config/ORMOD/Playtest
+    ports:
+      - "${GAME_HOST:-0.0.0.0}:${GAME_PORT:-27015}:${GAME_PORT:-27015}/udp"
+      - "${GAME_HOST:-0.0.0.0}:${QUERY_PORT:-27016}:${QUERY_PORT:-27016}/udp"
+    stdin_open: true
+    tty: true
+    networks:
+      - default
+
+  # ── Dashboard (API + frontend) ────────────────────────────────────────────────
+  ormod-dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: ormod-dashboard
+    restart: unless-stopped
+    # Runs as dashboard (UID 1001) after the entrypoint chowns volume mounts.
+    # The entrypoint script handles the root→non-root transition automatically.
+    depends_on:
+      - ormod-game
+      - socket-proxy
+    environment:
+      DATABASE_URL:        ${DATABASE_URL:-file:/data/ormod-rcon.db}
+      SAVE_BASE_PATH:      /saves
+      BACKUP_PATH:         /backups
+      BETTER_AUTH_SECRET:  ${BETTER_AUTH_SECRET}
+      PORT:                3000
+      STATIC_PATH:         /app/apps/web/dist
+      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
+      DOCKER_CONTROL_ENABLED: "true"
+      # Route Docker API calls through the socket proxy (TCP) instead of the raw
+      # Unix socket. docker-manager.ts reads this and switches to HTTP-over-TCP.
+      DOCKER_HOST:         tcp://socket-proxy:2375
+    volumes:
+      - ./data:/data                                # SQLite database
+      - ${SAVES_PATH:-game-saves}:/saves            # Shared save files
+      - ./backups:/backups                          # Pre-wipe backup archives
+      # /var/run/docker.sock is intentionally NOT mounted here.
+      # All Docker API access goes through socket-proxy over the internal network.
+    ports:
+      - "${DASHBOARD_HOST:-0.0.0.0}:${DASHBOARD_PORT:-3000}:3000"
+    networks:
+      - default
+      - proxy-internal   # can reach socket-proxy
+
+volumes:
+  game-saves:
+
+networks:
+  default:
+    name: ormod-network
+  proxy-internal:
+    # Internal-only network: socket-proxy ↔ dashboard.
+    # `internal: true` means no external routing — containers on this network
+    # cannot reach the internet, only each other.
+    internal: true
+    name: ormod-proxy-internal

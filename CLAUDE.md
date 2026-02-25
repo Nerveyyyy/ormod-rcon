@@ -94,10 +94,29 @@ ormod-rcon/
 ├── apps/
 │   ├── api/                    # Fastify backend
 │   │   ├── src/
-│   │   │   ├── server.ts
-│   │   │   ├── plugins/        # auth, websocket, cors
-│   │   │   ├── routes/         # servers, players, settings, access-lists, console, wipe, schedule
+│   │   │   ├── app.ts          # Builds & returns Fastify instance (testable)
+│   │   │   ├── server.ts       # Thin entry point (listen + post-startup tasks)
+│   │   │   ├── config.ts       # Env JSON schema + Fastify type augmentation
+│   │   │   ├── plugins/        # Autoloaded (fp dependency graph controls order)
+│   │   │   │   ├── sensible.ts       # @fastify/sensible (httpErrors, reply helpers)
+│   │   │   │   ├── env.ts            # @fastify/env (schema validation + dotenv)
+│   │   │   │   ├── database.ts       # Prisma lifecycle (decorate + onClose)
+│   │   │   │   ├── formbody.ts       # @fastify/formbody
+│   │   │   │   ├── cookie.ts         # @fastify/cookie
+│   │   │   │   ├── helmet.ts         # @fastify/helmet (HSTS, referrer, frameguard)
+│   │   │   │   ├── cors.ts           # @fastify/cors (reads fastify.config)
+│   │   │   │   ├── csrf.ts           # @fastify/csrf-protection (cookie double-submit)
+│   │   │   │   ├── underpressure.ts  # @fastify/under-pressure (backpressure)
+│   │   │   │   └── auth.ts           # BetterAuth hooks + auth guard
+│   │   │   ├── routes/         # Autoloaded under /api prefix (fastify.route + schemas)
+│   │   │   │   ├── servers.ts, players.ts, settings.ts, access-lists.ts
+│   │   │   │   ├── console.ts  # default=HTTP routes; named consoleWsRoutes (manual)
+│   │   │   │   ├── wipe.ts, schedule.ts
+│   │   │   │   ├── setup.ts         # GET+POST /api/setup (first-run)
+│   │   │   │   └── capabilities.ts  # GET /api/capabilities
+│   │   │   ├── controllers/    # Handler logic (one file per route domain)
 │   │   │   ├── services/       # docker-manager, file-io, rcon-adapter, wipe-service, list-service
+│   │   │   ├── lib/            # auth.ts (BetterAuth config)
 │   │   │   └── db/
 │   │   └── prisma/
 │   │       └── schema.prisma   # Full schema in architecture doc
@@ -159,7 +178,7 @@ Three scopes implemented in `AccessList` Prisma model and AccessControl UI:
 - `preview_console_logs` accumulates across page reloads — use `performance.getEntriesByType('resource')` to confirm which Vite file version is active
 - cron-parser v4/v5 API: use `CronExpressionParser.parse(expr).next().toDate()` (not `parseExpression`)
 - Prisma array-form `$transaction` does not support `skipDuplicates: true` at TypeScript level — remove it and use `deleteMany` before `createMany` instead
-- `@fastify/static` must be registered in `server.ts` when `STATIC_PATH` env var is set (Docker production). Use `prefix: '/'` and a catch-all 404 handler to serve `index.html` for SPA routing.
+- `@fastify/static` is registered in `app.ts` when `STATIC_PATH` env var is set (Docker production). Uses `prefix: '/'` and a catch-all 404 handler to serve `index.html` for SPA routing.
 
 ---
 
@@ -194,7 +213,10 @@ Future flow: route → `getAdapter()` → `WebSocketRconAdapter` → RCON TCP
 - ✅ Access lists with EXTERNAL URL refresh
 - ✅ Server Management page (add/edit/delete servers, start/stop/restart)
 - ✅ `docker-manager.ts` — Docker socket replaces node-pty entirely
-- ✅ `@fastify/static` registered in `server.ts` for Docker static serving
+- ✅ Proper Fastify plugin architecture (`app.ts`/`server.ts` split, `@fastify/autoload`, numbered plugins)
+- ✅ Env validation via `@fastify/env` with typed `fastify.config.*`
+- ✅ Security plugins: `@fastify/helmet`, `@fastify/csrf-protection`, `@fastify/under-pressure`
+- ✅ `@fastify/static` registered in `app.ts` for Docker static serving
 - ✅ Bind-mount support for game binary and saves (`GAME_BINARY_PATH`, `SAVES_PATH`)
 - ✅ `DASHBOARD_HOST` for per-interface port binding
 - ⏳ **TODO:** Auth (Better Auth) — all routes currently open for local/Docker dev
@@ -213,7 +235,7 @@ chown -R 1000:1000 /opt/ormod/configs
 git clone https://github.com/Nerveyyyy/ormod-rcon /opt/ormod/rcon
 cd /opt/ormod/rcon
 cp .env.example .env
-# Edit .env: set JWT_SECRET, SERVER_NAME, GAME_BINARY_PATH=../server, SAVES_PATH=../configs
+# Edit .env: set BETTER_AUTH_SECRET, SERVER_NAME, GAME_BINARY_PATH=../server, SAVES_PATH=../configs
 
 docker compose up -d
 ```
@@ -221,9 +243,10 @@ docker compose up -d
 ## Getting Started (Local Dev)
 ```bash
 pnpm install
-cd apps/api && cp ../../.env.example .env
+cp .env.example .env
 # Edit .env: set DATABASE_URL=file:./ormod-rcon.db
-npx prisma migrate dev
-cd ../..
+cd apps/api && npx prisma migrate dev && cd ../..
 pnpm dev   # API on :3001, web on :3000
 ```
+The API dev script uses `--env-file=../../.env` to load the root `.env` file.
+`@fastify/env` also reads it via `dotenv.path: '../../.env'`.

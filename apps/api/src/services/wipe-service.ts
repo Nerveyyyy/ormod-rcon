@@ -8,15 +8,17 @@ import type { WipeType } from '../types.js';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export type WipeConfig = {
-  wipeType: WipeType;
-  customFiles?: string[];
-  keepPlayerData: boolean;
-  keepAccessLists: boolean;
-  createBackup: boolean;
+  wipeType:         WipeType;
+  customFiles?:     string[];
+  keepPlayerData:   boolean;
+  keepAccessLists:  boolean;
+  createBackup:     boolean;
   serverWillRestart: boolean;
-  notes?: string;
+  notes?:           string;
 };
 
+// Files/directories targeted by each wipe preset.
+// Paths are relative to server.savePath and must never escape it.
 const WIPE_TARGETS: Record<WipeType, string[]> = {
   MAP_ONLY: [
     'ChunkData', 'RegionData', 'mapdata.json', 'entitydata.json',
@@ -41,52 +43,80 @@ const WIPE_TARGETS: Record<WipeType, string[]> = {
   CUSTOM: [],
 };
 
+// Maximum wait for container to stop before proceeding with wipe (ms)
+const STOP_TIMEOUT_MS = 30_000;
+
 export class WipeService {
   async executeWipe(serverId: string, config: WipeConfig, userId: string) {
     const server = await prisma.server.findUniqueOrThrow({ where: { id: serverId } });
-    const io = new FileIOService(server.savePath);
+
+    if (!server.savePath) {
+      throw new Error('Server has no savePath configured — cannot wipe');
+    }
+
+    const savePath = path.resolve(server.savePath);
+    const io = new FileIOService(savePath);
     let backupPath: string | undefined;
+    let errorMsg:   string | undefined;
 
-    // 1. Stop server
-    await dockerManager.stop(server.id);
-    await sleep(3000);
-
-    // 2. Backup (uses fs.cp — works on Windows and Linux)
-    if (config.createBackup) {
-      backupPath = await this.createBackup(server.savePath, server.serverName);
+    // ── 1. Stop the server (safe wipe requires no writes in flight) ──────────
+    const wasRunning = dockerManager.isRunning(serverId);
+    if (wasRunning) {
+      await dockerManager.stop(serverId);
+      // Give the process a moment to flush writes
+      await sleep(3000);
     }
 
-    // 3. Delete files
-    const targets = config.wipeType === 'CUSTOM'
-      ? (config.customFiles ?? [])
-      : WIPE_TARGETS[config.wipeType];
+    try {
+      // ── 2. Backup ──────────────────────────────────────────────────────────
+      if (config.createBackup) {
+        backupPath = await this.createBackup(savePath, server.serverName);
+      }
 
-    for (const target of targets) {
-      await io.deleteFileOrDir(target);
+      // ── 3. Validate + delete targets ──────────────────────────────────────
+      const targets = config.wipeType === 'CUSTOM'
+        ? (config.customFiles ?? [])
+        : WIPE_TARGETS[config.wipeType];
+
+      for (const target of targets) {
+        this.assertSafePath(savePath, target);
+        await io.deleteFileOrDir(target);
+      }
+
+      // ── 4. Restart if requested ───────────────────────────────────────────
+      if (config.serverWillRestart) {
+        await dockerManager.start(serverId);
+      }
+
+    } catch (err) {
+      errorMsg = String(err);
+      // Best-effort restart even on error — don't leave server down
+      if (config.serverWillRestart && !dockerManager.isRunning(serverId)) {
+        try { await dockerManager.start(serverId); } catch { /* log later */ }
+      }
     }
 
-    // 4. Write wipe log
+    // ── 5. Write wipe log ────────────────────────────────────────────────────
     const log = await prisma.wipeLog.create({
       data: {
-        serverId: server.id,
-        wipeType: config.wipeType,
+        serverId:    server.id,
+        wipeType:    config.wipeType,
         triggeredBy: userId,
-        notes: config.notes,
+        notes:       config.notes,
         backupPath,
-        success: true,
+        success:     !errorMsg,
+        errorMsg,
       },
     });
 
-    // 5. Restart if requested
-    if (config.serverWillRestart) {
-      await dockerManager.start(server.id);
-    }
-
+    if (errorMsg) throw new Error(errorMsg);
     return log;
   }
 
+  // ── Backup ─────────────────────────────────────────────────────────────────
+
   private async createBackup(savePath: string, serverName: string): Promise<string> {
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const ts   = new Date().toISOString().replace(/[:.]/g, '-');
     const dest = path.join(
       process.env.BACKUP_PATH ?? './backups',
       serverName,
@@ -95,5 +125,23 @@ export class WipeService {
     await fs.mkdir(path.dirname(dest), { recursive: true });
     await fs.cp(savePath, dest, { recursive: true });
     return dest;
+  }
+
+  // ── Path safety guard ──────────────────────────────────────────────────────
+
+  /**
+   * Ensures a deletion target is inside savePath.
+   * Prevents path traversal attacks (e.g. a custom wipe target of "../../etc").
+   */
+  private assertSafePath(savePath: string, target: string): void {
+    // Reject any target with path separators or traversal sequences
+    if (target.includes('..') || target.includes('/') || target.includes('\\')) {
+      throw new Error(`Unsafe wipe target rejected: "${target}"`);
+    }
+    const resolved = path.resolve(savePath, target);
+    if (!resolved.startsWith(path.resolve(savePath) + path.sep) &&
+        resolved !== path.resolve(savePath)) {
+      throw new Error(`Wipe target "${target}" escapes savePath — operation aborted`);
+    }
   }
 }
