@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { requireOwner } from '../plugins/auth.js';
 import * as ctrl from '../controllers/schedule.js';
 
 // Re-export for server.ts startup cron restoration
@@ -37,6 +38,7 @@ const scheduleBody = {
 
 const scheduleRoutes: FastifyPluginAsync = async (app) => {
 
+  // Read — any authenticated user
   app.route({
     method:  'GET',
     url:     '/servers/:id/schedules',
@@ -44,33 +46,40 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
     handler: ctrl.listSchedules,
   });
 
+  // Create — OWNER only
   app.route({
-    method:  'POST',
-    url:     '/servers/:id/schedules',
-    schema:  { params: serverParams, body: scheduleBody },
-    handler: ctrl.createSchedule,
+    method:     'POST',
+    url:        '/servers/:id/schedules',
+    schema:     { params: serverParams, body: scheduleBody },
+    preHandler: [requireOwner],
+    handler:    ctrl.createSchedule,
   });
 
+  // Update — OWNER only
   app.route({
-    method:  'PUT',
-    url:     '/servers/:id/schedules/:taskId',
-    schema:  { params: taskParams },
-    handler: ctrl.updateSchedule,
+    method:     'PUT',
+    url:        '/servers/:id/schedules/:taskId',
+    schema:     { params: taskParams },
+    preHandler: [requireOwner],
+    handler:    ctrl.updateSchedule,
   });
 
+  // Delete — OWNER only
   app.route({
-    method:  'DELETE',
-    url:     '/servers/:id/schedules/:taskId',
-    schema:  { params: taskParams },
-    handler: ctrl.deleteSchedule,
+    method:     'DELETE',
+    url:        '/servers/:id/schedules/:taskId',
+    schema:     { params: taskParams },
+    preHandler: [requireOwner],
+    handler:    ctrl.deleteSchedule,
   });
 
-  // Manual trigger
+  // Manual trigger — OWNER only
   app.route({
-    method:  'POST',
-    url:     '/servers/:id/schedules/:taskId/run',
-    schema:  { params: taskParams },
-    handler: ctrl.runScheduleNow,
+    method:     'POST',
+    url:        '/servers/:id/schedules/:taskId/run',
+    schema:     { params: taskParams },
+    preHandler: [requireOwner],
+    handler:    ctrl.runScheduleNow,
   });
 };
 

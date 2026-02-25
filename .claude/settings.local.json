@@ -6,7 +6,8 @@
       "Bash(npx prisma migrate:*)",
       "Bash(pnpm add:*)",
       "Bash(\"E:/ormod-crcon/apps/api/src/routes/players.ts\":*)",
-      "Bash(\"E:/ormod-crcon/apps/api/src/routes/wipe.ts\":*)"
+      "Bash(\"E:/ormod-crcon/apps/api/src/routes/wipe.ts\":*)",
+      "Bash(cd /e/ormod-crcon/apps/api && npx tsc --noEmit 2>&1)"
     ]
   }
 }
