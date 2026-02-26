@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
 
 /* ── Reset (overrides Tailwind Preflight where needed) ────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

@@ -10,7 +10,7 @@ export default fp(async function envPlugin(fastify) {
 
   // Production safety check: require a real secret
   if (fastify.config.NODE_ENV === 'production') {
-    const secret = fastify.config.BETTER_AUTH_SECRET || fastify.config.JWT_SECRET;
+    const secret = fastify.config.BETTER_AUTH_SECRET;
     if (!secret || secret === 'change_this_to_something_very_random_and_long') {
       fastify.log.error(
         '[FATAL] BETTER_AUTH_SECRET must be set to a strong random value in production.\n' +

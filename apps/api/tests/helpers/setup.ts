@@ -160,7 +160,8 @@ export async function setupTestContext(): Promise<TestContext> {
 
   // 2. Set env vars before any module loads that reads them
   process.env.DATABASE_URL = dbUrl;
-  process.env.CORS_ORIGIN = 'http://localhost:3000';
+  process.env.WEB_HOST = 'localhost';
+  process.env.WEB_PORT = '3000';
   process.env.NODE_ENV = 'test';
   process.env.BETTER_AUTH_SECRET = 'test-secret-that-is-long-enough-for-auth';
   process.env.DOCKER_CONTROL_ENABLED = 'true';
