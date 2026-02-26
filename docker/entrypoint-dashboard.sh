@@ -17,4 +17,4 @@ chown -R dashboard:dashboard /data /backups /saves 2>/dev/null || true
 # Run Prisma migration + start server as the non-root dashboard user.
 # `gosu` is equivalent to `su-exec` — it executes the command with the new UID
 # without spawning a shell child process (clean signal forwarding).
-exec gosu dashboard sh -c "npx prisma db push --skip-generate && node dist/server.js"
+exec gosu dashboard sh -c "npx prisma db push && node dist/src/server.js"
