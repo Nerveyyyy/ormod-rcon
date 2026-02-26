@@ -37,6 +37,7 @@ RUN dpkg --add-architecture i386 \
  && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    gosu \
     lib32gcc-s1 \
     libstdc++6 \
     libgcc-s1 \
@@ -68,7 +69,11 @@ ENV HOME=/home/steam
 EXPOSE 27015/udp
 EXPOSE 27016/udp
 
-COPY --chown=steam:steam docker/entrypoint-gameserver.sh /entrypoint.sh
+# Switch back to root so the entrypoint can fix volume ownership before
+# dropping privileges to the steam user via gosu (mirrors dashboard pattern).
+USER root
+
+COPY docker/entrypoint-gameserver.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

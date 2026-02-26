@@ -79,6 +79,9 @@ COPY --from=api-builder /app/node_modules ./node_modules
 COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
+# prisma.config.ts is required by `prisma db push` at runtime to locate the
+# schema and datasource URL. It is not baked into the api-builder stage.
+COPY apps/api/prisma.config.ts ./apps/api/
 
 # Copy built React frontend (served as static files by Fastify @fastify/static)
 COPY --from=web-builder /app/apps/web/dist ./apps/web/dist
