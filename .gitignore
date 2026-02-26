@@ -20,7 +20,7 @@ apps/web/src/**/*.d.ts.map
 *.db-journal
 
 # Prisma generated client (regenerated via `prisma generate`)
-apps/api/src/generated/
+apps/api/prisma/generated/
 
 # Backups (generated at runtime)
 backups/

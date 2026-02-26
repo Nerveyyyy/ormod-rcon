@@ -13,7 +13,7 @@ import { registerCronJob } from './routes/schedule.js';
 const app = await buildApp();
 
 try {
-  await app.listen({ port: app.config.PORT, host: '0.0.0.0' });
+  await app.listen({ port: app.config.API_PORT, host: app.config.API_HOST });
 
   await dockerManager.reconnect();
   app.log.info('Docker manager reconnected to running containers');

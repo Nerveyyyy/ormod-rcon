@@ -173,6 +173,10 @@ Three scopes implemented in `AccessList` Prisma model and AccessControl UI:
 ---
 
 ## Known Gotchas
+- pnpm native build scripts (Prisma, better-sqlite3, esbuild): `pnpm approve-builds` is interactive (TUI) — add to `pnpm.onlyBuiltDependencies` in root `package.json` instead.
+- `tsc` (via `pnpm build` in `apps/web`) emits `.js`/`.d.ts`/`.js.map` alongside source files — these are gitignored via `apps/web/src/**/*.js` etc. Do not commit them.
+- `apps/web/tsconfig.json` must override `"types": []` — the base tsconfig inherits `"types": ["node"]` but `@types/node` is API-only; without this override `tsc --noEmit` fails in the web package.
+- Vitest full-suite parallel runs can show transient fork failures (SQLite isolation); always re-run the failing file in isolation to confirm before investigating.
 - Expandable table rows: use `<Fragment key={id}>` for the outer wrapper, add `key={\`detail-${id}\`}` to the conditional `<tr>`
 - `preview_console_logs` accumulates across page reloads — use `performance.getEntriesByType('resource')` to confirm which Vite file version is active
 - cron-parser v4/v5 API: use `CronExpressionParser.parse(expr).next().toDate()` (not `parseExpression`)
@@ -295,7 +299,7 @@ The API dev script uses `--env-file=../../.env` to load the root `.env` file.
 - One task per subagent for focused execution
 
 ### Self-Improvement
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- After ANY correction from the user: update `docs/lessons.md` with the pattern
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project
@@ -319,12 +323,12 @@ The API dev script uses `--env-file=../../.env` to load the root `.env` file.
 - Go fix failing CI tests without being told how
 
 ### Task Management
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+1. **Plan First**: Write plan to `docs/todo.md` with checkable items
 2. **Verify Plan**: Check in before starting implementation
 3. **Track Progress**: Mark items complete as you go
 4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+5. **Document Results**: Add review section to `docs/todo.md`
+6. **Capture Lessons**: Update `docs/lessons.md` after corrections
 
 ### Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.

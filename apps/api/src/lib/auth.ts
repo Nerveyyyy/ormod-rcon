@@ -11,12 +11,19 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import prisma from '../db/prisma-client.js';
+import { computeOrigins } from '../config.js';
 
-const TRUSTED_ORIGINS = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
-  .split(',')
-  .map(o => o.trim());
+const publicUrl = process.env.PUBLIC_URL  ?? '';
+const apiHost   = process.env.API_HOST    ?? 'localhost';
+const apiPort   = process.env.API_PORT    ?? '3001';
+const webHost   = process.env.WEB_HOST    ?? 'localhost';
+const webPort   = process.env.WEB_PORT    ?? '3000';
+
+const BASE_URL        = publicUrl || `http://${apiHost}:${apiPort}`;
+const TRUSTED_ORIGINS = computeOrigins(publicUrl, webHost, webPort);
 
 export const auth = betterAuth({
+  baseURL: BASE_URL,
   database: prismaAdapter(prisma, { provider: 'sqlite' }),
 
   // Email + password is the only auth method for self-hosted installs.

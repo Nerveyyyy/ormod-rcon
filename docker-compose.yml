@@ -57,11 +57,18 @@ services:
   # The Docker socket grants control over the game container (start/stop/exec).
   # Save files are shared via the same volume/path as the game container.
   #
-  # DASHBOARD_HOST    — host IP to bind the dashboard port to.
-  #                     Default: 0.0.0.0 (all interfaces).
-  #                     Set to a specific IP to restrict access, e.g. 10.0.0.1
+  # WEB_HOST      — host IP Docker binds the dashboard port to.
+  #                 Default: 0.0.0.0 (all interfaces).
+  #                 Set to a specific IP to restrict access, e.g. 10.0.0.1
   #
-  # DASHBOARD_PORT    — host port the dashboard is exposed on (default: 3000).
+  # WEB_PORT      — host port the dashboard is exposed on (default: 3000).
+  #
+  # PUBLIC_URL    — full URL clients use to reach the dashboard.
+  #                 Required for any non-localhost deployment.
+  #                 Examples:
+  #                   LAN/WAN:          http://192.168.1.100:3000
+  #                   Reverse proxy:    https://rcon.example.com
+  #                 Leave empty for localhost-only testing.
   ormod-dashboard:
     build:
       context: .
@@ -71,23 +78,26 @@ services:
     depends_on:
       - ormod-game
     environment:
-      DATABASE_URL: ${DATABASE_URL:-file:/data/ormod-rcon.db}
+      DATABASE_URL: file:/data/ormod-rcon.db
       SAVE_BASE_PATH: /saves
       BACKUP_PATH: /backups
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      PORT: 3000
+      # Fastify always binds to all interfaces inside the container
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      # Passed through for CORS derivation when PUBLIC_URL is not set
+      WEB_HOST: ${WEB_HOST:-0.0.0.0}
+      WEB_PORT: ${WEB_PORT:-3000}
+      PUBLIC_URL: ${PUBLIC_URL:-}
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
-      # DASHBOARD_HOST is intentionally NOT passed into the container — it is
-      # used only by the ports: mapping below to control host-side IP binding.
-      # Fastify always binds to 0.0.0.0 inside the container.
     volumes:
       - ./data:/data                                                         # SQLite database
       - ${SAVES_PATH:-game-saves}:/saves                                     # Shared save files (read-write)
       - ./backups:/backups                                                   # Pre-wipe backup archives
       - /var/run/docker.sock:/var/run/docker.sock                           # Docker API (process mgmt)
     ports:
-      - "${DASHBOARD_HOST:-0.0.0.0}:${DASHBOARD_PORT:-3000}:3000"
+      - "${WEB_HOST:-0.0.0.0}:${WEB_PORT:-3000}:3000"
 
 # Named volume used when SAVES_PATH is not set.
 # Docker Compose treats strings starting with ./ ../ or / as bind mounts;
