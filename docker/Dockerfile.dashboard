@@ -45,6 +45,7 @@ COPY apps/api/package.json ./apps/api/
 RUN pnpm install --frozen-lockfile --filter @ormod-rcon/api
 
 COPY apps/api/prisma ./apps/api/prisma
+COPY apps/api/prisma.config.ts ./apps/api/
 RUN pnpm --filter @ormod-rcon/api exec prisma generate
 
 COPY tsconfig.base.json ./
@@ -87,7 +88,6 @@ COPY apps/api/prisma.config.ts ./apps/api/
 COPY --from=web-builder /app/apps/web/dist ./apps/web/dist
 
 WORKDIR /app/apps/api
-RUN npx prisma generate
 
 # Give the dashboard user ownership of the entire app directory.
 # Volume mounts (/data, /backups, /saves) are chowned at runtime by the entrypoint.
