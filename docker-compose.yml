@@ -39,8 +39,8 @@ services:
       SERVER_NAME: ${SERVER_NAME:-MyOrmodServer}
       GAME_BINARY_NAME: ${GAME_BINARY_NAME:-ORMODDirective}
     volumes:
-      - ${GAME_BINARY_PATH:-./docker/game-binary}:/home/steam/ormod         # game binary directory
-      - ${SAVES_PATH:-game-saves}:/home/steam/.config/ORMOD/Playtest          # save data / server configs
+      - ${GAME_BINARY_PATH:-./docker/game-binary}:/game                      # game binary directory
+      - ${SAVES_PATH:-game-saves}:/saves                                     # save data / server configs
     ports:
       # Host:container ports use the same value — the game's actual port is set
       # in serversettings.json; GAME_PORT / QUERY_PORT just document that value
