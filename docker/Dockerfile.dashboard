@@ -44,12 +44,14 @@ COPY apps/api/package.json ./apps/api/
 
 RUN pnpm install --frozen-lockfile --filter @ormod-rcon/api
 
+# tsconfig must be present BEFORE prisma generate — Prisma 7 reads it to
+# determine import extensions (.js for NodeNext, .ts otherwise).
+COPY tsconfig.base.json ./
+COPY apps/api/tsconfig.json ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma
 COPY apps/api/prisma.config.ts ./apps/api/
 RUN pnpm --filter @ormod-rcon/api exec prisma generate
 
-COPY tsconfig.base.json ./
-COPY apps/api/tsconfig.json ./apps/api/
 COPY apps/api/src ./apps/api/src
 
 RUN pnpm --filter @ormod-rcon/api build
@@ -59,17 +61,9 @@ RUN pnpm --filter @ormod-rcon/api build
 # ── Stage 3: Runtime ───────────────────────────────────────────────────────
 FROM node:20-slim
 
-# openssl  — required at runtime by the Prisma query engine (libssl.so.3).
-# gosu     — minimal setuid helper used by entrypoint-dashboard.sh to drop
-#             from root (which fixes volume ownership) to the dashboard user.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl gosu \
+# openssl — required at runtime by the Prisma query engine (libssl.so.3).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
  && rm -rf /var/lib/apt/lists/*
-
-# Non-root user for the dashboard process.
-# UID/GID 1001 avoids collision with the host's typical first user (1000).
-# docker-compose.secure.yml relies on this UID being 1001.
-RUN groupadd -g 1001 dashboard \
- && useradd  -u 1001 -g 1001 -s /bin/sh -M dashboard
 
 RUN npm install -g pnpm
 
@@ -81,7 +75,7 @@ COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 # prisma.config.ts is required by `prisma db push` at runtime to locate the
-# schema and datasource URL. It is not baked into the api-builder stage.
+# schema and datasource URL.
 COPY apps/api/prisma.config.ts ./apps/api/
 
 # Copy built React frontend (served as static files by Fastify @fastify/static)
@@ -89,19 +83,10 @@ COPY --from=web-builder /app/apps/web/dist ./apps/web/dist
 
 WORKDIR /app/apps/api
 
-# Give the dashboard user ownership of the entire app directory.
-# Volume mounts (/data, /backups, /saves) are chowned at runtime by the entrypoint.
-RUN chown -R dashboard:dashboard /app
-
 ENV NODE_ENV=production
 # STATIC_PATH tells server.ts where to serve the React build from
 ENV STATIC_PATH=/app/apps/web/dist
 
-# Entrypoint: briefly runs as root to fix volume mount ownership, then drops
-# to UID 1001 (dashboard) for the actual server process.
-COPY docker/entrypoint-dashboard.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 EXPOSE 3000
 
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["sh", "-c", "npx prisma db push && node dist/src/server.js"]
