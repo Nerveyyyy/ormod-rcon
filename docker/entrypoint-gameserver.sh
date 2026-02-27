@@ -19,8 +19,10 @@ echo "╚═══════════════════════�
 #                          write crash dumps / temp files next to its binary.
 # /home/steam/.config/…  — saves / config volume: chowned so the game can
 #                          create and update server save files.
-chown -R steam:steam /home/steam/ormod || true
-chown -R steam:steam /home/steam/.config/ORMOD/Playtest || true
+chown -R steam:steam /home/steam/ormod 2>/dev/null \
+  || chmod -R 777 /home/steam/ormod 2>/dev/null || true
+chown -R steam:steam /home/steam/.config/ORMOD/Playtest 2>/dev/null \
+  || chmod -R 777 /home/steam/.config/ORMOD/Playtest 2>/dev/null || true
 
 # Ensure binary is executable (host filesystem permissions may vary).
 chmod +x "/home/steam/ormod/${GAME_BINARY_NAME}" || true
