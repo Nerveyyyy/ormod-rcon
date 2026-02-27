@@ -24,8 +24,9 @@ services:
   #                     e.g. a public interface while the dashboard is LAN-only.
   #
   # GAME_PORT /       — UDP ports the game listens on (set in serversettings.json).
-  # QUERY_PORT          These values tell Docker which ports to forward from the
-  #                     host. Keep them in sync with serversettings.json.
+  # QUERY_PORT /        These values tell Docker which ports to forward from the
+  # KCP_PORT             host. Keep them in sync with serversettings.json.
+  #                     KCP_PORT is the game traffic port (Mirror/KCP networking).
   #
   # Future: when the game ships on Steam, swap Dockerfile.gameserver to
   # SteamCMD and remove the GAME_BINARY_PATH volume entry below.
@@ -47,6 +48,7 @@ services:
       # and tell Docker which ports to forward.
       - "${GAME_HOST:-0.0.0.0}:${GAME_PORT:-27015}:${GAME_PORT:-27015}/udp"
       - "${GAME_HOST:-0.0.0.0}:${QUERY_PORT:-27016}:${QUERY_PORT:-27016}/udp"
+      - "${GAME_HOST:-0.0.0.0}:${KCP_PORT:-7777}:${KCP_PORT:-7777}/udp"
     stdin_open: true   # Keep stdin pipe open so the dashboard can write to it
     tty: true          # Required: game reads console commands from a PTY, not a plain
                        # pipe. With tty: true Docker streams raw bytes for logs (no
