@@ -52,6 +52,7 @@ ENV HOME=/root
 
 EXPOSE 27015/udp
 EXPOSE 27016/udp
+EXPOSE 7777/udp
 
 COPY docker/entrypoint-gameserver.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
