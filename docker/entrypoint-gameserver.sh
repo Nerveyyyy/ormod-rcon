@@ -12,22 +12,15 @@ printf  "║  Binary: %-35s║\n" "$GAME_BINARY_NAME"
 echo "║  Ports:  configured via serversettings.json ║"
 echo "╚══════════════════════════════════════════════╝"
 
-# Fix ownership on all mounted directories so the steam user can read/write them.
-# This runs briefly as root (entrypoint starts as root) then drops via gosu.
-#
-# /home/steam/ormod      — game binary bind-mount: chowned so the game can
-#                          write crash dumps / temp files next to its binary.
-# /home/steam/.config/…  — saves / config volume: chowned so the game can
-#                          create and update server save files.
-chown -R steam:steam /home/steam/ormod 2>/dev/null \
-  || chmod -R 777 /home/steam/ormod 2>/dev/null || true
-chown -R steam:steam /home/steam/.config/ORMOD/Playtest 2>/dev/null \
-  || chmod -R 777 /home/steam/.config/ORMOD/Playtest 2>/dev/null || true
+# Symlink so the game's hardcoded save path writes to our /saves volume.
+# Game expects: $HOME/.config/ORMOD/Playtest/<ServerName>/
+# Actual files: /saves/<ServerName>/
+mkdir -p /root/.config/ORMOD
+ln -sfn /saves /root/.config/ORMOD/Playtest
 
-# Ensure binary is executable (host filesystem permissions may vary).
-chmod +x "/home/steam/ormod/${GAME_BINARY_NAME}" || true
+chmod +x "/game/${GAME_BINARY_NAME}" || true
 
-exec gosu steam "/home/steam/ormod/${GAME_BINARY_NAME}" \
+exec "/game/${GAME_BINARY_NAME}" \
   -batchmode \
   -nographics \
   -servername "$SERVER_NAME"

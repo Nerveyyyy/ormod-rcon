@@ -1,77 +1,57 @@
 # ── ORMOD: Directive — Game Server ────────────────────────────────────────
 #
-# ┌─ CURRENT: Manual binary + SteamCMD runtime ─────────────────────────┐
-# │  The game is in early access and not yet on Steam as a dedicated    │
-# │  server app. SteamCMD is installed at build time to provide the     │
-# │  Steam client runtime (steamclient.so) that the Steamworks SDK      │
-# │  inside the binary requires. The game binary itself is NOT baked    │
-# │  into this image — it is mounted from the host at runtime via       │
-# │  GAME_BINARY_PATH in .env (default: ./docker/game-binary).          │
-# │                                                                       │
-# │  Before starting, ensure the binary is executable on the host:      │
-# │    chmod +x ./docker/game-binary/ORMODDirective                     │
-# │    (or wherever GAME_BINARY_PATH points)                             │
-# └───────────────────────────────────────────────────────────────────────┘
+# Simple game server container. Runs as root (standard for game servers).
+# No permission headaches — root can write anywhere.
 #
-# ┌─ FUTURE: SteamCMD app_update (when the game ships on Steam) ─────────┐
-# │  SteamCMD is already installed — just add the app_update call:      │
-# │                                                                       │
-# │    RUN steamcmd/steamcmd.sh \                                        │
-# │        +force_install_dir /home/steam/ormod \                        │
-# │        +login anonymous \                                            │
-# │        +app_update <STEAM_APP_ID> validate \                         │
-# │        +quit                                                         │
-# │                                                                       │
-# │  Then remove the GAME_BINARY_PATH volume mount from                  │
-# │  docker-compose.yml. Entrypoint and saves setup stay identical.     │
-# └───────────────────────────────────────────────────────────────────────┘
+# Volume mounts:
+#   /game   — game binary directory (bind-mount or SteamCMD install)
+#   /saves  — save data / server config files
+#
+# The entrypoint symlinks /saves → $HOME/.config/ORMOD/Playtest so the
+# game writes saves to the mounted volume transparently.
+#
+# ┌─ CURRENT: Manual binary ───────────────────────────────────────────────┐
+# │  Binary is bind-mounted from the host via GAME_BINARY_PATH.           │
+# └────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─ FUTURE: SteamCMD auto-update ─────────────────────────────────────────┐
+# │  SteamCMD is already installed. To switch:                             │
+# │  1. Add to entrypoint or Dockerfile:                                   │
+# │       steamcmd +force_install_dir /game +login anonymous \             │
+# │               +app_update <STEAM_APP_ID> validate +quit                │
+# │  2. Remove GAME_BINARY_PATH volume mount from docker-compose.yml      │
+# │  3. Add a named volume for /game to persist the install               │
+# └────────────────────────────────────────────────────────────────────────┘
 
 FROM ubuntu:22.04
 
-# Add i386 architecture and install:
-#   - SteamCMD runtime (lib32gcc-s1 — SteamCMD itself is a 32-bit binary)
-#   - Game binary runtime (libstdc++6, libgcc-s1)
-#   - curl to download SteamCMD
 RUN dpkg --add-architecture i386 \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    gosu \
     lib32gcc-s1 \
     libstdc++6 \
     libgcc-s1 \
  && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user matching SteamCMD convention
-RUN useradd -m -d /home/steam steam
-
-USER steam
-WORKDIR /home/steam
-
 # Install SteamCMD and run it once to download the Steam client runtime.
-# After the first run, steamcmd creates linux64/steamclient.so which the
-# Steamworks SDK inside the game binary looks for at ~/.steam/sdk64/.
-RUN mkdir -p steamcmd \
+# The game binary links against steamclient.so from the Steamworks SDK.
+RUN mkdir -p /root/steamcmd \
  && curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
-    | tar zxf - -C steamcmd \
- && steamcmd/steamcmd.sh +quit \
- && mkdir -p .steam/sdk64 .steam/sdk32 \
- && ln -sf /home/steam/steamcmd/linux64/steamclient.so .steam/sdk64/steamclient.so \
- && ln -sf /home/steam/steamcmd/linux32/steamclient.so .steam/sdk32/steamclient.so
+    | tar zxf - -C /root/steamcmd \
+ && /root/steamcmd/steamcmd.sh +quit \
+ && mkdir -p /root/.steam/sdk64 /root/.steam/sdk32 \
+ && ln -sf /root/steamcmd/linux64/steamclient.so /root/.steam/sdk64/steamclient.so \
+ && ln -sf /root/steamcmd/linux32/steamclient.so /root/.steam/sdk32/steamclient.so
 
-# Mount points — populated via docker-compose.yml volumes at runtime
-RUN mkdir -p ormod .config/ORMOD/Playtest
+# Mount points
+RUN mkdir -p /game /saves
 
-ENV HOME=/home/steam
+ENV HOME=/root
 
-# Both ports are UDP — actual values configured in serversettings.json
 EXPOSE 27015/udp
 EXPOSE 27016/udp
-
-# Switch back to root so the entrypoint can fix volume ownership before
-# dropping privileges to the steam user via gosu (mirrors dashboard pattern).
-USER root
 
 COPY docker/entrypoint-gameserver.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
