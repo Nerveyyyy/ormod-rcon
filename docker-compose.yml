@@ -71,12 +71,24 @@ services:
   #                   LAN/WAN:          http://192.168.1.100:3000
   #                   Reverse proxy:    https://rcon.example.com
   #                 Leave empty for localhost-only testing.
+  #
+  # API_HOST      — IP address Fastify binds to on the host.
+  #                 Default: 0.0.0.0 (all interfaces).
+  #                 Set to a specific IP to restrict access, e.g. 10.0.0.1
+  #                 With network_mode: host, this directly controls which
+  #                 interface the dashboard listens on. Combined with UFW,
+  #                 this gives full firewall control (Docker bridge networking
+  #                 bypasses UFW — host mode does not).
+  #
+  # API_PORT      — port Fastify listens on (default: 3000).
+  #                 With network_mode: host, this is the actual host port.
   ormod-dashboard:
     build:
       context: .
       dockerfile: docker/Dockerfile.dashboard
     container_name: ormod-dashboard
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - ormod-game
     environment:
@@ -84,10 +96,9 @@ services:
       SAVE_BASE_PATH: /saves
       BACKUP_PATH: /backups
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      # Fastify always binds to all interfaces inside the container
-      API_HOST: 0.0.0.0
-      API_PORT: 3000
-      # Passed through for CORS derivation when PUBLIC_URL is not set
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-3000}
+      # Passed through for CORS / BetterAuth origin derivation when PUBLIC_URL is not set
       WEB_HOST: ${WEB_HOST:-0.0.0.0}
       WEB_PORT: ${WEB_PORT:-3000}
       PUBLIC_URL: ${PUBLIC_URL:-}
@@ -102,15 +113,9 @@ services:
       - ./backups:/backups                                                   # Pre-wipe backup archives
       - /var/run/docker.sock:/var/run/docker.sock                           # Docker API (process mgmt)
       - ./certs:/certs:ro                                                    # TLS certs (optional)
-    ports:
-      - "${WEB_HOST:-0.0.0.0}:${WEB_PORT:-3000}:3000"
 
 # Named volume used when SAVES_PATH is not set.
 # Docker Compose treats strings starting with ./ ../ or / as bind mounts;
 # everything else (like the default "game-saves") is a named volume.
 volumes:
   game-saves:
-
-networks:
-  default:
-    name: ormod-network

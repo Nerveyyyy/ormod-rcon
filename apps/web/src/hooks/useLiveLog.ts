@@ -8,7 +8,8 @@ export function useLiveLog(serverId: string | null): LogLine[] {
 
   useEffect(() => {
     if (!serverId) return;
-    const ws = new WebSocket(`ws://${location.host}/ws/log/${serverId}`);
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/log/${serverId}`);
 
     ws.onmessage = (e) => {
       const { line } = JSON.parse(e.data) as { line: string };
