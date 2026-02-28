@@ -1,4 +1,5 @@
 # ORMOD: Directive — Community RCON Dashboard
+
 ## Architecture & Implementation Guide
 
 ---
@@ -11,18 +12,18 @@
 
 ## Tech Stack
 
-| Layer | Choice | Why |
-|-------|--------|-----|
-| Frontend | React 18 + TypeScript + Vite | Fast DX, strong typing, great ecosystem |
-| Styling | Tailwind CSS v4 | Utility-first, no runtime cost, easy theming |
-| API | Node.js + Fastify + TypeScript | Lightweight, schema validation, fast |
-| Database | SQLite via Prisma ORM | Zero-setup, file-based, perfect for a self-hosted tool |
-| Realtime | WebSocket (ws + @fastify/websocket) | Stream server output and player events live to the UI |
-| Auth | Better Auth (session-based) | Simple, self-hosted, no external service needed |
-| Process mgmt | Docker socket (native Node.js `http`) | Controls game container without a sidecar agent |
-| Scheduling | node-cron | Scheduled wipes, announcements, restarts |
-| Containerisation | Docker + Docker Compose | Single `docker compose up` to run everything |
-| Config | dotenv / env vars | Secrets stay out of code |
+| Layer            | Choice                                | Why                                                    |
+| ---------------- | ------------------------------------- | ------------------------------------------------------ |
+| Frontend         | React 18 + TypeScript + Vite          | Fast DX, strong typing, great ecosystem                |
+| Styling          | Tailwind CSS v4                       | Utility-first, no runtime cost, easy theming           |
+| API              | Node.js + Fastify + TypeScript        | Lightweight, schema validation, fast                   |
+| Database         | SQLite via Prisma ORM                 | Zero-setup, file-based, perfect for a self-hosted tool |
+| Realtime         | WebSocket (ws + @fastify/websocket)   | Stream server output and player events live to the UI  |
+| Auth             | Better Auth (session-based)           | Simple, self-hosted, no external service needed        |
+| Process mgmt     | Docker socket (native Node.js `http`) | Controls game container without a sidecar agent        |
+| Scheduling       | node-cron                             | Scheduled wipes, announcements, restarts               |
+| Containerisation | Docker + Docker Compose               | Single `docker compose up` to run everything           |
+| Config           | dotenv / env vars                     | Secrets stay out of code                               |
 
 ---
 
@@ -47,6 +48,7 @@ Two containers, one named volume, one Docker socket mount.
 ### Why Docker socket instead of a sidecar agent?
 
 The Docker Engine exposes a full HTTP API over a Unix socket at `/var/run/docker.sock`. Mounting the socket in the dashboard container gives it the ability to:
+
 - Start, stop, and restart the game container
 - Stream the game's stdout/stderr via `GET /containers/{name}/logs?follow=true`
 - Execute commands in the game container via `POST /containers/{name}/exec`
@@ -70,34 +72,37 @@ All game process operations go through the Docker HTTP API at `unix:///var/run/d
 
 ```typescript
 // Using Node.js built-in http module — no external package
-import http from 'http';
+import http from 'http'
 
 function dockerRequest(method: string, path: string, body?: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      socketPath: '/var/run/docker.sock',
-      method,
-      path,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(data ? JSON.parse(data) : {}));
-    });
-    req.on('error', reject);
-    if (body) req.write(JSON.stringify(body));
-    req.end();
-  });
+    const req = http.request(
+      {
+        socketPath: '/var/run/docker.sock',
+        method,
+        path,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk) => (data += chunk))
+        res.on('end', () => resolve(data ? JSON.parse(data) : {}))
+      }
+    )
+    req.on('error', reject)
+    if (body) req.write(JSON.stringify(body))
+    req.end()
+  })
 }
 
 // Start: POST /containers/ormod-game/start
-await dockerRequest('POST', `/containers/${containerName}/start`);
+await dockerRequest('POST', `/containers/${containerName}/start`)
 
 // Stop: POST /containers/ormod-game/stop
-await dockerRequest('POST', `/containers/${containerName}/stop`);
+await dockerRequest('POST', `/containers/${containerName}/stop`)
 
 // Restart: POST /containers/ormod-game/restart
-await dockerRequest('POST', `/containers/${containerName}/restart`);
+await dockerRequest('POST', `/containers/${containerName}/restart`)
 ```
 
 ### Streaming game output (log lines)
@@ -108,26 +113,32 @@ await dockerRequest('POST', `/containers/${containerName}/restart`);
 // Frame header: [stream_type(1), 0,0,0, size(4 bytes big-endian)]
 
 function streamLogs(containerName: string, onLine: (line: string) => void): () => void {
-  const req = http.request({
-    socketPath: '/var/run/docker.sock',
-    method: 'GET',
-    path: `/containers/${containerName}/logs?follow=true&stdout=true&stderr=true&tail=0`,
-  }, (res) => {
-    let buf = Buffer.alloc(0);
-    res.on('data', (chunk: Buffer) => {
-      buf = Buffer.concat([buf, chunk]);
-      // Parse Docker log multiplexing frames
-      while (buf.length >= 8) {
-        const frameSize = buf.readUInt32BE(4);
-        if (buf.length < 8 + frameSize) break;
-        const line = buf.subarray(8, 8 + frameSize).toString('utf-8').trimEnd();
-        if (line) onLine(line);
-        buf = buf.subarray(8 + frameSize);
-      }
-    });
-  });
-  req.end();
-  return () => req.destroy(); // stop streaming on WebSocket close
+  const req = http.request(
+    {
+      socketPath: '/var/run/docker.sock',
+      method: 'GET',
+      path: `/containers/${containerName}/logs?follow=true&stdout=true&stderr=true&tail=0`,
+    },
+    (res) => {
+      let buf = Buffer.alloc(0)
+      res.on('data', (chunk: Buffer) => {
+        buf = Buffer.concat([buf, chunk])
+        // Parse Docker log multiplexing frames
+        while (buf.length >= 8) {
+          const frameSize = buf.readUInt32BE(4)
+          if (buf.length < 8 + frameSize) break
+          const line = buf
+            .subarray(8, 8 + frameSize)
+            .toString('utf-8')
+            .trimEnd()
+          if (line) onLine(line)
+          buf = buf.subarray(8 + frameSize)
+        }
+      })
+    }
+  )
+  req.end()
+  return () => req.destroy() // stop streaming on WebSocket close
 }
 ```
 
@@ -141,10 +152,10 @@ const exec = await dockerRequest('POST', `/containers/${containerName}/exec`, {
   AttachStderr: false,
   Tty: false,
   Cmd: ['sh', '-c', `echo '${cmd}' > /proc/1/fd/0`],
-});
+})
 
 // Step 2: Start the exec
-await dockerRequest('POST', `/exec/${exec.Id}/start`, { Detach: true });
+await dockerRequest('POST', `/exec/${exec.Id}/start`, { Detach: true })
 ```
 
 The `/proc/1/fd/0` trick writes directly to the game process's stdin file descriptor without needing a controlling terminal. This works because the game container is started with `stdin_open: true` and `tty: true`.
@@ -159,8 +170,8 @@ The game currently only supports commands via Docker exec. RCON WebSocket is com
 // src/services/rcon-adapter.ts
 
 export interface RconAdapter {
-  sendCommand(cmd: string): Promise<string>;
-  isConnected(): boolean;
+  sendCommand(cmd: string): Promise<string>
+  isConnected(): boolean
 }
 
 // Current: Docker exec to /proc/1/fd/0
@@ -168,41 +179,45 @@ export class DockerExecAdapter implements RconAdapter {
   constructor(private containerName: string) {}
 
   async sendCommand(cmd: string): Promise<string> {
-    await dockerExec(this.containerName, cmd);
-    return 'Command dispatched via docker exec';
+    await dockerExec(this.containerName, cmd)
+    return 'Command dispatched via docker exec'
   }
 
   isConnected(): boolean {
-    return true; // container running = connected
+    return true // container running = connected
   }
 }
 
 // Future: WebSocket RCON (implement when game adds it)
 export class WebSocketRconAdapter implements RconAdapter {
-  private ws: WebSocket | null = null;
+  private ws: WebSocket | null = null
 
   async connect(host: string, port: number, pass: string): Promise<void> {
     // Similar to Facepunch webrcon protocol
-    throw new Error('RCON not yet implemented by game');
+    throw new Error('RCON not yet implemented by game')
   }
 
   async sendCommand(cmd: string): Promise<string> {
     // Send JSON packet, await response
-    throw new Error('RCON not yet implemented by game');
+    throw new Error('RCON not yet implemented by game')
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.ws?.readyState === WebSocket.OPEN
   }
 }
 
 // Factory: routes always call getAdapter(), never the adapter directly
-export function getAdapter(server: { id: string; rconPort?: number | null; rconPass?: string | null }): RconAdapter {
+export function getAdapter(server: {
+  id: string
+  rconPort?: number | null
+  rconPass?: string | null
+}): RconAdapter {
   if (server.rconPort && server.rconPass) {
-    return new WebSocketRconAdapter(); // future
+    return new WebSocketRconAdapter() // future
   }
-  const containerName = process.env.GAME_CONTAINER_NAME ?? 'ormod-game';
-  return new DockerExecAdapter(containerName); // current
+  const containerName = process.env.GAME_CONTAINER_NAME ?? 'ormod-game'
+  return new DockerExecAdapter(containerName) // current
 }
 ```
 
@@ -215,6 +230,7 @@ export function getAdapter(server: { id: string; rconPort?: number | null; rconP
 All reads/writes to game save files go through `FileIOService`. It is the only piece that touches the file system — everything else goes through it.
 
 Key behaviors:
+
 - Returns sensible empty defaults on first boot (save dir doesn't exist yet)
 - `ensureDir()` called before every write
 - `serversettings.json` hot-reloads in the game — no restart needed
@@ -226,30 +242,44 @@ export class FileIOService {
   constructor(private savePath: string) {}
 
   async readSettings(): Promise<Record<string, unknown>> {
-    try { return JSON.parse(await fs.readFile(path.join(this.savePath, 'serversettings.json'), 'utf-8')); }
-    catch { return {}; }  // first boot — file doesn't exist yet
+    try {
+      return JSON.parse(await fs.readFile(path.join(this.savePath, 'serversettings.json'), 'utf-8'))
+    } catch {
+      return {}
+    } // first boot — file doesn't exist yet
   }
 
   async writeSettings(data: Record<string, unknown>): Promise<void> {
-    await this.ensureDir();
-    await fs.writeFile(path.join(this.savePath, 'serversettings.json'), JSON.stringify(data, null, 2), 'utf-8');
+    await this.ensureDir()
+    await fs.writeFile(
+      path.join(this.savePath, 'serversettings.json'),
+      JSON.stringify(data, null, 2),
+      'utf-8'
+    )
     // No restart needed — game hot-reloads this file
   }
 
   async readList(filename: 'banlist.txt' | 'whitelist.txt' | 'adminlist.txt'): Promise<string[]> {
     try {
       return (await fs.readFile(path.join(this.savePath, filename), 'utf-8'))
-        .split('\n').map(l => l.trim()).filter(Boolean);
-    } catch { return []; }
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+    } catch {
+      return []
+    }
   }
 
-  async writeList(filename: 'banlist.txt' | 'whitelist.txt' | 'adminlist.txt', lines: string[]): Promise<void> {
-    await this.ensureDir();
-    await fs.writeFile(path.join(this.savePath, filename), lines.join('\n') + '\n', 'utf-8');
+  async writeList(
+    filename: 'banlist.txt' | 'whitelist.txt' | 'adminlist.txt',
+    lines: string[]
+  ): Promise<void> {
+    await this.ensureDir()
+    await fs.writeFile(path.join(this.savePath, filename), lines.join('\n') + '\n', 'utf-8')
   }
 
   private async ensureDir(): Promise<void> {
-    await fs.mkdir(this.savePath, { recursive: true });
+    await fs.mkdir(this.savePath, { recursive: true })
   }
 }
 ```
@@ -276,22 +306,25 @@ outputBuffer (ring buffer, 1000 lines per server)
 ```
 
 Client-side hook:
+
 ```typescript
 // src/hooks/useLiveLog.ts
 function useLiveLog(serverId: string | undefined) {
-  const [lines, setLines] = useState<string[]>([]);
+  const [lines, setLines] = useState<string[]>([])
 
   useEffect(() => {
-    if (!serverId) return;
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/log/${serverId}`);
+    if (!serverId) return
+    const ws = new WebSocket(
+      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/log/${serverId}`
+    )
     ws.onmessage = (e) => {
-      const { line } = JSON.parse(e.data);
-      setLines(prev => [...prev.slice(-500), line]);
-    };
-    return () => ws.close();
-  }, [serverId]);
+      const { line } = JSON.parse(e.data)
+      setLines((prev) => [...prev.slice(-500), line])
+    }
+    return () => ws.close()
+  }, [serverId])
 
-  return lines;
+  return lines
 }
 ```
 
@@ -304,17 +337,28 @@ Wipes are the most critical and dangerous operation. Always: stop → backup →
 ```typescript
 // Files deleted for each wipe type:
 const WIPE_TARGETS = {
-  MAP_ONLY:    ['ChunkData', 'RegionData', 'mapdata.json', 'entitydata.json',
-                'networkentities.json', 'buildareas.json', 'structuredata.dat',
-                'partialchunkdata.dat', 'pathfindingdata.dat', 'spawnregion.dat',
-                'loottables.json', 'weatherdata.dat', 'worldregrowth.json'],
-  MAP_PLAYERS: [ /* MAP_ONLY + */ 'PlayerData'],
-  FULL:        [ /* MAP_PLAYERS + */ 'log.txt'],
-  CUSTOM:      [], // populated from config.customFiles
-};
+  MAP_ONLY: [
+    'ChunkData',
+    'RegionData',
+    'mapdata.json',
+    'entitydata.json',
+    'networkentities.json',
+    'buildareas.json',
+    'structuredata.dat',
+    'partialchunkdata.dat',
+    'pathfindingdata.dat',
+    'spawnregion.dat',
+    'loottables.json',
+    'weatherdata.dat',
+    'worldregrowth.json',
+  ],
+  MAP_PLAYERS: [/* MAP_ONLY + */ 'PlayerData'],
+  FULL: [/* MAP_PLAYERS + */ 'log.txt'],
+  CUSTOM: [], // populated from config.customFiles
+}
 
 // Backup uses fs.cp (cross-platform, works without tar):
-await fs.cp(savePath, backupDest, { recursive: true });
+await fs.cp(savePath, backupDest, { recursive: true })
 ```
 
 ---
@@ -332,6 +376,7 @@ Admin List       ──sync──→   /saves/A/adminlist.txt  /saves/B/adminlis
 ```
 
 Three scopes:
+
 - **GLOBAL** — auto-synced to every server
 - **SERVER** — synced only to explicitly linked servers
 - **EXTERNAL** — URL feed of SteamID64s, refreshed on demand, merged into server files on sync
@@ -546,6 +591,7 @@ ormod-rcon/
 ## API Routes
 
 ### Servers
+
 ```
 GET    /api/servers                          List all managed servers + running status
 POST   /api/servers                          Register a new server
@@ -558,6 +604,7 @@ POST   /api/servers/:id/restart              Restart game container
 ```
 
 ### Settings
+
 ```
 GET    /api/servers/:id/settings             Read serversettings.json
 PUT    /api/servers/:id/settings             Write serversettings.json (hot-reloads)
@@ -565,12 +612,14 @@ PUT    /api/servers/:id/settings/:key        Write single key
 ```
 
 ### Players
+
 ```
 GET    /api/servers/:id/players              Players from PlayerData/ files
 GET    /api/players/:steamId                 Player history across all servers
 ```
 
 ### Console
+
 ```
 POST   /api/servers/:id/console/command      Dispatch command (docker exec or future RCON)
 GET    /api/servers/:id/console/log          Last N lines from output buffer
@@ -578,6 +627,7 @@ WS     /ws/log/:serverId                     Stream live output lines
 ```
 
 ### Access Lists
+
 ```
 GET    /api/lists                            All access lists
 POST   /api/lists                            Create list
@@ -596,6 +646,7 @@ PUT    /api/servers/:id/list-assignments     Atomically replace all assignments
 ```
 
 ### Wipe
+
 ```
 GET    /api/servers/:id/wipes                Wipe history
 POST   /api/servers/:id/wipe                 Execute wipe (timeout: 300s)
@@ -603,6 +654,7 @@ GET    /api/servers/:id/wipes/:wipeId        Wipe log detail
 ```
 
 ### Schedules
+
 ```
 GET    /api/servers/:id/schedules            List scheduled tasks
 POST   /api/servers/:id/schedules            Create + register cron job
@@ -621,13 +673,14 @@ The `ServerContext` (`apps/web/src/context/ServerContext.tsx`) is the central pi
 
 ```typescript
 // All pages and hooks consume this:
-const { servers, activeServer, setActiveServerId, refresh } = useServer();
+const { servers, activeServer, setActiveServerId, refresh } = useServer()
 // activeServer: { id, name, serverName, savePath, gamePort, queryPort, running, ... }
 ```
 
 The `useServer()` hook is a re-export from `ServerContext.tsx` via `hooks/useServer.ts` to keep import paths stable.
 
 ### Data flow
+
 ```
 ServerContext (fetches /api/servers on mount)
     ↓ activeServer.id
@@ -704,7 +757,9 @@ cron-parser API (v4/v5): `CronExpressionParser.parse(cronExpr).next().toDate()`
 ## Future Roadmap
 
 ### SteamCMD (when game publishes on Steam)
+
 Replace `COPY docker/game-binary/` in `Dockerfile.gameserver` with:
+
 ```dockerfile
 FROM cm2network/steamcmd:latest
 RUN /home/steam/steamcmd/steamcmd.sh \
@@ -713,9 +768,11 @@ RUN /home/steam/steamcmd/steamcmd.sh \
     +app_update <STEAM_APP_ID> validate \
     +quit
 ```
+
 Everything else stays the same.
 
 ### RCON (when game adds WebSocket RCON)
+
 1. `rconPort` and `rconPass` are already in the schema
 2. Implement `WebSocketRconAdapter.connect()` and `sendCommand()` using `net.Socket` (TCP binary)
 3. The `getAdapter()` factory automatically switches when credentials are present
@@ -723,4 +780,5 @@ Everything else stays the same.
 5. No route or UI changes required
 
 ### Auth
+
 Better Auth is already installed. Add a `preHandler` hook to each Fastify route plugin to validate the session token before allowing access.

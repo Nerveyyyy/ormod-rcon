@@ -1,26 +1,26 @@
-import { NavLink } from 'react-router';
-import { useAuth } from '../../context/AuthContext.js';
+import { NavLink } from 'react-router'
+import { useAuth } from '../../context/AuthContext.js'
 
 const baseTabs = [
-  { to: '/dashboard',      label: 'Dashboard',      icon: '◈' },
-  { to: '/players',        label: 'Players',         icon: '⌬' },
-  { to: '/settings',       label: 'Server Settings', icon: '⚙' },
-  { to: '/console',        label: 'Console',         icon: '>' },
-  { to: '/access-control', label: 'Access Control',  icon: '⊘' },
-  { to: '/wipe',           label: 'Wipe Manager',    icon: '⊠' },
-  { to: '/schedules',      label: 'Schedules',       icon: '◷' },
-  { to: '/servers',        label: 'Servers',         icon: '⊞' },
-];
+  { to: '/dashboard', label: 'Dashboard', icon: '◈' },
+  { to: '/players', label: 'Players', icon: '⌬' },
+  { to: '/settings', label: 'Server Settings', icon: '⚙' },
+  { to: '/console', label: 'Console', icon: '>' },
+  { to: '/access-control', label: 'Access Control', icon: '⊘' },
+  { to: '/wipe', label: 'Wipe Manager', icon: '⊠' },
+  { to: '/schedules', label: 'Schedules', icon: '◷' },
+  { to: '/servers', label: 'Servers', icon: '⊞' },
+]
+
+const OWNER_TABS = [...baseTabs, { to: '/users', label: 'Users', icon: '⊕' }]
 
 export default function NavTabs() {
-  const { user } = useAuth();
-  const tabs = user?.role === 'OWNER'
-    ? [...baseTabs, { to: '/users', label: 'Users', icon: '⊕' }]
-    : baseTabs;
+  const { user } = useAuth()
+  const tabs = user?.role === 'OWNER' ? OWNER_TABS : baseTabs
 
   return (
     <div className="nav-tabs">
-      {tabs.map(tab => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}
@@ -31,5 +31,5 @@ export default function NavTabs() {
         </NavLink>
       ))}
     </div>
-  );
+  )
 }

@@ -10,95 +10,89 @@
  * automatic renewal — no polling needed.
  */
 
-import {
-  createContext, useContext, useState, useEffect, type ReactNode,
-} from 'react';
-import { useNavigate, useLocation } from 'react-router';
-import { authClient } from '../lib/auth-client.js';
-import { clearCsrfToken } from '../api/client.js';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { useNavigate, useLocation } from 'react-router'
+import { authClient } from '../lib/auth-client.js'
+import { clearCsrfToken } from '../api/client.js'
 
 type AuthUser = {
-  id:    string;
-  name:  string;
-  email: string;
-  role:  string;  // OWNER | ADMIN | VIEWER
-};
+  id: string
+  name: string
+  email: string
+  role: string // OWNER | ADMIN | VIEWER
+}
 
 type AuthContextValue = {
-  user:    AuthUser | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-};
+  user: AuthUser | null
+  loading: boolean
+  signOut: () => Promise<void>
+}
 
 const AuthContext = createContext<AuthContextValue>({
-  user:    null,
+  user: null,
   loading: true,
   signOut: async () => {},
-});
+})
 
 // Public paths that don't require auth — auth guard skips these
-const PUBLIC_PATHS = ['/login', '/setup'];
+const PUBLIC_PATHS = ['/login', '/setup']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const [user,    setUser]    = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Don't run auth check on public pages
     if (PUBLIC_PATHS.includes(location.pathname)) {
-      setLoading(false);
-      return;
+      setLoading(false)
+      return
     }
 
     async function checkAuth() {
       try {
         // 1. Check if first-run setup is needed
-        const setupRes = await fetch('/api/setup');
-        const setupData = await setupRes.json().catch(() => ({}));
+        const setupRes = await fetch('/api/setup')
+        const setupData = await setupRes.json().catch(() => ({}))
         if (setupData?.setupRequired) {
-          navigate('/setup', { replace: true });
-          return;
+          navigate('/setup', { replace: true })
+          return
         }
 
         // 2. Check current session
-        const { data: session } = await authClient.getSession();
+        const { data: session } = await authClient.getSession()
         if (!session?.user) {
-          navigate('/login', { replace: true });
-          return;
+          navigate('/login', { replace: true })
+          return
         }
 
         setUser({
-          id:    session.user.id,
-          name:  session.user.name,
+          id: session.user.id,
+          name: session.user.name,
           email: session.user.email,
-          role:  (session.user as any).role ?? 'VIEWER',
-        });
+          role: ((session.user as Record<string, unknown>).role as string | undefined) ?? 'VIEWER',
+        })
       } catch {
-        navigate('/login', { replace: true });
+        navigate('/login', { replace: true })
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
 
-    checkAuth();
-  }, [location.pathname]);
+    checkAuth()
+  }, [location.pathname])
 
   const signOut = async () => {
-    await authClient.signOut();
-    clearCsrfToken();
-    setUser(null);
-    navigate('/login', { replace: true });
-  };
+    await authClient.signOut()
+    clearCsrfToken()
+    setUser(null)
+    navigate('/login', { replace: true })
+  }
 
-  return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  return useContext(AuthContext)
 }

@@ -1,7 +1,7 @@
 interface EmptyStateProps {
-  icon?: string;
-  title: string;
-  desc?: string;
+  icon?: string
+  title: string
+  desc?: string
 }
 
 export default function EmptyState({ icon = '◈', title, desc }: EmptyStateProps) {
@@ -11,5 +11,5 @@ export default function EmptyState({ icon = '◈', title, desc }: EmptyStateProp
       <div className="empty-state-title">{title}</div>
       {desc && <div className="empty-state-desc">{desc}</div>}
     </div>
-  );
+  )
 }

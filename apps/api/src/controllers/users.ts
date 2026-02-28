@@ -1,23 +1,23 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { fromNodeHeaders } from 'better-auth/node';
-import prisma from '../db/prisma-client.js';
-import { auth } from '../lib/auth.js';
+import type { FastifyRequest, FastifyReply } from 'fastify'
+import { fromNodeHeaders } from 'better-auth/node'
+import prisma from '../db/prisma-client.js'
+import { auth } from '../lib/auth.js'
 
 type CreateUserBody = {
-  name: string;
-  email: string;
-  password: string;
-  role: string;
-};
+  name: string
+  email: string
+  password: string
+  role: string
+}
 
 type UpdateRoleBody = {
-  role: 'OWNER' | 'ADMIN' | 'VIEWER';
-};
+  role: 'OWNER' | 'ADMIN' | 'VIEWER'
+}
 
 type ChangePasswordBody = {
-  currentPassword: string;
-  newPassword: string;
-};
+  currentPassword: string
+  newPassword: string
+}
 
 const USER_SELECT = {
   id: true,
@@ -25,143 +25,143 @@ const USER_SELECT = {
   email: true,
   role: true,
   createdAt: true,
-} as const;
+} as const
 
 export async function listUsers() {
   return prisma.user.findMany({
     select: USER_SELECT,
     orderBy: { createdAt: 'asc' },
-  });
+  })
 }
 
 export async function createUser(
   req: FastifyRequest<{ Body: CreateUserBody }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role } = req.body
 
   // Reject OWNER creation — only the setup flow can create OWNERs
   if (role === 'OWNER') {
-    return reply.status(400).send({ error: 'Cannot create users with OWNER role' });
+    return reply.status(400).send({ error: 'Cannot create users with OWNER role' })
   }
 
   // Check duplicate email
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
-    return reply.status(409).send({ error: 'A user with this email already exists' });
+    return reply.status(409).send({ error: 'A user with this email already exists' })
   }
 
   // Create via BetterAuth for proper password hashing
   const result = await auth.api.signUpEmail({
-    body:    { name, email, password },
+    body: { name, email, password },
     headers: fromNodeHeaders(req.headers),
-  });
+  })
 
   if (!result?.user?.id) {
-    return reply.status(500).send({ error: 'Failed to create user' });
+    return reply.status(500).send({ error: 'Failed to create user' })
   }
 
   // Set role (BetterAuth defaults to VIEWER)
   const user = await prisma.user.update({
-    where:  { id: result.user.id },
-    data:   { role },
+    where: { id: result.user.id },
+    data: { role },
     select: USER_SELECT,
-  });
+  })
 
-  reply.status(201);
-  return user;
+  reply.status(201)
+  return user
 }
 
 export async function updateRole(
   req: FastifyRequest<{ Params: { id: string }; Body: UpdateRoleBody }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const { id } = req.params;
-  const { role } = req.body;
+  const { id } = req.params
+  const { role } = req.body
 
   // Prevent self-role-change
   if (req.session!.user.id === id) {
-    return reply.status(400).send({ error: 'Cannot change your own role' });
+    return reply.status(400).send({ error: 'Cannot change your own role' })
   }
 
-  const target = await prisma.user.findUnique({ where: { id } });
+  const target = await prisma.user.findUnique({ where: { id } })
   if (!target) {
-    return reply.status(404).send({ error: 'User not found' });
+    return reply.status(404).send({ error: 'User not found' })
   }
 
   // Prevent demoting the last OWNER
   if (target.role === 'OWNER' && role !== 'OWNER') {
-    const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
+    const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } })
     if (ownerCount <= 1) {
-      return reply.status(400).send({ error: 'Cannot demote the last OWNER' });
+      return reply.status(400).send({ error: 'Cannot demote the last OWNER' })
     }
   }
 
   const updated = await prisma.user.update({
-    where:  { id },
-    data:   { role },
+    where: { id },
+    data: { role },
     select: USER_SELECT,
-  });
+  })
 
-  return updated;
+  return updated
 }
 
 export async function deleteUser(
   req: FastifyRequest<{ Params: { id: string } }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const { id } = req.params;
+  const { id } = req.params
 
   // Prevent self-delete
   if (req.session!.user.id === id) {
-    return reply.status(400).send({ error: 'Cannot delete your own account' });
+    return reply.status(400).send({ error: 'Cannot delete your own account' })
   }
 
-  const target = await prisma.user.findUnique({ where: { id } });
+  const target = await prisma.user.findUnique({ where: { id } })
   if (!target) {
-    return reply.status(404).send({ error: 'User not found' });
+    return reply.status(404).send({ error: 'User not found' })
   }
 
   // Prevent deleting the last OWNER
   if (target.role === 'OWNER') {
-    const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
+    const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } })
     if (ownerCount <= 1) {
-      return reply.status(400).send({ error: 'Cannot delete the last OWNER' });
+      return reply.status(400).send({ error: 'Cannot delete the last OWNER' })
     }
   }
 
   // Cascade: delete sessions and accounts first, then user
-  await prisma.session.deleteMany({ where: { userId: id } });
-  await prisma.account.deleteMany({ where: { userId: id } });
-  await prisma.user.delete({ where: { id } });
+  await prisma.session.deleteMany({ where: { userId: id } })
+  await prisma.account.deleteMany({ where: { userId: id } })
+  await prisma.user.delete({ where: { id } })
 
-  return { ok: true };
+  return { ok: true }
 }
 
 export async function getMe(req: FastifyRequest) {
-  const { id, name, email, role } = req.session!.user;
-  return { id, name, email, role };
+  const { id, name, email, role } = req.session!.user
+  return { id, name, email, role }
 }
 
 export async function changeOwnPassword(
   req: FastifyRequest<{ Body: ChangePasswordBody }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body
 
   if (newPassword.length < 8) {
-    return reply.status(400).send({ error: 'New password must be at least 8 characters' });
+    return reply.status(400).send({ error: 'New password must be at least 8 characters' })
   }
 
   try {
     await auth.api.changePassword({
-      body:    { currentPassword, newPassword },
+      body: { currentPassword, newPassword },
       headers: fromNodeHeaders(req.headers),
-    });
-    return { ok: true };
-  } catch (err: any) {
-    const message = err?.message || 'Password change failed';
+    })
+    return { ok: true }
+  } catch (err: unknown) {
+    const message = (err instanceof Error ? err.message : null) || 'Password change failed'
     // BetterAuth throws on wrong current password
-    return reply.status(400).send({ error: message });
+    return reply.status(400).send({ error: message })
   }
 }

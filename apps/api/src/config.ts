@@ -7,50 +7,50 @@
 
 export const envSchema = {
   type: 'object',
-  required: ['DATABASE_URL'],
+  required: ['DATABASE_URL', 'BETTER_AUTH_SECRET'],
   additionalProperties: true, // allow Docker-compose-only vars
   properties: {
-    API_PORT:               { type: 'number',  default: 3001 },
-    API_HOST:               { type: 'string',  default: 'localhost' },
-    WEB_HOST:               { type: 'string',  default: 'localhost' },
-    WEB_PORT:               { type: 'number',  default: 3000 },
-    PUBLIC_URL:             { type: 'string',  default: '' },
-    NODE_ENV:               { type: 'string',  default: 'development' },
-    STATIC_PATH:            { type: 'string',  default: '' },
-    BETTER_AUTH_SECRET:     { type: 'string',  default: '' },
-    DATABASE_URL:           { type: 'string' },
-    DOCKER_SOCKET:          { type: 'string',  default: '/var/run/docker.sock' },
-    DOCKER_HOST:            { type: 'string',  default: '' },
-    DOCKER_CONTROL_ENABLED: { type: 'string',  default: 'true' },
-    GAME_CONTAINER_NAME:    { type: 'string',  default: 'ormod-game' },
-    SAVE_BASE_PATH:         { type: 'string',  default: '' },
-    SAVES_PATH:             { type: 'string',  default: '' },
-    BACKUP_PATH:            { type: 'string',  default: './backups' },
-    TLS_CERT_PATH:          { type: 'string',  default: '' },
-    TLS_KEY_PATH:           { type: 'string',  default: '' },
+    API_PORT: { type: 'number', default: 3001 },
+    API_HOST: { type: 'string', default: 'localhost' },
+    WEB_HOST: { type: 'string', default: 'localhost' },
+    WEB_PORT: { type: 'number', default: 3000 },
+    PUBLIC_URL: { type: 'string', default: '' },
+    NODE_ENV: { type: 'string', default: 'development' },
+    STATIC_PATH: { type: 'string', default: '' },
+    BETTER_AUTH_SECRET: { type: 'string' },
+    DATABASE_URL: { type: 'string' },
+    DOCKER_SOCKET: { type: 'string', default: '/var/run/docker.sock' },
+    DOCKER_HOST: { type: 'string', default: '' },
+    DOCKER_CONTROL_ENABLED: { type: 'boolean', default: true },
+    GAME_CONTAINER_NAME: { type: 'string', default: 'ormod-game' },
+    SAVE_BASE_PATH: { type: 'string', default: '' },
+    SAVES_PATH: { type: 'string', default: '' },
+    BACKUP_PATH: { type: 'string', default: './backups' },
+    TLS_CERT_PATH: { type: 'string', default: '' },
+    TLS_KEY_PATH: { type: 'string', default: '' },
   },
-} as const;
+} as const
 
 export type EnvConfig = {
-  API_PORT:               number;
-  API_HOST:               string;
-  WEB_HOST:               string;
-  WEB_PORT:               number;
-  PUBLIC_URL:             string;
-  NODE_ENV:               string;
-  STATIC_PATH:            string;
-  BETTER_AUTH_SECRET:     string;
-  DATABASE_URL:           string;
-  DOCKER_SOCKET:          string;
-  DOCKER_HOST:            string;
-  DOCKER_CONTROL_ENABLED: string;
-  GAME_CONTAINER_NAME:    string;
-  SAVE_BASE_PATH:         string;
-  SAVES_PATH:             string;
-  BACKUP_PATH:            string;
-  TLS_CERT_PATH:          string;
-  TLS_KEY_PATH:           string;
-};
+  API_PORT: number
+  API_HOST: string
+  WEB_HOST: string
+  WEB_PORT: number
+  PUBLIC_URL: string
+  NODE_ENV: string
+  STATIC_PATH: string
+  BETTER_AUTH_SECRET: string
+  DATABASE_URL: string
+  DOCKER_SOCKET: string
+  DOCKER_HOST: string
+  DOCKER_CONTROL_ENABLED: boolean
+  GAME_CONTAINER_NAME: string
+  SAVE_BASE_PATH: string
+  SAVES_PATH: string
+  BACKUP_PATH: string
+  TLS_CERT_PATH: string
+  TLS_KEY_PATH: string
+}
 
 /**
  * Compute the list of allowed CORS/trusted origins.
@@ -62,40 +62,37 @@ export type EnvConfig = {
 export function computeOrigins(
   publicUrl: string,
   webHost: string,
-  webPort: number | string,
+  webPort: number | string
 ): string[] {
-  if (publicUrl) return [publicUrl];
-  const base = `http://${webHost}:${webPort}`;
-  const origins = new Set([base]);
-  if (webHost === 'localhost')  origins.add(`http://127.0.0.1:${webPort}`);
-  if (webHost === '127.0.0.1') origins.add(`http://localhost:${webPort}`);
-  return [...origins];
+  if (publicUrl) return [publicUrl]
+  const base = `http://${webHost}:${webPort}`
+  const origins = new Set([base])
+  if (webHost === 'localhost') origins.add(`http://127.0.0.1:${webPort}`)
+  if (webHost === '127.0.0.1') origins.add(`http://localhost:${webPort}`)
+  return [...origins]
 }
 
 // ── Session type (attached by auth plugin preHandler) ────────────────────────
 
 export type SessionUser = {
-  id:    string;
-  email: string;
-  name:  string;
-  role:  string;
-};
+  id: string
+  email: string
+  name: string
+  role: string
+}
 
 export type SessionData = {
-  user:    SessionUser;
-  session: { id: string; expiresAt: Date };
-};
+  user: SessionUser
+  session: { id: string; expiresAt: Date }
+}
 
 // ── Fastify module augmentation ──────────────────────────────────────────────
 
-import type { PrismaClient } from '../prisma/generated/client.js';
-
 declare module 'fastify' {
   interface FastifyInstance {
-    config: EnvConfig;
-    prisma: PrismaClient;
+    config: EnvConfig
   }
   interface FastifyRequest {
-    session?: SessionData;
+    session?: SessionData
   }
 }

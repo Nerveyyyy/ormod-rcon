@@ -18,29 +18,28 @@
  *     rconAvailable: true  — RCON commands + responses
  */
 
-export type Capabilities = {
-  dockerControl:  boolean;
-  fileAccess:     boolean;
-  rconAvailable:  boolean;
-  authEnabled:    boolean;
-  mode: 'FULL_CONTROL' | 'RCON_ONLY' | 'PARTIAL';
-};
+import type { FastifyInstance } from 'fastify'
 
-export async function listCapabilities(): Promise<Capabilities> {
-  const dockerControl = process.env.DOCKER_CONTROL_ENABLED !== 'false';
-  const fileAccess    = Boolean(
-    process.env.SAVE_BASE_PATH ||
-    process.env.SAVES_PATH     ||
-    process.env.BACKUP_PATH
-  );
+export type Capabilities = {
+  dockerControl: boolean
+  fileAccess: boolean
+  rconAvailable: boolean
+  authEnabled: boolean
+  mode: 'FULL_CONTROL' | 'RCON_ONLY' | 'PARTIAL'
+}
+
+export async function listCapabilities(config: FastifyInstance['config']): Promise<Capabilities> {
+  // DOCKER_CONTROL_ENABLED is a boolean env var (validated by @fastify/env schema)
+  const dockerControl = config.DOCKER_CONTROL_ENABLED
+  const fileAccess = Boolean(config.SAVE_BASE_PATH || config.SAVES_PATH || config.BACKUP_PATH)
   // RCON is not yet implemented in the game (Playtest 1.9.0).
   // Flip this to true and implement WebSocketRconAdapter when the game adds RCON.
-  const rconAvailable = false;
-  const authEnabled   = true; // BetterAuth is always active
+  const rconAvailable = false
+  const authEnabled = true // BetterAuth is always active
 
-  let mode: Capabilities['mode'] = 'PARTIAL';
-  if (dockerControl && fileAccess) mode = 'FULL_CONTROL';
-  else if (!dockerControl && rconAvailable) mode = 'RCON_ONLY';
+  let mode: Capabilities['mode'] = 'PARTIAL'
+  if (dockerControl && fileAccess) mode = 'FULL_CONTROL'
+  else if (!dockerControl && rconAvailable) mode = 'RCON_ONLY'
 
-  return { dockerControl, fileAccess, rconAvailable, authEnabled, mode };
+  return { dockerControl, fileAccess, rconAvailable, authEnabled, mode }
 }

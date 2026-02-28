@@ -105,7 +105,7 @@ model PlayerRecord {
   id        String   @id @default(cuid())
   steamId   String
   serverId  String
-  server    Server   @relation(fields: [serverId], references: [id])
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   lastSeen  DateTime @default(now())
   totalTime Int      @default(0)  // seconds
   notes     String?
@@ -151,7 +151,7 @@ model ListEntry {
 model ServerListLink {
   serverId String
   listId   String
-  server   Server     @relation(fields: [serverId], references: [id])
+  server   Server     @relation(fields: [serverId], references: [id], onDelete: Cascade)
   list     AccessList @relation(fields: [listId], references: [id])
 
   @@id([serverId, listId])
@@ -164,7 +164,7 @@ model ServerListLink {
 model WipeLog {
   id          String   @id @default(cuid())
   serverId    String
-  server      Server   @relation(fields: [serverId], references: [id])
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   wipeType    String                        // FULL | MAP_ONLY | MAP_PLAYERS | CUSTOM
   triggeredBy String                        // dashboard user id
   notes       String?
@@ -181,7 +181,7 @@ model WipeLog {
 model ScheduledTask {
   id        String    @id @default(cuid())
   serverId  String
-  server    Server    @relation(fields: [serverId], references: [id])
+  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   type      String                          // WIPE | COMMAND | ANNOUNCEMENT | RESTART
   cronExpr  String                          // e.g. "0 6 * * 1" = every Monday 6am
   label     String

@@ -12,8 +12,8 @@
  */
 
 export interface RconAdapter {
-  sendCommand(cmd: string): Promise<string>;
-  isConnected(): boolean;
+  sendCommand(cmd: string): Promise<string>
+  isConnected(): boolean
 }
 
 // ── Current: Docker exec → game stdin ─────────────────────────────────────
@@ -22,13 +22,13 @@ export class DockerExecAdapter implements RconAdapter {
 
   async sendCommand(cmd: string): Promise<string> {
     // Lazy import avoids circular dependency chain
-    const { dockerManager } = await import('./docker-manager.js');
-    await dockerManager.sendCommand(this.serverId, cmd);
-    return 'Command dispatched via docker exec';
+    const { dockerManager } = await import('./docker-manager.js')
+    await dockerManager.sendCommand(this.serverId, cmd)
+    return 'Command dispatched via docker exec'
   }
 
   isConnected(): boolean {
-    return true; // connected as long as the container exists
+    return true // connected as long as the container exists
   }
 }
 
@@ -36,30 +36,36 @@ export class DockerExecAdapter implements RconAdapter {
 // Implement when ORMOD: Directive adds WebSocket RCON support.
 // Transport: net.Socket over TCP (binary protocol, similar to Facepunch webrcon)
 export class WebSocketRconAdapter implements RconAdapter {
-  private ws: WebSocket | null = null;
+  // Minimal inline type — avoids requiring @types/ws for placeholder code
+  private ws: { readyState: number; close(): void } | null = null
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- placeholder params for future RCON implementation
   async connect(_host: string, _port: number, _pass: string): Promise<void> {
-    throw new Error('RCON WebSocket not yet implemented by game');
+    throw new Error('RCON WebSocket not yet implemented by game')
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- placeholder param for future RCON implementation
   async sendCommand(_cmd: string): Promise<string> {
-    throw new Error('RCON not yet implemented by game');
+    throw new Error('RCON not yet implemented by game')
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    // ws WebSocket OPEN state = 1
+    return this.ws?.readyState === 1
   }
 }
 
 // ── Factory ────────────────────────────────────────────────────────────────
 // Returns the appropriate adapter. Routes always call getAdapter() —
 // never interact with docker-manager or RCON sockets directly.
-export async function getAdapter(
-  server: { id: string; rconPort?: number | null; rconPass?: string | null }
-): Promise<RconAdapter> {
+export async function getAdapter(server: {
+  id: string
+  rconPort?: number | null
+  rconPass?: string | null
+}): Promise<RconAdapter> {
   if (server.rconPort && server.rconPass) {
     // Future: instantiate WebSocketRconAdapter and connect here
-    throw new Error('RCON WebSocket not yet implemented by game');
+    throw new Error('RCON WebSocket not yet implemented by game')
   }
-  return new DockerExecAdapter(server.id);
+  return new DockerExecAdapter(server.id)
 }
