@@ -93,11 +93,15 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-}
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
+      # TLS — uncomment and set paths to enable native HTTPS
+      # TLS_CERT_PATH: ${TLS_CERT_PATH:-}
+      # TLS_KEY_PATH: ${TLS_KEY_PATH:-}
     volumes:
       - ./data:/data                                                         # SQLite database
       - ${SAVES_PATH:-game-saves}:/saves                                     # Shared save files (read-write)
       - ./backups:/backups                                                   # Pre-wipe backup archives
       - /var/run/docker.sock:/var/run/docker.sock                           # Docker API (process mgmt)
+      - ./certs:/certs:ro                                                    # TLS certs (optional)
     ports:
       - "${WEB_HOST:-0.0.0.0}:${WEB_PORT:-3000}:3000"
 

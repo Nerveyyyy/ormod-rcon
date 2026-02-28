@@ -47,5 +47,8 @@ pnpm-debug.log*
 # Test databases
 .test-dbs/
 
+# TLS certificates (keep certs/README.md, ignore actual certs)
+certs/*.pem
+
 # Temporary
 /tmp
