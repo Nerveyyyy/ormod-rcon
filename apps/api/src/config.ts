@@ -26,6 +26,8 @@ export const envSchema = {
     SAVE_BASE_PATH:         { type: 'string',  default: '' },
     SAVES_PATH:             { type: 'string',  default: '' },
     BACKUP_PATH:            { type: 'string',  default: './backups' },
+    TLS_CERT_PATH:          { type: 'string',  default: '' },
+    TLS_KEY_PATH:           { type: 'string',  default: '' },
   },
 } as const;
 
@@ -46,6 +48,8 @@ export type EnvConfig = {
   SAVE_BASE_PATH:         string;
   SAVES_PATH:             string;
   BACKUP_PATH:            string;
+  TLS_CERT_PATH:          string;
+  TLS_KEY_PATH:           string;
 };
 
 /**
