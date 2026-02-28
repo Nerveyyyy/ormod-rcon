@@ -12,6 +12,7 @@ import AccessControl from './pages/AccessControl.js';
 import WipeManager from './pages/WipeManager.js';
 import Schedules from './pages/Schedules.js';
 import ServerManagement from './pages/ServerManagement.js';
+import UserManagement from './pages/UserManagement.js';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="wipe"           element={<WipeManager />} />
               <Route path="schedules"      element={<Schedules />} />
               <Route path="servers"        element={<ServerManagement />} />
+              <Route path="users"          element={<UserManagement />} />
             </Route>
           </Routes>
         </ServerProvider>
