@@ -1,0 +1,9 @@
+node_modules
+dist
+apps/api/src/generated
+pnpm-lock.yaml
+# Compiled TypeScript output emitted in-tree (web tsconfig has no outDir)
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map
+apps/web/src/**/*.d.ts
+apps/web/src/**/*.d.ts.map

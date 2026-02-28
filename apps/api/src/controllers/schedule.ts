@@ -1,106 +1,112 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import cron from 'node-cron';
-import { CronExpressionParser } from 'cron-parser';
-import prisma from '../db/prisma-client.js';
-import { WipeService } from '../services/wipe-service.js';
-import { dockerManager } from '../services/docker-manager.js';
-import { getAdapter } from '../services/rcon-adapter.js';
-import type { TaskType } from '../types.js';
+import type { FastifyRequest, FastifyReply } from 'fastify'
+import cron from 'node-cron'
+import { CronExpressionParser } from 'cron-parser'
+import prisma from '../db/prisma-client.js'
+import { WipeService } from '../services/wipe-service.js'
+import { dockerManager } from '../services/docker-manager.js'
+import { getAdapter } from '../services/rcon-adapter.js'
+import type { TaskType } from '../types.js'
 
 // ── Cron internals ───────────────────────────────────────────────────────────
 
-const cronJobs = new Map<string, cron.ScheduledTask>();
+const cronJobs = new Map<string, cron.ScheduledTask>()
 
 type TaskRow = {
-  id: string;
-  serverId: string;
-  type: string;
-  cronExpr: string;
-  label: string;
-  payload: string;
-  enabled: boolean;
-  lastRun: Date | null;
-  nextRun: Date | null;
-  createdAt: Date;
-};
+  id: string
+  serverId: string
+  type: string
+  cronExpr: string
+  label: string
+  payload: string
+  enabled: boolean
+  lastRun: Date | null
+  nextRun: Date | null
+  createdAt: Date
+}
 
 function computeNextRun(cronExpr: string): Date | null {
   try {
-    return CronExpressionParser.parse(cronExpr).next().toDate();
+    return CronExpressionParser.parse(cronExpr).next().toDate()
   } catch {
-    return null;
+    return null
   }
 }
 
 async function runTask(task: TaskRow): Promise<void> {
-  const server = await prisma.server.findUnique({ where: { id: task.serverId } });
-  if (!server) return;
+  const server = await prisma.server.findUnique({ where: { id: task.serverId } })
+  if (!server) return
 
   try {
     switch (task.type as TaskType) {
       case 'WIPE': {
-        const config = JSON.parse(task.payload);
-        await new WipeService().executeWipe(task.serverId, config, 'scheduler');
-        break;
+        const config = JSON.parse(task.payload)
+        await new WipeService().executeWipe(task.serverId, config, 'scheduler')
+        break
       }
       case 'COMMAND': {
-        const adapter = await getAdapter(server);
-        await adapter.sendCommand(task.payload);
-        break;
+        const adapter = await getAdapter(server)
+        await adapter.sendCommand(task.payload)
+        break
       }
       case 'ANNOUNCEMENT': {
-        const adapter = await getAdapter(server);
-        await adapter.sendCommand(`announcement ${task.payload}`);
-        break;
+        const adapter = await getAdapter(server)
+        await adapter.sendCommand(`announcement ${task.payload}`)
+        break
       }
       case 'RESTART': {
-        await dockerManager.restart(task.serverId);
-        break;
+        await dockerManager.restart(task.serverId)
+        break
       }
     }
   } catch (err) {
-    console.error(`[scheduler] Task "${task.label}" failed:`, err);
+    console.error(`[scheduler] Task "${task.label}" failed:`, err)
   }
 
   await prisma.scheduledTask.update({
     where: { id: task.id },
     data: { lastRun: new Date(), nextRun: computeNextRun(task.cronExpr) },
-  });
+  })
 }
 
 /** Register a cron job for a task. Exported for use by server.ts on startup. */
 export function registerCronJob(task: TaskRow): void {
   if (!cron.validate(task.cronExpr)) {
-    console.warn(`[scheduler] Invalid cron expression for task "${task.label}": ${task.cronExpr}`);
-    return;
+    console.warn(`[scheduler] Invalid cron expression for task "${task.label}": ${task.cronExpr}`)
+    return
   }
-  const job = cron.schedule(task.cronExpr, () => { runTask(task); });
-  cronJobs.set(task.id, job);
+  const job = cron.schedule(task.cronExpr, () => {
+    runTask(task)
+  })
+  cronJobs.set(task.id, job)
 }
 
 function unregisterCronJob(taskId: string): void {
-  const job = cronJobs.get(taskId);
-  if (job) { job.stop(); cronJobs.delete(taskId); }
+  const job = cronJobs.get(taskId)
+  if (job) {
+    job.stop()
+    cronJobs.delete(taskId)
+  }
 }
 
 // ── Route handlers ───────────────────────────────────────────────────────────
 
-export async function listSchedules(
-  req: FastifyRequest<{ Params: { id: string } }>,
-) {
+export async function listSchedules(req: FastifyRequest<{ Params: { id: string } }>) {
   return prisma.scheduledTask.findMany({
     where: { serverId: req.params.id },
     orderBy: { createdAt: 'asc' },
-  });
+  })
 }
 
 export async function createSchedule(
-  req: FastifyRequest<{ Params: { id: string }; Body: { type: string; cronExpr: string; label: string; payload: string; enabled?: boolean } }>,
-  reply: FastifyReply,
+  req: FastifyRequest<{
+    Params: { id: string }
+    Body: { type: string; cronExpr: string; label: string; payload: string; enabled?: boolean }
+  }>,
+  reply: FastifyReply
 ) {
-  const { cronExpr } = req.body;
+  const { cronExpr } = req.body
   if (!cron.validate(cronExpr)) {
-    return reply.status(400).send({ error: `Invalid cron expression: ${cronExpr}` });
+    return reply.status(400).send({ error: `Invalid cron expression: ${cronExpr}` })
   }
   const task = await prisma.scheduledTask.create({
     data: {
@@ -108,47 +114,62 @@ export async function createSchedule(
       serverId: req.params.id,
       nextRun: computeNextRun(cronExpr),
     },
-  });
-  if (task.enabled) registerCronJob(task);
-  reply.status(201);
-  return task;
+  })
+  if (task.enabled) registerCronJob(task)
+  reply.status(201)
+  return task
 }
 
 export async function updateSchedule(
-  req: FastifyRequest<{ Params: { id: string; taskId: string }; Body: Partial<{ type: string; cronExpr: string; label: string; payload: string; enabled: boolean }> }>,
-  reply: FastifyReply,
+  req: FastifyRequest<{
+    Params: { id: string; taskId: string }
+    Body: Partial<{
+      type: string
+      cronExpr: string
+      label: string
+      payload: string
+      enabled: boolean
+    }>
+  }>,
+  reply: FastifyReply
 ) {
-  const existing = await prisma.scheduledTask.findUnique({ where: { id: req.params.taskId } });
-  if (!existing) return reply.status(404).send({ error: 'Task not found' });
+  const existing = await prisma.scheduledTask.findFirst({
+    where: { id: req.params.taskId, serverId: req.params.id },
+  })
+  if (!existing) return reply.status(404).send({ error: 'Task not found' })
 
-  unregisterCronJob(req.params.taskId);
+  unregisterCronJob(req.params.taskId)
 
-  const cronExpr = req.body.cronExpr ?? existing.cronExpr;
+  const cronExpr = req.body.cronExpr ?? existing.cronExpr
   const task = await prisma.scheduledTask.update({
     where: { id: req.params.taskId },
     data: { ...req.body, nextRun: computeNextRun(cronExpr) },
-  });
-  if (task.enabled) registerCronJob(task);
-  return task;
+  })
+  if (task.enabled) registerCronJob(task)
+  return task
 }
 
 export async function deleteSchedule(
   req: FastifyRequest<{ Params: { id: string; taskId: string } }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const existing = await prisma.scheduledTask.findUnique({ where: { id: req.params.taskId } });
-  if (!existing) return reply.status(404).send({ error: 'Task not found' });
-  unregisterCronJob(req.params.taskId);
-  await prisma.scheduledTask.delete({ where: { id: req.params.taskId } });
-  return { ok: true };
+  const existing = await prisma.scheduledTask.findFirst({
+    where: { id: req.params.taskId, serverId: req.params.id },
+  })
+  if (!existing) return reply.status(404).send({ error: 'Task not found' })
+  unregisterCronJob(req.params.taskId)
+  await prisma.scheduledTask.delete({ where: { id: req.params.taskId } })
+  return { ok: true }
 }
 
 export async function runScheduleNow(
   req: FastifyRequest<{ Params: { id: string; taskId: string } }>,
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
-  const task = await prisma.scheduledTask.findUnique({ where: { id: req.params.taskId } });
-  if (!task) return reply.status(404).send({ error: 'Task not found' });
-  await runTask(task);
-  return { ok: true };
+  const task = await prisma.scheduledTask.findFirst({
+    where: { id: req.params.taskId, serverId: req.params.id },
+  })
+  if (!task) return reply.status(404).send({ error: 'Task not found' })
+  await runTask(task)
+  return { ok: true }
 }

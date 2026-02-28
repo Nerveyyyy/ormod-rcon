@@ -6,11 +6,11 @@
  * (relative paths), which works for both Vite dev proxy and Docker prod.
  */
 
-import { createAuthClient } from 'better-auth/client';
+import { createAuthClient } from 'better-auth/client'
 
 export const authClient = createAuthClient({
   // Empty string = same origin (Vite proxies /api/auth → port 3001 in dev)
   baseURL: '',
-});
+})
 
-export type { Session } from 'better-auth';
+export type { Session } from 'better-auth'

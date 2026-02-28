@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react'
 
 /* ─────────────────────────────────────────────
    ORMOD: Directive — Community RCON Panel
@@ -489,113 +489,273 @@ body { background: var(--bg0); }
 .row { display: flex; align-items: center; gap: 10px; }
 .col { display: flex; flex-direction: column; gap: 10px; }
 .mono { font-family: var(--mono); }
-`;
+`
 
 function Clock() {
-  const [t, setT] = useState(new Date());
-  useEffect(() => { const i = setInterval(() => setT(new Date()), 1000); return () => clearInterval(i); }, []);
-  const pad = n => String(n).padStart(2, "0");
-  return <span className="clock mono">{pad(t.getHours())}:{pad(t.getMinutes())}:{pad(t.getSeconds())} UTC</span>;
+  const [t, setT] = useState(new Date())
+  useEffect(() => {
+    const i = setInterval(() => setT(new Date()), 1000)
+    return () => clearInterval(i)
+  }, [])
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    <span className="clock mono">
+      {pad(t.getHours())}:{pad(t.getMinutes())}:{pad(t.getSeconds())} UTC
+    </span>
+  )
 }
 
 const mockPlayers = [
-  { steam: "76561198001234567", name: "SurvivorMike", perm: "server", online: true, playtime: "14h 32m", location: "Pine Forest" },
-  { steam: "76561198009876543", name: "Wanderer_K", perm: "admin", online: true, playtime: "6h 10m", location: "Desert" },
-  { steam: "76561198012345678", name: "NomadRex", perm: "operator", online: true, playtime: "2h 55m", location: "Ruins" },
-  { steam: "76561198087654321", name: "delta_scout", perm: "client", online: true, playtime: "0h 47m", location: "Wetlands" },
-  { steam: "76561198055555555", name: "IronCraft99", perm: "client", online: false, playtime: "22h 04m", location: "—" },
-  { steam: "76561198033333333", name: "ghost_loop", perm: "client", online: true, playtime: "1h 18m", location: "Tundra" },
-];
+  {
+    steam: '76561198001234567',
+    name: 'SurvivorMike',
+    perm: 'server',
+    online: true,
+    playtime: '14h 32m',
+    location: 'Pine Forest',
+  },
+  {
+    steam: '76561198009876543',
+    name: 'Wanderer_K',
+    perm: 'admin',
+    online: true,
+    playtime: '6h 10m',
+    location: 'Desert',
+  },
+  {
+    steam: '76561198012345678',
+    name: 'NomadRex',
+    perm: 'operator',
+    online: true,
+    playtime: '2h 55m',
+    location: 'Ruins',
+  },
+  {
+    steam: '76561198087654321',
+    name: 'delta_scout',
+    perm: 'client',
+    online: true,
+    playtime: '0h 47m',
+    location: 'Wetlands',
+  },
+  {
+    steam: '76561198055555555',
+    name: 'IronCraft99',
+    perm: 'client',
+    online: false,
+    playtime: '22h 04m',
+    location: '—',
+  },
+  {
+    steam: '76561198033333333',
+    name: 'ghost_loop',
+    perm: 'client',
+    online: true,
+    playtime: '1h 18m',
+    location: 'Tundra',
+  },
+]
 
 const mockLog = [
-  { time: "14:38:04", type: "join", msg: "ghost_loop connected [76561198033333333]" },
-  { time: "14:37:50", type: "save", msg: "World auto-saved (SaveInterval: 120s)" },
-  { time: "14:37:10", type: "cmd", msg: "Wanderer_K: setweather stormy" },
-  { time: "14:36:45", type: "warn", msg: "Server memory usage high (82%)" },
-  { time: "14:36:01", type: "cmd", msg: "SurvivorMike: announcement Server restarting in 10 min" },
-  { time: "14:35:33", type: "leave", msg: "IronCraft99 disconnected — user quit" },
-  { time: "14:34:12", type: "cmd", msg: "NomadRex: heal 76561198087654321" },
-  { time: "14:33:58", type: "join", msg: "delta_scout connected [76561198087654321]" },
-  { time: "14:32:40", type: "ban", msg: "Wanderer_K: ban 76561197999000111 — Cheating" },
-  { time: "14:31:00", type: "save", msg: "World auto-saved (SaveInterval: 120s)" },
-];
+  { time: '14:38:04', type: 'join', msg: 'ghost_loop connected [76561198033333333]' },
+  { time: '14:37:50', type: 'save', msg: 'World auto-saved (SaveInterval: 120s)' },
+  { time: '14:37:10', type: 'cmd', msg: 'Wanderer_K: setweather stormy' },
+  { time: '14:36:45', type: 'warn', msg: 'Server memory usage high (82%)' },
+  { time: '14:36:01', type: 'cmd', msg: 'SurvivorMike: announcement Server restarting in 10 min' },
+  { time: '14:35:33', type: 'leave', msg: 'IronCraft99 disconnected — user quit' },
+  { time: '14:34:12', type: 'cmd', msg: 'NomadRex: heal 76561198087654321' },
+  { time: '14:33:58', type: 'join', msg: 'delta_scout connected [76561198087654321]' },
+  { time: '14:32:40', type: 'ban', msg: 'Wanderer_K: ban 76561197999000111 — Cheating' },
+  { time: '14:31:00', type: 'save', msg: 'World auto-saved (SaveInterval: 120s)' },
+]
 
 const mockBans = [
-  { steam: "76561197999000111", name: "xAimbotUserx", by: "Wanderer_K", date: "2026-02-21", reason: "Cheating — aimbot suspected" },
-  { steam: "76561197888000222", name: "GrieferBoss", by: "SurvivorMike", date: "2026-02-18", reason: "Excessive griefing / base spam" },
-  { steam: "76561197777000333", name: "chat_spammer", by: "Wanderer_K", date: "2026-02-15", reason: "Spam / advertising" },
-];
+  {
+    steam: '76561197999000111',
+    name: 'xAimbotUserx',
+    by: 'Wanderer_K',
+    date: '2026-02-21',
+    reason: 'Cheating — aimbot suspected',
+  },
+  {
+    steam: '76561197888000222',
+    name: 'GrieferBoss',
+    by: 'SurvivorMike',
+    date: '2026-02-18',
+    reason: 'Excessive griefing / base spam',
+  },
+  {
+    steam: '76561197777000333',
+    name: 'chat_spammer',
+    by: 'Wanderer_K',
+    date: '2026-02-15',
+    reason: 'Spam / advertising',
+  },
+]
 
 const mockWhitelist = [
-  { steam: "76561198001234567", name: "SurvivorMike", added: "2026-02-10" },
-  { steam: "76561198009876543", name: "Wanderer_K", added: "2026-02-10" },
-  { steam: "76561198044444444", name: "PlaytestUser01", added: "2026-02-20" },
-];
+  { steam: '76561198001234567', name: 'SurvivorMike', added: '2026-02-10' },
+  { steam: '76561198009876543', name: 'Wanderer_K', added: '2026-02-10' },
+  { steam: '76561198044444444', name: 'PlaytestUser01', added: '2026-02-20' },
+]
 
 const settingGroups = [
   {
-    label: "General",
+    label: 'General',
     settings: [
-      { key: "WorldName", name: "World Name", desc: "Save name for this world", type: "text", value: "My Survival World" },
-      { key: "SaveInterval", name: "Save Interval", desc: "How often the world auto-saves (seconds)", type: "number", value: 120 },
-      { key: "IsHardcore", name: "Hardcore Mode", desc: "Enable unforgiving Hardcore rules", type: "bool", value: false },
-      { key: "GameType", name: "Game Type", desc: "Cooperative (PvE focused), PVP, Creative, or Arena", type: "select", value: "ServerType.Cooperative", options: ["ServerType.Cooperative","ServerType.PVP","ServerType.Creative","ServerType.Arena"] },
-      { key: "Description", name: "Server Description", desc: "Shown in the server browser", type: "text", value: "A community survival server" },
-      { key: "IsOnline", name: "Visible in Browser", desc: "Allow players to find server in server browser", type: "bool", value: true },
-      { key: "IsWhitelisted", name: "Whitelisted", desc: "Restrict joins to players in whitelist.txt", type: "bool", value: false },
-      { key: "FriendsOnly", name: "Friends Only", desc: "Only Steam friends can join", type: "bool", value: false },
-      { key: "MaxPlayers", name: "Max Players", desc: "Maximum concurrent player slots", type: "number", value: 16 },
-      { key: "WorldOvergrowth", name: "World Overgrowth", desc: "0 = fresh apocalypse · 1 = years in (affects loot scarcity & decay)", type: "number", value: 0.4 },
+      {
+        key: 'WorldName',
+        name: 'World Name',
+        desc: 'Save name for this world',
+        type: 'text',
+        value: 'My Survival World',
+      },
+      {
+        key: 'SaveInterval',
+        name: 'Save Interval',
+        desc: 'How often the world auto-saves (seconds)',
+        type: 'number',
+        value: 120,
+      },
+      {
+        key: 'IsHardcore',
+        name: 'Hardcore Mode',
+        desc: 'Enable unforgiving Hardcore rules',
+        type: 'bool',
+        value: false,
+      },
+      {
+        key: 'GameType',
+        name: 'Game Type',
+        desc: 'Cooperative (PvE focused), PVP, Creative, or Arena',
+        type: 'select',
+        value: 'ServerType.Cooperative',
+        options: [
+          'ServerType.Cooperative',
+          'ServerType.PVP',
+          'ServerType.Creative',
+          'ServerType.Arena',
+        ],
+      },
+      {
+        key: 'Description',
+        name: 'Server Description',
+        desc: 'Shown in the server browser',
+        type: 'text',
+        value: 'A community survival server',
+      },
+      {
+        key: 'IsOnline',
+        name: 'Visible in Browser',
+        desc: 'Allow players to find server in server browser',
+        type: 'bool',
+        value: true,
+      },
+      {
+        key: 'IsWhitelisted',
+        name: 'Whitelisted',
+        desc: 'Restrict joins to players in whitelist.txt',
+        type: 'bool',
+        value: false,
+      },
+      {
+        key: 'FriendsOnly',
+        name: 'Friends Only',
+        desc: 'Only Steam friends can join',
+        type: 'bool',
+        value: false,
+      },
+      {
+        key: 'MaxPlayers',
+        name: 'Max Players',
+        desc: 'Maximum concurrent player slots',
+        type: 'number',
+        value: 16,
+      },
+      {
+        key: 'WorldOvergrowth',
+        name: 'World Overgrowth',
+        desc: '0 = fresh apocalypse · 1 = years in (affects loot scarcity & decay)',
+        type: 'number',
+        value: 0.4,
+      },
     ],
   },
   {
-    label: "Map",
+    label: 'Map',
     settings: [
-      { key: "LimitMapSize", name: "Limit Map Size", desc: "Add a world border — disabled = infinite world", type: "bool", value: false },
-      { key: "MapSizeLimit", name: "Map Size Limit", desc: "Border-to-border size in units when limiting is on", type: "number", value: 4000 },
-      { key: "SpawnRegionSize", name: "Spawn Region Size", desc: "Radius players can respawn within", type: "number", value: 500 },
+      {
+        key: 'LimitMapSize',
+        name: 'Limit Map Size',
+        desc: 'Add a world border — disabled = infinite world',
+        type: 'bool',
+        value: false,
+      },
+      {
+        key: 'MapSizeLimit',
+        name: 'Map Size Limit',
+        desc: 'Border-to-border size in units when limiting is on',
+        type: 'number',
+        value: 4000,
+      },
+      {
+        key: 'SpawnRegionSize',
+        name: 'Spawn Region Size',
+        desc: 'Radius players can respawn within',
+        type: 'number',
+        value: 500,
+      },
     ],
   },
-];
+]
 
 const consoleInit = [
-  { cls: "c-comment", text: "# ORMOD: Directive — Server Console" },
-  { cls: "c-comment", text: "# World: My Survival World  |  SteamCMD Dedicated Server" },
-  { cls: "c-comment", text: "# Permissions: [server] > [admin] > [operator] > [client]" },
-  { cls: "c-comment", text: "#" },
-  { cls: "c-info", text: "  getplayers" },
-  { cls: "c-ok", text: "  [6] SurvivorMike · Wanderer_K · NomadRex · delta_scout · ghost_loop + 1 offline" },
-  { cls: "c-info", text: "  getserversettings" },
-  { cls: "c-ok", text: "  GameType: Cooperative | MaxPlayers: 16 | IsHardcore: false | WorldOvergrowth: 0.4" },
-  { cls: "c-info", text: "  announcement Welcome to the server! Please read the rules in Discord." },
-  { cls: "c-ok", text: "  [OK] Announcement sent to all players." },
-];
+  { cls: 'c-comment', text: '# ORMOD: Directive — Server Console' },
+  { cls: 'c-comment', text: '# World: My Survival World  |  SteamCMD Dedicated Server' },
+  { cls: 'c-comment', text: '# Permissions: [server] > [admin] > [operator] > [client]' },
+  { cls: 'c-comment', text: '#' },
+  { cls: 'c-info', text: '  getplayers' },
+  {
+    cls: 'c-ok',
+    text: '  [6] SurvivorMike · Wanderer_K · NomadRex · delta_scout · ghost_loop + 1 offline',
+  },
+  { cls: 'c-info', text: '  getserversettings' },
+  {
+    cls: 'c-ok',
+    text: '  GameType: Cooperative | MaxPlayers: 16 | IsHardcore: false | WorldOvergrowth: 0.4',
+  },
+  {
+    cls: 'c-info',
+    text: '  announcement Welcome to the server! Please read the rules in Discord.',
+  },
+  { cls: 'c-ok', text: '  [OK] Announcement sent to all players.' },
+]
 
 const quickCmds = [
-  { cmd: "getplayers", desc: "List all players", perm: "operator" },
-  { cmd: "getserversettings", desc: "Show current settings", perm: "admin" },
-  { cmd: "forcesave", desc: "Force world save", perm: "server" },
-  { cmd: "announcement [msg]", desc: "Broadcast to all players", perm: "operator" },
-  { cmd: "settime [0000-2400]", desc: "Set world time", perm: "admin" },
-  { cmd: "setweather [type]", desc: "cloudy / stormy / clear / lightrain etc.", perm: "admin" },
-  { cmd: "setfog [true/false]", desc: "Toggle world fog", perm: "admin" },
-  { cmd: "kick [steamId]", desc: "Kick a player", perm: "operator" },
-  { cmd: "ban [steamId]", desc: "Ban a player", perm: "admin" },
-  { cmd: "unban [steamId]", desc: "Unban a player", perm: "admin" },
-  { cmd: "whitelist [steamId]", desc: "Add to whitelist.txt", perm: "admin" },
-  { cmd: "teleport [steamId]", desc: "Teleport self to player", perm: "admin" },
-  { cmd: "heal [steamId]", desc: "Reset all player stats", perm: "operator" },
-  { cmd: "addxp [steamId] [amt]", desc: "Give XP to a player", perm: "operator" },
-  { cmd: "spawn [entity]", desc: "Spawn entity at position", perm: "admin" },
-  { cmd: "setpermissions [id] [lvl]", desc: "Set player permission level", perm: "server" },
-  { cmd: "authenabled [true/false]", desc: "Toggle server-side auth", perm: "server" },
-  { cmd: "anticheatenabled [true/false]", desc: "Toggle anti-cheat system", perm: "server" },
-  { cmd: "forcerespawnloot", desc: "Force respawn all loot pools", perm: "admin" },
-];
+  { cmd: 'getplayers', desc: 'List all players', perm: 'operator' },
+  { cmd: 'getserversettings', desc: 'Show current settings', perm: 'admin' },
+  { cmd: 'forcesave', desc: 'Force world save', perm: 'server' },
+  { cmd: 'announcement [msg]', desc: 'Broadcast to all players', perm: 'operator' },
+  { cmd: 'settime [0000-2400]', desc: 'Set world time', perm: 'admin' },
+  { cmd: 'setweather [type]', desc: 'cloudy / stormy / clear / lightrain etc.', perm: 'admin' },
+  { cmd: 'setfog [true/false]', desc: 'Toggle world fog', perm: 'admin' },
+  { cmd: 'kick [steamId]', desc: 'Kick a player', perm: 'operator' },
+  { cmd: 'ban [steamId]', desc: 'Ban a player', perm: 'admin' },
+  { cmd: 'unban [steamId]', desc: 'Unban a player', perm: 'admin' },
+  { cmd: 'whitelist [steamId]', desc: 'Add to whitelist.txt', perm: 'admin' },
+  { cmd: 'teleport [steamId]', desc: 'Teleport self to player', perm: 'admin' },
+  { cmd: 'heal [steamId]', desc: 'Reset all player stats', perm: 'operator' },
+  { cmd: 'addxp [steamId] [amt]', desc: 'Give XP to a player', perm: 'operator' },
+  { cmd: 'spawn [entity]', desc: 'Spawn entity at position', perm: 'admin' },
+  { cmd: 'setpermissions [id] [lvl]', desc: 'Set player permission level', perm: 'server' },
+  { cmd: 'authenabled [true/false]', desc: 'Toggle server-side auth', perm: 'server' },
+  { cmd: 'anticheatenabled [true/false]', desc: 'Toggle anti-cheat system', perm: 'server' },
+  { cmd: 'forcerespawnloot', desc: 'Force respawn all loot pools', perm: 'admin' },
+]
 
 /* ──────────────── DASHBOARD ──────────────── */
 function Dashboard() {
-  const online = mockPlayers.filter(p => p.online).length;
+  const online = mockPlayers.filter((p) => p.online).length
   return (
     <div className="main fadein">
       <div className="stat-row">
@@ -606,7 +766,12 @@ function Dashboard() {
         </div>
         <div className="stat-item">
           <div className="stat-label">Game Type</div>
-          <div className="stat-value" style={{fontSize:"16px",paddingTop:"6px",color:"var(--orange)"}}>Cooperative</div>
+          <div
+            className="stat-value"
+            style={{ fontSize: '16px', paddingTop: '6px', color: 'var(--orange)' }}
+          >
+            Cooperative
+          </div>
           <div className="stat-sub">ServerType.Cooperative</div>
         </div>
         <div className="stat-item">
@@ -616,22 +781,30 @@ function Dashboard() {
         </div>
         <div className="stat-item">
           <div className="stat-label">Last Save</div>
-          <div className="stat-value" style={{fontSize:"18px",paddingTop:"4px"}}>2m ago</div>
+          <div className="stat-value" style={{ fontSize: '18px', paddingTop: '4px' }}>
+            2m ago
+          </div>
           <div className="stat-sub">Auto-save: 120s interval</div>
         </div>
       </div>
 
       <div className="warn-banner">
-        ⚠ Server memory usage is high (82%). Run <span className="mono" style={{margin:"0 4px",color:"var(--text)"}}>forcesave</span> and consider scheduling a restart.
+        ⚠ Server memory usage is high (82%). Run{' '}
+        <span className="mono" style={{ margin: '0 4px', color: 'var(--text)' }}>
+          forcesave
+        </span>{' '}
+        and consider scheduling a restart.
       </div>
 
       <div className="grid-3">
         <div className="card">
           <div className="card-header">
             <span className="card-title">Activity Log</span>
-            <span className="pill pill-green"><span className="dot dot-green pulse"></span>Live</span>
+            <span className="pill pill-green">
+              <span className="dot dot-green pulse"></span>Live
+            </span>
           </div>
-          <div style={{background:"var(--bg0)"}}>
+          <div style={{ background: 'var(--bg0)' }}>
             {mockLog.map((l, i) => (
               <div key={i} className={`log-entry log-${l.type}`}>
                 <span className="log-time">{l.time}</span>
@@ -649,23 +822,40 @@ function Dashboard() {
               <span className="card-meta">{online} active</span>
             </div>
             <div className="card-body-0">
-              {mockPlayers.filter(p => p.online).map((p, i) => (
-                <div key={i} className="setting-row" style={{padding:"10px 16px"}}>
-                  <div>
-                    <div style={{fontSize:"13px",fontWeight:"500",color:"var(--text-bright)"}}>{p.name}</div>
-                    <div style={{fontFamily:"var(--mono)",fontSize:"10px",color:"var(--dim)",marginTop:"2px"}}>{p.steam.slice(0,15)}…</div>
+              {mockPlayers
+                .filter((p) => p.online)
+                .map((p, i) => (
+                  <div key={i} className="setting-row" style={{ padding: '10px 16px' }}>
+                    <div>
+                      <div
+                        style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-bright)' }}
+                      >
+                        {p.name}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '10px',
+                          color: 'var(--dim)',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {p.steam.slice(0, 15)}…
+                      </div>
+                    </div>
+                    <div className="col" style={{ alignItems: 'flex-end', gap: '4px' }}>
+                      <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>
+                      <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{p.location}</span>
+                    </div>
                   </div>
-                  <div className="col" style={{alignItems:"flex-end",gap:"4px"}}>
-                    <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>
-                    <span style={{fontSize:"10px",color:"var(--muted)"}}>{p.location}</span>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
 
           <div className="card">
-            <div className="card-header"><span className="card-title">Quick Actions</span></div>
+            <div className="card-header">
+              <span className="card-title">Quick Actions</span>
+            </div>
             <div className="card-body">
               <div className="btn-group">
                 <button className="btn btn-primary btn-sm">Force Save</button>
@@ -678,22 +868,31 @@ function Dashboard() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /* ──────────────── PLAYERS ──────────────── */
 function Players() {
-  const [active, setActive] = useState(null);
+  const [active, setActive] = useState(null)
   return (
     <div className="main fadein">
-      <div className="row" style={{marginBottom:"4px"}}>
+      <div className="row" style={{ marginBottom: '4px' }}>
         <div>
-          <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text-bright)"}}>Player Management</div>
-          <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-bright)' }}>
+            Player Management
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginTop: '2px',
+            }}
+          >
             adminlist.txt · setpermissions · kick · ban · whitelist
           </div>
         </div>
-        <div className="spacer"/>
+        <div className="spacer" />
         <button className="btn btn-ghost btn-sm">Refresh</button>
         <button className="btn btn-primary btn-sm">Broadcast</button>
       </div>
@@ -702,7 +901,8 @@ function Players() {
         <div className="card-header">
           <span className="card-title">All Players</span>
           <span className="card-meta">
-            {mockPlayers.filter(p=>p.online).length} online · {mockPlayers.filter(p=>!p.online).length} offline
+            {mockPlayers.filter((p) => p.online).length} online ·{' '}
+            {mockPlayers.filter((p) => !p.online).length} offline
           </span>
         </div>
         <table className="data-table">
@@ -719,17 +919,27 @@ function Players() {
           <tbody>
             {mockPlayers.map((p, i) => (
               <>
-                <tr key={i} onClick={() => setActive(active === i ? null : i)} style={{cursor:"pointer"}}>
+                <tr
+                  key={i}
+                  onClick={() => setActive(active === i ? null : i)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td className="bright">{p.name}</td>
                   <td className="mono">{p.steam}</td>
-                  <td><span className={`perm perm-${p.perm}`}>[{p.perm}]</span></td>
                   <td>
-                    {p.online
-                      ? <span className="pill pill-green"><span className="dot dot-green pulse"></span>Online</span>
-                      : <span className="pill pill-muted">Offline</span>}
+                    <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>
+                  </td>
+                  <td>
+                    {p.online ? (
+                      <span className="pill pill-green">
+                        <span className="dot dot-green pulse"></span>Online
+                      </span>
+                    ) : (
+                      <span className="pill pill-muted">Offline</span>
+                    )}
                   </td>
                   <td className="mono">{p.playtime}</td>
-                  <td onClick={e => e.stopPropagation()}>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div className="btn-group">
                       <button className="btn btn-ghost btn-xs">Teleport</button>
                       <button className="btn btn-ghost btn-xs">Heal</button>
@@ -740,22 +950,51 @@ function Players() {
                 </tr>
                 {active === i && (
                   <tr key={`exp-${i}`}>
-                    <td colSpan={6} style={{padding:"0",background:"var(--bg2)"}}>
-                      <div style={{padding:"16px 20px"}}>
-                        <div className="row" style={{marginBottom:"12px"}}>
-                          <span style={{fontWeight:"600",color:"var(--text-bright)"}}>{p.name}</span>
-                          <span style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)"}}>{p.steam}</span>
+                    <td colSpan={6} style={{ padding: '0', background: 'var(--bg2)' }}>
+                      <div style={{ padding: '16px 20px' }}>
+                        <div className="row" style={{ marginBottom: '12px' }}>
+                          <span style={{ fontWeight: '600', color: 'var(--text-bright)' }}>
+                            {p.name}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: 'var(--mono)',
+                              fontSize: '11px',
+                              color: 'var(--muted)',
+                            }}
+                          >
+                            {p.steam}
+                          </span>
                         </div>
-                        <div className="row" style={{gap:"12px",flexWrap:"wrap",marginBottom:"14px"}}>
+                        <div
+                          className="row"
+                          style={{ gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}
+                        >
                           {[
-                            ["Permission", <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>],
-                            ["Biome / Location", p.location],
-                            ["Session Time", p.playtime],
-                            ["Status", p.online ? "Online" : "Offline"],
+                            [
+                              'Permission',
+                              <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>,
+                            ],
+                            ['Biome / Location', p.location],
+                            ['Session Time', p.playtime],
+                            ['Status', p.online ? 'Online' : 'Offline'],
                           ].map(([label, val]) => (
-                            <div key={label} style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:"2px",padding:"10px 16px",minWidth:"130px"}}>
+                            <div
+                              key={label}
+                              style={{
+                                background: 'var(--bg3)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '2px',
+                                padding: '10px 16px',
+                                minWidth: '130px',
+                              }}
+                            >
                               <div className="stat-label">{label}</div>
-                              <div style={{fontSize:"13px",color:"var(--text)",marginTop:"2px"}}>{val}</div>
+                              <div
+                                style={{ fontSize: '13px', color: 'var(--text)', marginTop: '2px' }}
+                              >
+                                {val}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -780,44 +1019,58 @@ function Players() {
         </table>
       </div>
     </div>
-  );
+  )
 }
 
 /* ──────────────── SETTINGS ──────────────── */
 function Settings() {
   const [vals, setVals] = useState(
-    settingGroups.flatMap(g => g.settings).reduce((a, s) => ({ ...a, [s.key]: s.value }), {})
-  );
-  const [saved, setSaved] = useState(false);
-  const set = (k, v) => { setVals(p => ({ ...p, [k]: v })); setSaved(false); };
+    settingGroups.flatMap((g) => g.settings).reduce((a, s) => ({ ...a, [s.key]: s.value }), {})
+  )
+  const [saved, setSaved] = useState(false)
+  const set = (k, v) => {
+    setVals((p) => ({ ...p, [k]: v }))
+    setSaved(false)
+  }
 
   return (
     <div className="main fadein">
-      <div className="row" style={{marginBottom:"4px"}}>
+      <div className="row" style={{ marginBottom: '4px' }}>
         <div>
-          <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text-bright)"}}>Server Settings</div>
-          <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-bright)' }}>
+            Server Settings
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginTop: '2px',
+            }}
+          >
             serversettings.json · setserversetting [key] [value] · live reload
           </div>
         </div>
-        <div className="spacer"/>
+        <div className="spacer" />
         <button className="btn btn-ghost btn-sm">Reload from File</button>
         <button className="btn btn-primary btn-sm" onClick={() => setSaved(true)}>
-          {saved ? "✓ Saved" : "Save to JSON"}
+          {saved ? '✓ Saved' : 'Save to JSON'}
         </button>
       </div>
 
-      <div className="grid-2" style={{alignItems:"start"}}>
+      <div className="grid-2" style={{ alignItems: 'start' }}>
         <div className="card">
           <div className="card-header">
             <span className="card-title">Parameters</span>
-            <span className="pill pill-green"><span className="dot dot-green pulse"></span>Live Reload Active</span>
+            <span className="pill pill-green">
+              <span className="dot dot-green pulse"></span>Live Reload Active
+            </span>
           </div>
           <div className="card-body-0">
-            {settingGroups.map(g => (
+            {settingGroups.map((g) => (
               <div key={g.label}>
                 <div className="setting-group-label">{g.label}</div>
-                {g.settings.map(s => (
+                {g.settings.map((s) => (
                   <div key={s.key} className="setting-row">
                     <div className="setting-info">
                       <div className="setting-name">{s.name}</div>
@@ -825,27 +1078,49 @@ function Settings() {
                       <div className="setting-desc">{s.desc}</div>
                     </div>
                     <div>
-                      {s.type === "bool" && (
+                      {s.type === 'bool' && (
                         <div className="toggle-wrap">
-                          <span style={{fontFamily:"var(--mono)",fontSize:"11px",color:vals[s.key]?"var(--green)":"var(--dim)"}}>
-                            {vals[s.key] ? "true" : "false"}
+                          <span
+                            style={{
+                              fontFamily: 'var(--mono)',
+                              fontSize: '11px',
+                              color: vals[s.key] ? 'var(--green)' : 'var(--dim)',
+                            }}
+                          >
+                            {vals[s.key] ? 'true' : 'false'}
                           </span>
-                          <div className={`toggle ${vals[s.key] ? "on" : ""}`} onClick={() => set(s.key, !vals[s.key])} />
+                          <div
+                            className={`toggle ${vals[s.key] ? 'on' : ''}`}
+                            onClick={() => set(s.key, !vals[s.key])}
+                          />
                         </div>
                       )}
-                      {s.type === "number" && (
-                        <input className="num-input" type="number" value={vals[s.key]}
-                          onChange={e => set(s.key, parseFloat(e.target.value))} />
+                      {s.type === 'number' && (
+                        <input
+                          className="num-input"
+                          type="number"
+                          value={vals[s.key]}
+                          onChange={(e) => set(s.key, parseFloat(e.target.value))}
+                        />
                       )}
-                      {s.type === "select" && (
-                        <select className="sel-input" value={vals[s.key]}
-                          onChange={e => set(s.key, e.target.value)}>
-                          {s.options.map(o => <option key={o}>{o}</option>)}
+                      {s.type === 'select' && (
+                        <select
+                          className="sel-input"
+                          value={vals[s.key]}
+                          onChange={(e) => set(s.key, e.target.value)}
+                        >
+                          {s.options.map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
                         </select>
                       )}
-                      {s.type === "text" && (
-                        <input className="text-input" type="text" value={vals[s.key]}
-                          onChange={e => set(s.key, e.target.value)} />
+                      {s.type === 'text' && (
+                        <input
+                          className="text-input"
+                          type="text"
+                          value={vals[s.key]}
+                          onChange={(e) => set(s.key, e.target.value)}
+                        />
                       )}
                     </div>
                   </div>
@@ -855,69 +1130,88 @@ function Settings() {
           </div>
         </div>
 
-        <div className="card" style={{position:"sticky",top:"16px"}}>
+        <div className="card" style={{ position: 'sticky', top: '16px' }}>
           <div className="card-header">
             <span className="card-title">serversettings.json</span>
             <span className="card-meta">Live Preview</span>
           </div>
           <div className="card-body-0">
             <div className="json-pane">
-              <span className="jd">{"{"}</span><br/>
-              {settingGroups.flatMap(g => g.settings).map(s => (
-                <div key={s.key} style={{paddingLeft:"16px"}}>
-                  <span className="jk">"{s.key}"</span>
-                  <span className="jd">: </span>
-                  {s.type === "bool"
-                    ? <span className="jb">{String(vals[s.key])}</span>
-                    : s.type === "number"
-                    ? <span className="jn">{vals[s.key]}</span>
-                    : <span className="js">"{vals[s.key]}"</span>}
-                  <span className="jd">,</span>
-                </div>
-              ))}
-              <span className="jd">{"}"}</span>
+              <span className="jd">{'{'}</span>
+              <br />
+              {settingGroups
+                .flatMap((g) => g.settings)
+                .map((s) => (
+                  <div key={s.key} style={{ paddingLeft: '16px' }}>
+                    <span className="jk">"{s.key}"</span>
+                    <span className="jd">: </span>
+                    {s.type === 'bool' ? (
+                      <span className="jb">{String(vals[s.key])}</span>
+                    ) : s.type === 'number' ? (
+                      <span className="jn">{vals[s.key]}</span>
+                    ) : (
+                      <span className="js">"{vals[s.key]}"</span>
+                    )}
+                    <span className="jd">,</span>
+                  </div>
+                ))}
+              <span className="jd">{'}'}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /* ──────────────── CONSOLE ──────────────── */
 function Console() {
-  const [lines, setLines] = useState(consoleInit);
-  const [input, setInput] = useState("");
-  const [hist, setHist] = useState([]);
-  const [hi, setHi] = useState(-1);
-  const endRef = useRef(null);
+  const [lines, setLines] = useState(consoleInit)
+  const [input, setInput] = useState('')
+  const [hist, setHist] = useState([])
+  const [hi, setHi] = useState(-1)
+  const endRef = useRef(null)
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [lines]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [lines])
 
   const run = () => {
-    if (!input.trim()) return;
-    const cmd = input.trim();
-    setLines(l => [
+    if (!input.trim()) return
+    const cmd = input.trim()
+    setLines((l) => [
       ...l,
-      { cls: "c-input", text: `  ${cmd}` },
-      { cls: "c-ok", text: "  [OK] Command dispatched to server process." },
-    ]);
-    setHist(h => [cmd, ...h]);
-    setHi(-1);
-    setInput("");
-  };
+      { cls: 'c-input', text: `  ${cmd}` },
+      { cls: 'c-ok', text: '  [OK] Command dispatched to server process.' },
+    ])
+    setHist((h) => [cmd, ...h])
+    setHi(-1)
+    setInput('')
+  }
 
   return (
     <div className="main fadein">
-      <div className="row" style={{marginBottom:"4px"}}>
+      <div className="row" style={{ marginBottom: '4px' }}>
         <div>
-          <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text-bright)"}}>Console</div>
-          <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-bright)' }}>
+            Console
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginTop: '2px',
+            }}
+          >
             Direct CLI access · Commands dispatched via server process stdin
           </div>
         </div>
-        <div className="spacer"/>
-        <button className="btn btn-ghost btn-sm" onClick={() => setLines([{cls:"c-comment",text:"# Console cleared."}])}>
+        <div className="spacer" />
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setLines([{ cls: 'c-comment', text: '# Console cleared.' }])}
+        >
           Clear
         </button>
       </div>
@@ -927,39 +1221,59 @@ function Console() {
           <div className="card">
             <div className="card-header">
               <span className="card-title">Terminal</span>
-              <span className="pill pill-green"><span className="dot dot-green pulse"></span>Connected</span>
+              <span className="pill pill-green">
+                <span className="dot dot-green pulse"></span>Connected
+              </span>
             </div>
             <div className="card-body">
               <div className="console-out">
-                {lines.map((l, i) => <div key={i} className={`c-line ${l.cls}`}>{l.text || "\u00A0"}</div>)}
-                <div ref={endRef}/>
+                {lines.map((l, i) => (
+                  <div key={i} className={`c-line ${l.cls}`}>
+                    {l.text || '\u00A0'}
+                  </div>
+                ))}
+                <div ref={endRef} />
               </div>
               <div className="console-input-row">
                 <span className="c-prompt">$</span>
                 <input
                   className="c-field"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") run();
-                    if (e.key === "ArrowUp") { const n = Math.min(hi+1,hist.length-1); setHi(n); setInput(hist[n]||""); }
-                    if (e.key === "ArrowDown") { const n = Math.max(hi-1,-1); setHi(n); setInput(n<0?"":hist[n]); }
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') run()
+                    if (e.key === 'ArrowUp') {
+                      const n = Math.min(hi + 1, hist.length - 1)
+                      setHi(n)
+                      setInput(hist[n] || '')
+                    }
+                    if (e.key === 'ArrowDown') {
+                      const n = Math.max(hi - 1, -1)
+                      setHi(n)
+                      setInput(n < 0 ? '' : hist[n])
+                    }
                   }}
                   placeholder="type a command..."
                   autoFocus
                 />
-                <button className="btn btn-primary btn-sm" onClick={run}>Run</button>
+                <button className="btn btn-primary btn-sm" onClick={run}>
+                  Run
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="card" style={{alignSelf:"start"}}>
-          <div className="card-header"><span className="card-title">Quick Commands</span></div>
-          <div className="card-body-0" style={{maxHeight:"460px",overflowY:"auto"}}>
+        <div className="card" style={{ alignSelf: 'start' }}>
+          <div className="card-header">
+            <span className="card-title">Quick Commands</span>
+          </div>
+          <div className="card-body-0" style={{ maxHeight: '460px', overflowY: 'auto' }}>
             {quickCmds.map((q, i) => (
-              <div key={i} className="quick-cmd" onClick={() => setInput(q.cmd + " ")}>
-                <span className={`perm perm-${q.perm}`} style={{flexShrink:0}}>[{q.perm}]</span>
+              <div key={i} className="quick-cmd" onClick={() => setInput(q.cmd + ' ')}>
+                <span className={`perm perm-${q.perm}`} style={{ flexShrink: 0 }}>
+                  [{q.perm}]
+                </span>
                 <span className="qc-cmd">{q.cmd}</span>
                 <span className="qc-desc">{q.desc}</span>
               </div>
@@ -968,133 +1282,287 @@ function Console() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /* ──────────────── WIPE MANAGER ──────────────── */
 const wipeHistory = [
-  { id: 1, type: "MAP_ONLY", by: "SurvivorMike", date: "2026-02-10 06:00", notes: "Bi-weekly map wipe", backup: true, success: true },
-  { id: 2, type: "MAP_ONLY", by: "Auto-Scheduler", date: "2026-01-27 06:00", notes: "Scheduled wipe", backup: true, success: true },
-  { id: 3, type: "FULL", by: "SurvivorMike", date: "2026-01-01 00:00", notes: "New Year full wipe", backup: true, success: true },
-];
+  {
+    id: 1,
+    type: 'MAP_ONLY',
+    by: 'SurvivorMike',
+    date: '2026-02-10 06:00',
+    notes: 'Bi-weekly map wipe',
+    backup: true,
+    success: true,
+  },
+  {
+    id: 2,
+    type: 'MAP_ONLY',
+    by: 'Auto-Scheduler',
+    date: '2026-01-27 06:00',
+    notes: 'Scheduled wipe',
+    backup: true,
+    success: true,
+  },
+  {
+    id: 3,
+    type: 'FULL',
+    by: 'SurvivorMike',
+    date: '2026-01-01 00:00',
+    notes: 'New Year full wipe',
+    backup: true,
+    success: true,
+  },
+]
 
 const wipeFiles = [
-  { label: "ChunkData/", desc: "All world chunk files", checked: true, critical: true },
-  { label: "RegionData/", desc: "Region spawn data", checked: true, critical: true },
-  { label: "mapdata.json", desc: "Map metadata", checked: true, critical: false },
-  { label: "entitydata.json", desc: "All placed entities", checked: true, critical: false },
-  { label: "networkentities.json", desc: "Workbenches, vehicles, mechanoids", checked: true, critical: false },
-  { label: "buildareas.json", desc: "Build location data", checked: true, critical: false },
-  { label: "structuredata.dat", desc: "POI structure data", checked: true, critical: false },
-  { label: "pathfindingdata.dat", desc: "AI pathfinding cache", checked: true, critical: false },
-  { label: "loottables.json", desc: "Loot respawn state", checked: true, critical: false },
-  { label: "weatherdata.dat", desc: "Weather & fog state", checked: true, critical: false },
-  { label: "worldregrowth.json", desc: "Foliage regrowth data", checked: true, critical: false },
-  { label: "PlayerData/", desc: "All player save files", checked: false, critical: true },
-  { label: "spawnregion.dat", desc: "Spawn region data", checked: false, critical: false },
-  { label: "log.txt", desc: "Server log file", checked: false, critical: false },
-];
+  { label: 'ChunkData/', desc: 'All world chunk files', checked: true, critical: true },
+  { label: 'RegionData/', desc: 'Region spawn data', checked: true, critical: true },
+  { label: 'mapdata.json', desc: 'Map metadata', checked: true, critical: false },
+  { label: 'entitydata.json', desc: 'All placed entities', checked: true, critical: false },
+  {
+    label: 'networkentities.json',
+    desc: 'Workbenches, vehicles, mechanoids',
+    checked: true,
+    critical: false,
+  },
+  { label: 'buildareas.json', desc: 'Build location data', checked: true, critical: false },
+  { label: 'structuredata.dat', desc: 'POI structure data', checked: true, critical: false },
+  { label: 'pathfindingdata.dat', desc: 'AI pathfinding cache', checked: true, critical: false },
+  { label: 'loottables.json', desc: 'Loot respawn state', checked: true, critical: false },
+  { label: 'weatherdata.dat', desc: 'Weather & fog state', checked: true, critical: false },
+  { label: 'worldregrowth.json', desc: 'Foliage regrowth data', checked: true, critical: false },
+  { label: 'PlayerData/', desc: 'All player save files', checked: false, critical: true },
+  { label: 'spawnregion.dat', desc: 'Spawn region data', checked: false, critical: false },
+  { label: 'log.txt', desc: 'Server log file', checked: false, critical: false },
+]
 
 function WipeManager() {
-  const [confirmText, setConfirmText] = useState("");
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingType, setPendingType] = useState(null);
-  const [createBackup, setCreateBackup] = useState(true);
-  const [restartAfter, setRestartAfter] = useState(true);
-  const [files, setFiles] = useState(wipeFiles);
-  const [tab, setTab] = useState("quick");
+  const [confirmText, setConfirmText] = useState('')
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [pendingType, setPendingType] = useState(null)
+  const [createBackup, setCreateBackup] = useState(true)
+  const [restartAfter, setRestartAfter] = useState(true)
+  const [files, setFiles] = useState(wipeFiles)
+  const [tab, setTab] = useState('quick')
 
-  const SERVER_NAME = "My Survival World";
+  const SERVER_NAME = 'My Survival World'
 
   const wipeTypes = [
     {
-      id: "MAP_ONLY",
-      label: "Map Wipe",
-      color: "btn-primary",
-      icon: "◫",
-      desc: "Deletes all world, chunk, and entity data. Player inventories and stats are preserved. Use for regular wipe days.",
-      deletes: ["ChunkData/", "RegionData/", "mapdata.json", "entitydata.json", "networkentities.json", "buildareas.json", "structuredata.dat", "loottables.json", "weatherdata.dat", "worldregrowth.json"],
-      keeps: ["PlayerData/", "banlist.txt", "whitelist.txt", "adminlist.txt", "serversettings.json"],
+      id: 'MAP_ONLY',
+      label: 'Map Wipe',
+      color: 'btn-primary',
+      icon: '◫',
+      desc: 'Deletes all world, chunk, and entity data. Player inventories and stats are preserved. Use for regular wipe days.',
+      deletes: [
+        'ChunkData/',
+        'RegionData/',
+        'mapdata.json',
+        'entitydata.json',
+        'networkentities.json',
+        'buildareas.json',
+        'structuredata.dat',
+        'loottables.json',
+        'weatherdata.dat',
+        'worldregrowth.json',
+      ],
+      keeps: [
+        'PlayerData/',
+        'banlist.txt',
+        'whitelist.txt',
+        'adminlist.txt',
+        'serversettings.json',
+      ],
     },
     {
-      id: "MAP_PLAYERS",
-      label: "Map + Players",
-      color: "btn-warn-custom",
-      icon: "◫",
-      desc: "Deletes world data AND player data. Players lose their inventories and progress. Keeps access lists and settings.",
-      deletes: ["ChunkData/", "RegionData/", "PlayerData/", "mapdata.json", "entitydata.json", "networkentities.json"],
-      keeps: ["banlist.txt", "whitelist.txt", "adminlist.txt", "serversettings.json"],
+      id: 'MAP_PLAYERS',
+      label: 'Map + Players',
+      color: 'btn-warn-custom',
+      icon: '◫',
+      desc: 'Deletes world data AND player data. Players lose their inventories and progress. Keeps access lists and settings.',
+      deletes: [
+        'ChunkData/',
+        'RegionData/',
+        'PlayerData/',
+        'mapdata.json',
+        'entitydata.json',
+        'networkentities.json',
+      ],
+      keeps: ['banlist.txt', 'whitelist.txt', 'adminlist.txt', 'serversettings.json'],
     },
     {
-      id: "FULL",
-      label: "Full Wipe",
-      color: "btn-danger",
-      icon: "⊠",
-      desc: "Deletes everything except access lists and server settings. Complete fresh start — use sparingly.",
-      deletes: ["ChunkData/", "RegionData/", "PlayerData/", "ALL world files", "log.txt"],
-      keeps: ["banlist.txt", "whitelist.txt", "adminlist.txt", "serversettings.json"],
+      id: 'FULL',
+      label: 'Full Wipe',
+      color: 'btn-danger',
+      icon: '⊠',
+      desc: 'Deletes everything except access lists and server settings. Complete fresh start — use sparingly.',
+      deletes: ['ChunkData/', 'RegionData/', 'PlayerData/', 'ALL world files', 'log.txt'],
+      keeps: ['banlist.txt', 'whitelist.txt', 'adminlist.txt', 'serversettings.json'],
     },
-  ];
+  ]
 
-  const chosen = wipeTypes.find(w => w.id === pendingType);
+  const chosen = wipeTypes.find((w) => w.id === pendingType)
 
   return (
     <div className="main fadein">
-      <div className="row" style={{marginBottom:"4px"}}>
+      <div className="row" style={{ marginBottom: '4px' }}>
         <div>
-          <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text-bright)"}}>Wipe Manager</div>
-          <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-bright)' }}>
+            Wipe Manager
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginTop: '2px',
+            }}
+          >
             Stop server → backup → delete files → restart
           </div>
         </div>
-        <div className="spacer"/>
+        <div className="spacer" />
         <div className="btn-group">
-          <button onClick={() => setTab("quick")} className={`btn btn-sm ${tab==="quick"?"btn-primary":"btn-ghost"}`}>Quick Wipe</button>
-          <button onClick={() => setTab("custom")} className={`btn btn-sm ${tab==="custom"?"btn-primary":"btn-ghost"}`}>Custom Wipe</button>
-          <button onClick={() => setTab("history")} className={`btn btn-sm ${tab==="history"?"btn-primary":"btn-ghost"}`}>History</button>
-          <button onClick={() => setTab("schedule")} className={`btn btn-sm ${tab==="schedule"?"btn-primary":"btn-ghost"}`}>Schedule</button>
+          <button
+            onClick={() => setTab('quick')}
+            className={`btn btn-sm ${tab === 'quick' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            Quick Wipe
+          </button>
+          <button
+            onClick={() => setTab('custom')}
+            className={`btn btn-sm ${tab === 'custom' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            Custom Wipe
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`btn btn-sm ${tab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            History
+          </button>
+          <button
+            onClick={() => setTab('schedule')}
+            className={`btn btn-sm ${tab === 'schedule' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            Schedule
+          </button>
         </div>
       </div>
 
       <div className="warn-banner">
-        ⚠ Wipes are <strong style={{margin:"0 4px"}}>irreversible</strong>. The server will be stopped before any wipe executes. Always keep backups enabled.
+        ⚠ Wipes are <strong style={{ margin: '0 4px' }}>irreversible</strong>. The server will be
+        stopped before any wipe executes. Always keep backups enabled.
       </div>
 
-      {tab === "quick" && (
+      {tab === 'quick' && (
         <div className="fadein">
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px"}}>
-            {wipeTypes.map(wt => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px' }}>
+            {wipeTypes.map((wt) => (
               <div key={wt.id} className="card">
                 <div className="card-header">
-                  <span className="card-title" style={{
-                    color: wt.id==="FULL" ? "var(--red)" : wt.id==="MAP_PLAYERS" ? "var(--orange)" : "var(--blue)"
-                  }}>{wt.label}</span>
+                  <span
+                    className="card-title"
+                    style={{
+                      color:
+                        wt.id === 'FULL'
+                          ? 'var(--red)'
+                          : wt.id === 'MAP_PLAYERS'
+                            ? 'var(--orange)'
+                            : 'var(--blue)',
+                    }}
+                  >
+                    {wt.label}
+                  </span>
                 </div>
-                <div className="card-body" style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-                  <div style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>{wt.desc}</div>
-
-                  <div>
-                    <div style={{fontSize:"10px",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--dim)",marginBottom:"6px"}}>Deletes</div>
-                    {wt.deletes.slice(0,4).map(f => (
-                      <div key={f} style={{display:"flex",alignItems:"center",gap:"6px",padding:"2px 0",fontFamily:"var(--mono)",fontSize:"10px",color:"var(--red)"}}>
-                        <span>✕</span><span>{f}</span>
-                      </div>
-                    ))}
-                    {wt.deletes.length > 4 && <div style={{fontFamily:"var(--mono)",fontSize:"10px",color:"var(--dim)"}}>+{wt.deletes.length-4} more…</div>}
+                <div
+                  className="card-body"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+                >
+                  <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
+                    {wt.desc}
                   </div>
 
                   <div>
-                    <div style={{fontSize:"10px",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--dim)",marginBottom:"6px"}}>Keeps</div>
-                    {wt.keeps.map(f => (
-                      <div key={f} style={{display:"flex",alignItems:"center",gap:"6px",padding:"2px 0",fontFamily:"var(--mono)",fontSize:"10px",color:"var(--green)"}}>
-                        <span>✓</span><span>{f}</span>
+                    <div
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'var(--dim)',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      Deletes
+                    </div>
+                    {wt.deletes.slice(0, 4).map((f) => (
+                      <div
+                        key={f}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '2px 0',
+                          fontFamily: 'var(--mono)',
+                          fontSize: '10px',
+                          color: 'var(--red)',
+                        }}
+                      >
+                        <span>✕</span>
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                    {wt.deletes.length > 4 && (
+                      <div
+                        style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--dim)' }}
+                      >
+                        +{wt.deletes.length - 4} more…
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'var(--dim)',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      Keeps
+                    </div>
+                    {wt.keeps.map((f) => (
+                      <div
+                        key={f}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '2px 0',
+                          fontFamily: 'var(--mono)',
+                          fontSize: '10px',
+                          color: 'var(--green)',
+                        }}
+                      >
+                        <span>✓</span>
+                        <span>{f}</span>
                       </div>
                     ))}
                   </div>
 
                   <button
-                    className={`btn ${wt.id==="FULL" ? "btn-danger" : wt.id==="MAP_PLAYERS" ? "btn-primary" : "btn-primary"}`}
-                    onClick={() => { setPendingType(wt.id); setShowConfirm(true); setConfirmText(""); }}
+                    className={`btn ${wt.id === 'FULL' ? 'btn-danger' : wt.id === 'MAP_PLAYERS' ? 'btn-primary' : 'btn-primary'}`}
+                    onClick={() => {
+                      setPendingType(wt.id)
+                      setShowConfirm(true)
+                      setConfirmText('')
+                    }}
                   >
                     Execute {wt.label} →
                   </button>
@@ -1105,64 +1573,132 @@ function WipeManager() {
         </div>
       )}
 
-      {tab === "custom" && (
+      {tab === 'custom' && (
         <div className="fadein">
-          <div className="grid-2" style={{alignItems:"start"}}>
+          <div className="grid-2" style={{ alignItems: 'start' }}>
             <div className="card">
-              <div className="card-header"><span className="card-title">Select Files to Delete</span></div>
+              <div className="card-header">
+                <span className="card-title">Select Files to Delete</span>
+              </div>
               <div className="card-body-0">
                 {files.map((f, i) => (
-                  <div key={f.label} className="setting-row" style={{padding:"10px 18px",cursor:"pointer"}}
-                    onClick={() => setFiles(prev => prev.map((p, j) => j===i ? {...p, checked: !p.checked} : p))}>
-                    <div style={{display:"flex",alignItems:"center",gap:"10px",flex:1}}>
-                      <div style={{
-                        width:"16px",height:"16px",border:`1px solid ${f.checked?"var(--red)":"var(--border2)"}`,
-                        background: f.checked ? "var(--red-bg)" : "var(--bg3)",
-                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
-                      }}>
-                        {f.checked && <span style={{color:"var(--red)",fontSize:"10px"}}>✕</span>}
+                  <div
+                    key={f.label}
+                    className="setting-row"
+                    style={{ padding: '10px 18px', cursor: 'pointer' }}
+                    onClick={() =>
+                      setFiles((prev) =>
+                        prev.map((p, j) => (j === i ? { ...p, checked: !p.checked } : p))
+                      )
+                    }
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      <div
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          border: `1px solid ${f.checked ? 'var(--red)' : 'var(--border2)'}`,
+                          background: f.checked ? 'var(--red-bg)' : 'var(--bg3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {f.checked && (
+                          <span style={{ color: 'var(--red)', fontSize: '10px' }}>✕</span>
+                        )}
                       </div>
                       <div>
-                        <div style={{fontFamily:"var(--mono)",fontSize:"12px",color: f.checked?"var(--red)":"var(--muted)"}}>{f.label}</div>
-                        <div style={{fontSize:"11px",color:"var(--dim)"}}>{f.desc}</div>
+                        <div
+                          style={{
+                            fontFamily: 'var(--mono)',
+                            fontSize: '12px',
+                            color: f.checked ? 'var(--red)' : 'var(--muted)',
+                          }}
+                        >
+                          {f.label}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--dim)' }}>{f.desc}</div>
                       </div>
                     </div>
-                    {f.critical && <span className="pill pill-red" style={{fontSize:"9px",padding:"1px 6px"}}>critical</span>}
+                    {f.critical && (
+                      <span
+                        className="pill pill-red"
+                        style={{ fontSize: '9px', padding: '1px 6px' }}
+                      >
+                        critical
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
             <div className="col">
               <div className="card">
-                <div className="card-header"><span className="card-title">Options</span></div>
+                <div className="card-header">
+                  <span className="card-title">Options</span>
+                </div>
                 <div className="card-body-0">
                   <div className="setting-row">
                     <div className="setting-info">
                       <div className="setting-name">Create Backup</div>
-                      <div className="setting-desc">tar.gz archive of entire save dir before wiping</div>
+                      <div className="setting-desc">
+                        tar.gz archive of entire save dir before wiping
+                      </div>
                     </div>
-                    <div className={`toggle ${createBackup?"on":""}`} onClick={() => setCreateBackup(p => !p)} />
+                    <div
+                      className={`toggle ${createBackup ? 'on' : ''}`}
+                      onClick={() => setCreateBackup((p) => !p)}
+                    />
                   </div>
                   <div className="setting-row">
                     <div className="setting-info">
                       <div className="setting-name">Restart After Wipe</div>
                       <div className="setting-desc">Automatically start server when complete</div>
                     </div>
-                    <div className={`toggle ${restartAfter?"on":""}`} onClick={() => setRestartAfter(p => !p)} />
+                    <div
+                      className={`toggle ${restartAfter ? 'on' : ''}`}
+                      onClick={() => setRestartAfter((p) => !p)}
+                    />
                   </div>
                 </div>
               </div>
               <div className="card">
-                <div className="card-header"><span className="card-title">Summary</span></div>
+                <div className="card-header">
+                  <span className="card-title">Summary</span>
+                </div>
                 <div className="card-body">
-                  <div style={{marginBottom:"10px",fontSize:"12px",color:"var(--muted)"}}>
-                    <strong style={{color:"var(--red)"}}>{files.filter(f=>f.checked).length}</strong> items selected for deletion.
+                  <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--muted)' }}>
+                    <strong style={{ color: 'var(--red)' }}>
+                      {files.filter((f) => f.checked).length}
+                    </strong>{' '}
+                    items selected for deletion.
                   </div>
-                  {files.filter(f=>f.checked).map(f => (
-                    <div key={f.label} style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--red)",padding:"1px 0"}}>✕ {f.label}</div>
-                  ))}
-                  <button className="btn btn-danger" style={{marginTop:"16px",width:"100%"}}
-                    onClick={() => { setPendingType("CUSTOM"); setShowConfirm(true); setConfirmText(""); }}>
+                  {files
+                    .filter((f) => f.checked)
+                    .map((f) => (
+                      <div
+                        key={f.label}
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '11px',
+                          color: 'var(--red)',
+                          padding: '1px 0',
+                        }}
+                      >
+                        ✕ {f.label}
+                      </div>
+                    ))}
+                  <button
+                    className="btn btn-danger"
+                    style={{ marginTop: '16px', width: '100%' }}
+                    onClick={() => {
+                      setPendingType('CUSTOM')
+                      setShowConfirm(true)
+                      setConfirmText('')
+                    }}
+                  >
                     Execute Custom Wipe →
                   </button>
                 </div>
@@ -1172,20 +1708,51 @@ function WipeManager() {
         </div>
       )}
 
-      {tab === "history" && (
+      {tab === 'history' && (
         <div className="card fadein">
-          <div className="card-header"><span className="card-title">Wipe History</span></div>
+          <div className="card-header">
+            <span className="card-title">Wipe History</span>
+          </div>
           <table className="data-table">
-            <thead><tr><th>Type</th><th>Triggered By</th><th>Date</th><th>Notes</th><th>Backup</th><th>Status</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Triggered By</th>
+                <th>Date</th>
+                <th>Notes</th>
+                <th>Backup</th>
+                <th>Status</th>
+              </tr>
+            </thead>
             <tbody>
-              {wipeHistory.map(w => (
+              {wipeHistory.map((w) => (
                 <tr key={w.id}>
-                  <td><span className={`perm ${w.type==="FULL"?"perm-server":w.type==="MAP_PLAYERS"?"perm-admin":"perm-operator"}`}>{w.type}</span></td>
+                  <td>
+                    <span
+                      className={`perm ${w.type === 'FULL' ? 'perm-server' : w.type === 'MAP_PLAYERS' ? 'perm-admin' : 'perm-operator'}`}
+                    >
+                      {w.type}
+                    </span>
+                  </td>
                   <td className="bright">{w.by}</td>
-                  <td className="mono" style={{color:"var(--dim)"}}>{w.date}</td>
-                  <td style={{color:"var(--muted)"}}>{w.notes}</td>
-                  <td>{w.backup ? <span className="pill pill-green" style={{fontSize:"10px"}}>✓ Available</span> : <span style={{color:"var(--dim)"}}>—</span>}</td>
-                  <td><span className="pill pill-green" style={{fontSize:"10px"}}>Success</span></td>
+                  <td className="mono" style={{ color: 'var(--dim)' }}>
+                    {w.date}
+                  </td>
+                  <td style={{ color: 'var(--muted)' }}>{w.notes}</td>
+                  <td>
+                    {w.backup ? (
+                      <span className="pill pill-green" style={{ fontSize: '10px' }}>
+                        ✓ Available
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--dim)' }}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="pill pill-green" style={{ fontSize: '10px' }}>
+                      Success
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1193,39 +1760,77 @@ function WipeManager() {
         </div>
       )}
 
-      {tab === "schedule" && (
+      {tab === 'schedule' && (
         <div className="fadein">
           <div className="card">
             <div className="card-header">
               <span className="card-title">Scheduled Wipes</span>
               <button className="btn btn-primary btn-sm">+ Add Schedule</button>
             </div>
-            <div style={{padding:"20px 18px"}}>
-              <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:"3px",padding:"16px 20px",marginBottom:"16px"}}>
-                <div className="row" style={{marginBottom:"10px"}}>
-                  <span style={{fontWeight:"600",color:"var(--text-bright)"}}>Weekly Map Wipe</span>
-                  <span className="pill pill-green" style={{fontSize:"10px"}}>Enabled</span>
-                  <div className="spacer"/>
+            <div style={{ padding: '20px 18px' }}>
+              <div
+                style={{
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '3px',
+                  padding: '16px 20px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div className="row" style={{ marginBottom: '10px' }}>
+                  <span style={{ fontWeight: '600', color: 'var(--text-bright)' }}>
+                    Weekly Map Wipe
+                  </span>
+                  <span className="pill pill-green" style={{ fontSize: '10px' }}>
+                    Enabled
+                  </span>
+                  <div className="spacer" />
                   <button className="btn btn-ghost btn-xs">Edit</button>
                   <button className="btn btn-danger btn-xs">Delete</button>
                 </div>
-                <div className="row" style={{gap:"20px",flexWrap:"wrap"}}>
+                <div className="row" style={{ gap: '20px', flexWrap: 'wrap' }}>
                   {[
-                    ["Cron", "0 6 * * 1"],
-                    ["Schedule", "Every Monday at 06:00 UTC"],
-                    ["Type", "MAP_ONLY"],
-                    ["Next Run", "Mon 2026-02-25 06:00"],
-                    ["Last Run", "Mon 2026-02-10 06:00"],
-                  ].map(([k,v]) => (
+                    ['Cron', '0 6 * * 1'],
+                    ['Schedule', 'Every Monday at 06:00 UTC'],
+                    ['Type', 'MAP_ONLY'],
+                    ['Next Run', 'Mon 2026-02-25 06:00'],
+                    ['Last Run', 'Mon 2026-02-10 06:00'],
+                  ].map(([k, v]) => (
                     <div key={k}>
-                      <div style={{fontSize:"10px",color:"var(--dim)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{k}</div>
-                      <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--text)",marginTop:"2px"}}>{v}</div>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: 'var(--dim)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                        }}
+                      >
+                        {k}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: '11px',
+                          color: 'var(--text)',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {v}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{textAlign:"center",color:"var(--dim)",fontSize:"12px",padding:"20px"}}>
-                + Add a scheduled wipe using cron expressions.<br/>
+              <div
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--dim)',
+                  fontSize: '12px',
+                  padding: '20px',
+                }}
+              >
+                + Add a scheduled wipe using cron expressions.
+                <br />
                 Pre-wipe announcements are sent automatically at T-60min and T-5min.
               </div>
             </div>
@@ -1235,61 +1840,124 @@ function WipeManager() {
 
       {/* ── Confirmation Dialog ── */}
       {showConfirm && (
-        <div style={{
-          position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",
-          display:"flex",alignItems:"center",justifyContent:"center",zIndex:100
-        }}>
-          <div className="card fadein" style={{width:"480px",background:"var(--bg1)"}}>
-            <div className="card-header" style={{borderColor:"var(--red-dim)"}}>
-              <span className="card-title" style={{color:"var(--red)"}}>⚠ Confirm Wipe</span>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div className="card fadein" style={{ width: '480px', background: 'var(--bg1)' }}>
+            <div className="card-header" style={{ borderColor: 'var(--red-dim)' }}>
+              <span className="card-title" style={{ color: 'var(--red)' }}>
+                ⚠ Confirm Wipe
+              </span>
             </div>
-            <div className="card-body" style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              <div style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>
-                You are about to execute a <strong style={{color:"var(--text-bright)"}}>{pendingType}</strong> wipe on
-                <strong style={{color:"var(--orange)"}}> {SERVER_NAME}</strong>.
-                The server will be stopped first.
+            <div
+              className="card-body"
+              style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            >
+              <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
+                You are about to execute a{' '}
+                <strong style={{ color: 'var(--text-bright)' }}>{pendingType}</strong> wipe on
+                <strong style={{ color: 'var(--orange)' }}> {SERVER_NAME}</strong>. The server will
+                be stopped first.
               </div>
               {chosen && (
-                <div style={{background:"var(--bg2)",border:"1px solid var(--border)",padding:"12px",fontSize:"12px"}}>
-                  <div style={{color:"var(--dim)",marginBottom:"6px",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Files to be deleted</div>
-                  {chosen.deletes.map(f => (
-                    <div key={f} style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--red)",padding:"1px 0"}}>✕ {f}</div>
+                <div
+                  style={{
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--border)',
+                    padding: '12px',
+                    fontSize: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      color: 'var(--dim)',
+                      marginBottom: '6px',
+                      fontSize: '10px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Files to be deleted
+                  </div>
+                  {chosen.deletes.map((f) => (
+                    <div
+                      key={f}
+                      style={{
+                        fontFamily: 'var(--mono)',
+                        fontSize: '11px',
+                        color: 'var(--red)',
+                        padding: '1px 0',
+                      }}
+                    >
+                      ✕ {f}
+                    </div>
                   ))}
                 </div>
               )}
-              <div className="setting-row" style={{padding:"0"}}>
+              <div className="setting-row" style={{ padding: '0' }}>
                 <div className="setting-info">
                   <div className="setting-name">Create backup before wiping</div>
                 </div>
-                <div className={`toggle ${createBackup?"on":""}`} onClick={() => setCreateBackup(p => !p)} />
+                <div
+                  className={`toggle ${createBackup ? 'on' : ''}`}
+                  onClick={() => setCreateBackup((p) => !p)}
+                />
               </div>
-              <div className="setting-row" style={{padding:"0"}}>
+              <div className="setting-row" style={{ padding: '0' }}>
                 <div className="setting-info">
                   <div className="setting-name">Restart server after wipe</div>
                 </div>
-                <div className={`toggle ${restartAfter?"on":""}`} onClick={() => setRestartAfter(p => !p)} />
+                <div
+                  className={`toggle ${restartAfter ? 'on' : ''}`}
+                  onClick={() => setRestartAfter((p) => !p)}
+                />
               </div>
               <div>
-                <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"6px"}}>
-                  Type <strong style={{fontFamily:"var(--mono)",color:"var(--orange)"}}>{SERVER_NAME}</strong> to confirm
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
+                  Type{' '}
+                  <strong style={{ fontFamily: 'var(--mono)', color: 'var(--orange)' }}>
+                    {SERVER_NAME}
+                  </strong>{' '}
+                  to confirm
                 </div>
                 <input
                   className="text-input"
-                  style={{width:"100%"}}
+                  style={{ width: '100%' }}
                   value={confirmText}
-                  onChange={e => setConfirmText(e.target.value)}
+                  onChange={(e) => setConfirmText(e.target.value)}
                   placeholder={SERVER_NAME}
                 />
               </div>
-              <div className="btn-group" style={{justifyContent:"flex-end"}}>
-                <button className="btn btn-ghost" onClick={() => { setShowConfirm(false); setConfirmText(""); }}>
+              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setShowConfirm(false)
+                    setConfirmText('')
+                  }}
+                >
                   Cancel
                 </button>
                 <button
                   className="btn btn-danger"
                   disabled={confirmText !== SERVER_NAME}
-                  style={{opacity: confirmText === SERVER_NAME ? 1 : 0.4, cursor: confirmText === SERVER_NAME ? "pointer" : "not-allowed"}}
-                  onClick={() => { setShowConfirm(false); setConfirmText(""); alert("Wipe executed! (mock)"); }}
+                  style={{
+                    opacity: confirmText === SERVER_NAME ? 1 : 0.4,
+                    cursor: confirmText === SERVER_NAME ? 'pointer' : 'not-allowed',
+                  }}
+                  onClick={() => {
+                    setShowConfirm(false)
+                    setConfirmText('')
+                    alert('Wipe executed! (mock)')
+                  }}
                 >
                   Execute Wipe
                 </button>
@@ -1299,36 +1967,54 @@ function WipeManager() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 /* ──────────────── ACCESS CONTROL ──────────────── */
 function AccessControl() {
-  const [tab, setTab] = useState("bans");
+  const [tab, setTab] = useState('bans')
   return (
     <div className="main fadein">
-      <div className="row" style={{marginBottom:"4px"}}>
+      <div className="row" style={{ marginBottom: '4px' }}>
         <div>
-          <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text-bright)"}}>Access Control</div>
-          <div style={{fontFamily:"var(--mono)",fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-bright)' }}>
+            Access Control
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginTop: '2px',
+            }}
+          >
             banlist.txt · whitelist.txt · adminlist.txt
           </div>
         </div>
-        <div className="spacer"/>
+        <div className="spacer" />
         <div className="btn-group">
-          <button onClick={() => setTab("bans")} className={`btn btn-sm ${tab==="bans"?"btn-danger":"btn-ghost"}`}>
+          <button
+            onClick={() => setTab('bans')}
+            className={`btn btn-sm ${tab === 'bans' ? 'btn-danger' : 'btn-ghost'}`}
+          >
             Ban List ({mockBans.length})
           </button>
-          <button onClick={() => setTab("whitelist")} className={`btn btn-sm ${tab==="whitelist"?"btn-primary":"btn-ghost"}`}>
+          <button
+            onClick={() => setTab('whitelist')}
+            className={`btn btn-sm ${tab === 'whitelist' ? 'btn-primary' : 'btn-ghost'}`}
+          >
             Whitelist ({mockWhitelist.length})
           </button>
-          <button onClick={() => setTab("admins")} className={`btn btn-sm ${tab==="admins"?"btn-green":"btn-ghost"}`}>
+          <button
+            onClick={() => setTab('admins')}
+            className={`btn btn-sm ${tab === 'admins' ? 'btn-green' : 'btn-ghost'}`}
+          >
             Admin List
           </button>
         </div>
       </div>
 
-      {tab === "bans" && (
+      {tab === 'bans' && (
         <div className="card fadein">
           <div className="card-header">
             <span className="card-title">banlist.txt</span>
@@ -1336,16 +2022,25 @@ function AccessControl() {
           </div>
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Steam ID</th><th>Reason</th><th>Banned By</th><th>Date</th><th>Actions</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Steam ID</th>
+                <th>Reason</th>
+                <th>Banned By</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
             </thead>
             <tbody>
               {mockBans.map((b, i) => (
                 <tr key={i}>
                   <td className="bright">{b.name}</td>
                   <td className="mono">{b.steam}</td>
-                  <td style={{color:"var(--muted)"}}>{b.reason}</td>
+                  <td style={{ color: 'var(--muted)' }}>{b.reason}</td>
                   <td>{b.by}</td>
-                  <td className="mono" style={{color:"var(--dim)"}}>{b.date}</td>
+                  <td className="mono" style={{ color: 'var(--dim)' }}>
+                    {b.date}
+                  </td>
                   <td>
                     <div className="btn-group">
                       <button className="btn btn-green btn-xs">Unban</button>
@@ -1359,7 +2054,7 @@ function AccessControl() {
         </div>
       )}
 
-      {tab === "whitelist" && (
+      {tab === 'whitelist' && (
         <div className="card fadein">
           <div className="card-header">
             <span className="card-title">whitelist.txt</span>
@@ -1368,22 +2063,41 @@ function AccessControl() {
               <button className="btn btn-primary btn-sm">+ Add Player</button>
             </div>
           </div>
-          <div className="warn-banner" style={{borderRadius:"0",borderLeft:"none",borderRight:"none",borderTop:"none"}}>
-            Whitelist is currently <strong style={{margin:"0 4px"}}>disabled</strong>. Enable via
-            <span style={{fontFamily:"var(--mono)",margin:"0 5px",color:"var(--text)"}}>setserversetting IsWhitelisted true</span>
+          <div
+            className="warn-banner"
+            style={{
+              borderRadius: '0',
+              borderLeft: 'none',
+              borderRight: 'none',
+              borderTop: 'none',
+            }}
+          >
+            Whitelist is currently <strong style={{ margin: '0 4px' }}>disabled</strong>. Enable via
+            <span style={{ fontFamily: 'var(--mono)', margin: '0 5px', color: 'var(--text)' }}>
+              setserversetting IsWhitelisted true
+            </span>
             or in Server Settings.
           </div>
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Steam ID</th><th>Added</th><th>Actions</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Steam ID</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
             </thead>
             <tbody>
               {mockWhitelist.map((w, i) => (
                 <tr key={i}>
                   <td className="bright">{w.name}</td>
                   <td className="mono">{w.steam}</td>
-                  <td className="mono" style={{color:"var(--dim)"}}>{w.added}</td>
-                  <td><button className="btn btn-danger btn-xs">Remove</button></td>
+                  <td className="mono" style={{ color: 'var(--dim)' }}>
+                    {w.added}
+                  </td>
+                  <td>
+                    <button className="btn btn-danger btn-xs">Remove</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1391,14 +2105,20 @@ function AccessControl() {
         </div>
       )}
 
-      {tab === "admins" && (
+      {tab === 'admins' && (
         <div className="card fadein">
           <div className="card-header">
             <span className="card-title">adminlist.txt</span>
             <span className="card-meta">Format: SteamId:permission_level</span>
           </div>
-          <div style={{padding:"14px 18px",borderBottom:"1px solid var(--border)",background:"var(--bg2)"}}>
-            <div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"10px"}}>
+          <div
+            style={{
+              padding: '14px 18px',
+              borderBottom: '1px solid var(--border)',
+              background: 'var(--bg2)',
+            }}
+          >
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
               Permission levels (highest to lowest):&nbsp;
               <span className="perm perm-server">[server]</span>&nbsp;›&nbsp;
               <span className="perm perm-admin">[admin]</span>&nbsp;›&nbsp;
@@ -1412,43 +2132,52 @@ function AccessControl() {
           </div>
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Steam ID</th><th>Permission Level</th><th>Actions</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Steam ID</th>
+                <th>Permission Level</th>
+                <th>Actions</th>
+              </tr>
             </thead>
             <tbody>
-              {mockPlayers.filter(p => p.perm !== "client").map((p, i) => (
-                <tr key={i}>
-                  <td className="bright">{p.name}</td>
-                  <td className="mono">{p.steam}</td>
-                  <td><span className={`perm perm-${p.perm}`}>[{p.perm}]</span></td>
-                  <td>
-                    <div className="btn-group">
-                      <button className="btn btn-ghost btn-xs">Change Level</button>
-                      <button className="btn btn-danger btn-xs">Remove</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {mockPlayers
+                .filter((p) => p.perm !== 'client')
+                .map((p, i) => (
+                  <tr key={i}>
+                    <td className="bright">{p.name}</td>
+                    <td className="mono">{p.steam}</td>
+                    <td>
+                      <span className={`perm perm-${p.perm}`}>[{p.perm}]</span>
+                    </td>
+                    <td>
+                      <div className="btn-group">
+                        <button className="btn btn-ghost btn-xs">Change Level</button>
+                        <button className="btn btn-danger btn-xs">Remove</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 /* ──────────────── APP SHELL ──────────────── */
 const TABS = [
-  { id: "dashboard", label: "Dashboard", icon: "◈" },
-  { id: "players", label: "Players", icon: "⌬" },
-  { id: "settings", label: "Server Settings", icon: "⚙" },
-  { id: "console", label: "Console", icon: ">" },
-  { id: "access", label: "Access Control", icon: "⊘" },
-  { id: "wipe", label: "Wipe Manager", icon: "⊠" },
-];
+  { id: 'dashboard', label: 'Dashboard', icon: '◈' },
+  { id: 'players', label: 'Players', icon: '⌬' },
+  { id: 'settings', label: 'Server Settings', icon: '⚙' },
+  { id: 'console', label: 'Console', icon: '>' },
+  { id: 'access', label: 'Access Control', icon: '⊘' },
+  { id: 'wipe', label: 'Wipe Manager', icon: '⊠' },
+]
 
 export default function App() {
-  const [page, setPage] = useState("dashboard");
-  const online = mockPlayers.filter(p => p.online).length;
+  const [page, setPage] = useState('dashboard')
+  const online = mockPlayers.filter((p) => p.online).length
 
   return (
     <>
@@ -1457,38 +2186,47 @@ export default function App() {
         <div className="header">
           <div className="logo-area">
             <div className="logo-icon">☢</div>
-            <div className="logo-text">ORMOD<span>:</span>Directive <span style={{color:"var(--muted)",fontWeight:400,fontSize:"13px"}}>RCON</span></div>
+            <div className="logo-text">
+              ORMOD<span>:</span>Directive{' '}
+              <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: '13px' }}>RCON</span>
+            </div>
           </div>
-          <div className="header-divider"/>
-          <div className="row" style={{gap:"8px"}}>
-            <span className="pill pill-green"><span className="dot dot-green pulse"></span>Online</span>
+          <div className="header-divider" />
+          <div className="row" style={{ gap: '8px' }}>
+            <span className="pill pill-green">
+              <span className="dot dot-green pulse"></span>Online
+            </span>
             <span className="pill pill-muted">My Survival World</span>
             <span className="pill pill-orange">Cooperative</span>
           </div>
-          <div className="spacer"/>
+          <div className="spacer" />
           <div className="header-right">
             <span>{online}/16 players</span>
-            <div className="header-divider"/>
-            <Clock/>
+            <div className="header-divider" />
+            <Clock />
           </div>
         </div>
 
         <div className="nav-tabs">
-          {TABS.map(t => (
-            <div key={t.id} className={`nav-tab ${page === t.id ? "active" : ""}`} onClick={() => setPage(t.id)}>
+          {TABS.map((t) => (
+            <div
+              key={t.id}
+              className={`nav-tab ${page === t.id ? 'active' : ''}`}
+              onClick={() => setPage(t.id)}
+            >
               <span>{t.icon}</span>
               {t.label}
             </div>
           ))}
         </div>
 
-        {page === "dashboard" && <Dashboard />}
-        {page === "players" && <Players />}
-        {page === "settings" && <Settings />}
-        {page === "console" && <Console />}
-        {page === "access" && <AccessControl />}
-        {page === "wipe" && <WipeManager />}
+        {page === 'dashboard' && <Dashboard />}
+        {page === 'players' && <Players />}
+        {page === 'settings' && <Settings />}
+        {page === 'console' && <Console />}
+        {page === 'access' && <AccessControl />}
+        {page === 'wipe' && <WipeManager />}
       </div>
     </>
-  );
+  )
 }

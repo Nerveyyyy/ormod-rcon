@@ -59,6 +59,7 @@ SAVES_PATH=../configs
 ```
 
 > **Permissions:** When using `SAVES_PATH`, ensure the directory is writable by UID 1000 (the `steam` user inside the game container):
+>
 > ```bash
 > chown -R 1000:1000 /opt/ormod/configs
 > ```
@@ -139,23 +140,23 @@ In this mode saves are stored in a Docker-managed named volume (`game-saves`).
 
 All settings live in `.env` (copied from `.env.example`):
 
-| Variable | Default | Description |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | *(required)* | Random secret for session tokens — run `openssl rand -hex 32` |
-| `SERVER_NAME` | `MyOrmodServer` | Passed as `-servername` to the game binary |
-| `GAME_BINARY_NAME` | `ORMODDirective` | Filename of the server executable inside `GAME_BINARY_PATH`. Change if your binary has a different name (e.g. `dedicated`) |
-| `GAME_BINARY_PATH` | `./docker/game-binary` | Host path to the game binary directory |
-| `GAME_PORT` | `27015` | UDP game port. Must match `serversettings.json` — Docker forwards this port from the host |
-| `QUERY_PORT` | `27016` | UDP query port. Must match `serversettings.json` |
-| `GAME_HOST` | `0.0.0.0` | Host IP to bind game ports to. Set to a specific IP to expose game traffic on one NIC only |
-| `GAME_CONTAINER_NAME` | `ormod-game` | Docker container name for the game |
-| `SAVES_PATH` | *(named volume)* | Host path for save data. Leave unset for a Docker-managed named volume, or set to a host path (e.g. `../configs`) for direct access |
-| `DASHBOARD_HOST` | `0.0.0.0` | Host IP the dashboard binds to. Set to a specific IP to restrict to one interface |
-| `DASHBOARD_PORT` | `3000` | Host port for the dashboard |
-| `PORT` | `3001` | Internal API port (Fastify) |
-| `CORS_ORIGIN` | `http://localhost:3000` | Allowed origins for CORS (comma-separated) |
-| `BACKUP_PATH` | `./backups` | Directory for pre-wipe backups |
-| `DATABASE_URL` | `file:/data/ormod-rcon.db` | SQLite path inside the dashboard container |
+| Variable              | Default                    | Description                                                                                                                         |
+| --------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`  | _(required)_               | Random secret for session tokens — run `openssl rand -hex 32`                                                                       |
+| `SERVER_NAME`         | `MyOrmodServer`            | Passed as `-servername` to the game binary                                                                                          |
+| `GAME_BINARY_NAME`    | `ORMODDirective`           | Filename of the server executable inside `GAME_BINARY_PATH`. Change if your binary has a different name (e.g. `dedicated`)          |
+| `GAME_BINARY_PATH`    | `./docker/game-binary`     | Host path to the game binary directory                                                                                              |
+| `GAME_PORT`           | `27015`                    | UDP game port. Must match `serversettings.json` — Docker forwards this port from the host                                           |
+| `QUERY_PORT`          | `27016`                    | UDP query port. Must match `serversettings.json`                                                                                    |
+| `GAME_HOST`           | `0.0.0.0`                  | Host IP to bind game ports to. Set to a specific IP to expose game traffic on one NIC only                                          |
+| `GAME_CONTAINER_NAME` | `ormod-game`               | Docker container name for the game                                                                                                  |
+| `SAVES_PATH`          | _(named volume)_           | Host path for save data. Leave unset for a Docker-managed named volume, or set to a host path (e.g. `../configs`) for direct access |
+| `DASHBOARD_HOST`      | `0.0.0.0`                  | Host IP the dashboard binds to. Set to a specific IP to restrict to one interface                                                   |
+| `DASHBOARD_PORT`      | `3000`                     | Host port for the dashboard                                                                                                         |
+| `PORT`                | `3001`                     | Internal API port (Fastify)                                                                                                         |
+| `CORS_ORIGIN`         | `http://localhost:3000`    | Allowed origins for CORS (comma-separated)                                                                                          |
+| `BACKUP_PATH`         | `./backups`                | Directory for pre-wipe backups                                                                                                      |
+| `DATABASE_URL`        | `file:/data/ormod-rcon.db` | SQLite path inside the dashboard container                                                                                          |
 
 ---
 
@@ -173,12 +174,12 @@ DASHBOARD_HOST=10.0.0.1
 
 Common patterns:
 
-| Scenario | `GAME_HOST` | `DASHBOARD_HOST` |
-|---|---|---|
-| All interfaces (default) | `0.0.0.0` | `0.0.0.0` |
-| Public game, LAN dashboard | `0.0.0.0` | `10.0.0.1` |
-| Single public NIC | `203.0.113.5` | `203.0.113.5` |
-| Behind reverse proxy | `0.0.0.0` | `127.0.0.1` |
+| Scenario                   | `GAME_HOST`   | `DASHBOARD_HOST` |
+| -------------------------- | ------------- | ---------------- |
+| All interfaces (default)   | `0.0.0.0`     | `0.0.0.0`        |
+| Public game, LAN dashboard | `0.0.0.0`     | `10.0.0.1`       |
+| Single public NIC          | `203.0.113.5` | `203.0.113.5`    |
+| Behind reverse proxy       | `0.0.0.0`     | `127.0.0.1`      |
 
 ---
 
@@ -218,8 +219,8 @@ ormod-rcon/
 │   ├── Dockerfile.gameserver     # Game binary container
 │   └── entrypoint-gameserver.sh
 ├── docs/
-│   ├── ORMOD_RCON_ARCHITECTURE.md
-│   └── UI_DESIGN_SYSTEM.md
+│   ├── architecture.md
+│   └── design-system.md
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -240,8 +241,8 @@ When the game is published on Steam, `docker/Dockerfile.gameserver` will switch 
 
 ## Documentation
 
-- [`docs/ORMOD_RCON_ARCHITECTURE.md`](docs/ORMOD_RCON_ARCHITECTURE.md) — full architecture, schema, services, API routes
-- [`docs/UI_DESIGN_SYSTEM.md`](docs/UI_DESIGN_SYSTEM.md) — design system, colors, fonts, component rules
+- [`docs/architecture.md`](docs/architecture.md) — full architecture, schema, services, API routes
+- [`docs/design-system.md`](docs/design-system.md) — design system, colors, fonts, component rules
 
 ---
 

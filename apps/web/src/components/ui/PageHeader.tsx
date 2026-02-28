@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
-  title: string;
-  subtitle?: string;
-  actions?: ReactNode;
+  title: string
+  subtitle?: string
+  actions?: ReactNode
 }
 
 export default function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
@@ -15,5 +15,5 @@ export default function PageHeader({ title, subtitle, actions }: PageHeaderProps
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </div>
-  );
+  )
 }
