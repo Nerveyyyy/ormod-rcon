@@ -52,3 +52,6 @@ certs/*.pem
 
 # Temporary
 /tmp
+
+# Implementation plans (local only)
+docs/plans/
