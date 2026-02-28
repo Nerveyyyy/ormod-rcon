@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router';
+import { useAuth } from '../../context/AuthContext.js';
 
-const tabs = [
+const baseTabs = [
   { to: '/dashboard',      label: 'Dashboard',      icon: '◈' },
   { to: '/players',        label: 'Players',         icon: '⌬' },
   { to: '/settings',       label: 'Server Settings', icon: '⚙' },
@@ -12,6 +13,11 @@ const tabs = [
 ];
 
 export default function NavTabs() {
+  const { user } = useAuth();
+  const tabs = user?.role === 'OWNER'
+    ? [...baseTabs, { to: '/users', label: 'Users', icon: '⊕' }]
+    : baseTabs;
+
   return (
     <div className="nav-tabs">
       {tabs.map(tab => (
