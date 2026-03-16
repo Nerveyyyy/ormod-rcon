@@ -17,17 +17,15 @@ export const envSchema = {
     PUBLIC_URL: { type: 'string', default: '' },
     NODE_ENV: { type: 'string', default: 'development' },
     STATIC_PATH: { type: 'string', default: '' },
-    BETTER_AUTH_SECRET: { type: 'string' },
+    BETTER_AUTH_SECRET: { type: 'string', minLength: 32 },
     DATABASE_URL: { type: 'string' },
     DOCKER_SOCKET: { type: 'string', default: '/var/run/docker.sock' },
     DOCKER_HOST: { type: 'string', default: '' },
     DOCKER_CONTROL_ENABLED: { type: 'boolean', default: true },
     GAME_CONTAINER_NAME: { type: 'string', default: 'ormod-game' },
-    SAVE_BASE_PATH: { type: 'string', default: '' },
-    SAVES_PATH: { type: 'string', default: '' },
-    BACKUP_PATH: { type: 'string', default: './backups' },
     TLS_CERT_PATH: { type: 'string', default: '' },
     TLS_KEY_PATH: { type: 'string', default: '' },
+    LOG_LEVEL: { type: 'string', default: 'info' },
   },
 } as const
 
@@ -45,11 +43,9 @@ export type EnvConfig = {
   DOCKER_HOST: string
   DOCKER_CONTROL_ENABLED: boolean
   GAME_CONTAINER_NAME: string
-  SAVE_BASE_PATH: string
-  SAVES_PATH: string
-  BACKUP_PATH: string
   TLS_CERT_PATH: string
   TLS_KEY_PATH: string
+  LOG_LEVEL: string
 }
 
 /**
@@ -62,13 +58,15 @@ export type EnvConfig = {
 export function computeOrigins(
   publicUrl: string,
   webHost: string,
-  webPort: number | string
+  webPort: number | string,
+  tlsCertPath?: string
 ): string[] {
   if (publicUrl) return [publicUrl]
-  const base = `http://${webHost}:${webPort}`
+  const scheme = tlsCertPath ? 'https' : 'http'
+  const base = `${scheme}://${webHost}:${webPort}`
   const origins = new Set([base])
-  if (webHost === 'localhost') origins.add(`http://127.0.0.1:${webPort}`)
-  if (webHost === '127.0.0.1') origins.add(`http://localhost:${webPort}`)
+  if (webHost === 'localhost') origins.add(`${scheme}://127.0.0.1:${webPort}`)
+  if (webHost === '127.0.0.1') origins.add(`${scheme}://localhost:${webPort}`)
   return [...origins]
 }
 

@@ -175,9 +175,7 @@ export async function setupTestContext(): Promise<TestContext> {
   process.env.DOCKER_CONTROL_ENABLED = 'true'
   process.env.DOCKER_SOCKET = '/var/run/docker.sock'
   process.env.GAME_CONTAINER_NAME = 'test-game'
-  process.env.SAVES_PATH = ''
-  process.env.SAVE_BASE_PATH = ''
-  process.env.BACKUP_PATH = './test-backups'
+
 
   // 3. Push schema to DB (creates tables without migrations)
   execSync(`npx prisma db push --accept-data-loss`, {
