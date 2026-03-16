@@ -1,47 +1,43 @@
-import path from 'node:path'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { dockerManager } from '../services/docker-manager.js'
-
-/**
- * Validate that savePath is safe:
- *   - Never allows explicit '..' traversal components.
- *   - When SAVE_BASE_PATH is configured, enforces path confinement.
- */
-function validateSavePath(savePath: string, basePath: string): boolean {
-  // Reject explicit '..' traversal regardless of base path configuration
-  const normalised = savePath.replace(/\\/g, '/')
-  if (normalised.split('/').includes('..')) return false
-  // If SAVE_BASE_PATH is set, the path must resolve within it
-  if (basePath) {
-    const resolved = path.resolve(savePath)
-    const resolvedBase = path.resolve(basePath)
-    return resolved === resolvedBase || resolved.startsWith(resolvedBase + path.sep)
-  }
-  return true
-}
+import { unregisterCronJob } from './schedule.js'
 
 type ServerBody = {
   name: string
   serverName: string
-  savePath: string
   containerName?: string | null
-  executablePath?: string
   gamePort?: number
   queryPort?: number
   notes?: string
 }
 
+const SERVER_SELECT = {
+  id: true,
+  name: true,
+  serverName: true,
+  containerName: true,
+  mode: true,
+  gamePort: true,
+  queryPort: true,
+  notes: true,
+  createdAt: true,
+} as const
+
 export async function listServers() {
-  const servers = await prisma.server.findMany({ orderBy: { createdAt: 'asc' } })
+  const servers = await prisma.server.findMany({
+    select: SERVER_SELECT,
+    orderBy: { createdAt: 'asc' },
+  })
   return servers.map((s) => ({ ...s, running: dockerManager.isRunning(s.id) }))
 }
 
 export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, reply: FastifyReply) {
-  if (!validateSavePath(req.body.savePath, req.server.config.SAVE_BASE_PATH)) {
-    return reply.status(400).send({ error: 'Invalid savePath' })
-  }
-  const server = await prisma.server.create({ data: req.body })
+  const { name, serverName, containerName, gamePort, queryPort, notes } = req.body
+  const server = await prisma.server.create({
+    data: { name, serverName, containerName, gamePort, queryPort, notes },
+    select: SERVER_SELECT,
+  })
   reply.status(201)
   return { ...server, running: false }
 }
@@ -55,7 +51,8 @@ export async function getServer(
     include: { wipeLogs: { orderBy: { createdAt: 'desc' }, take: 1 } },
   })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
-  return { ...server, running: dockerManager.isRunning(server.id) }
+  const { rconPass: _rconPass, rconPort: _rconPort, ...safeServer } = server
+  return { ...safeServer, running: dockerManager.isRunning(server.id) }
 }
 
 export async function updateServer(
@@ -64,13 +61,12 @@ export async function updateServer(
 ) {
   const server = await prisma.server.findUnique({ where: { id: req.params.id } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
-  if (
-    req.body.savePath !== undefined &&
-    !validateSavePath(req.body.savePath, req.server.config.SAVE_BASE_PATH)
-  ) {
-    return reply.status(400).send({ error: 'Invalid savePath' })
-  }
-  const updated = await prisma.server.update({ where: { id: req.params.id }, data: req.body })
+  const { name, serverName, containerName, gamePort, queryPort, notes } = req.body
+  const updated = await prisma.server.update({
+    where: { id: req.params.id },
+    data: { name, serverName, containerName, gamePort, queryPort, notes },
+    select: SERVER_SELECT,
+  })
   return { ...updated, running: dockerManager.isRunning(updated.id) }
 }
 
@@ -80,6 +76,12 @@ export async function deleteServer(
 ) {
   const server = await prisma.server.findUnique({ where: { id: req.params.id } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
+
+  const tasks = await prisma.scheduledTask.findMany({ where: { serverId: req.params.id } })
+  for (const task of tasks) {
+    unregisterCronJob(task.id)
+  }
+
   if (dockerManager.isRunning(req.params.id)) {
     await dockerManager.stop(req.params.id)
   }

@@ -14,7 +14,6 @@ afterAll(async () => {
 const serverData = {
   name: 'Test Server',
   serverName: 'test-server-1',
-  savePath: '/tmp/test-saves',
 }
 
 describe('Servers routes', () => {
@@ -34,22 +33,14 @@ describe('Servers routes', () => {
 
     it('ADMIN cannot create a server → 403', async () => {
       const res = await ctx.admin.post('/api/servers', {
-        payload: JSON.stringify({
-          name: 'Admin Server',
-          serverName: 'admin-server',
-          savePath: '/tmp/admin-saves',
-        }),
+        payload: JSON.stringify({ name: 'Admin Server', serverName: 'admin-server' }),
       })
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot create a server → 403', async () => {
       const res = await ctx.viewer.post('/api/servers', {
-        payload: JSON.stringify({
-          name: 'Viewer Server',
-          serverName: 'viewer-server',
-          savePath: '/tmp/viewer-saves',
-        }),
+        payload: JSON.stringify({ name: 'Viewer Server', serverName: 'viewer-server' }),
       })
       expect(res.statusCode).toBe(403)
     })
@@ -169,7 +160,6 @@ describe('Servers routes', () => {
         payload: JSON.stringify({
           name: 'Cascade Test',
           serverName: 'cascade-test',
-          savePath: '/tmp/cascade',
         }),
       })
       expect(serverRes.statusCode).toBe(201)
