@@ -1,15 +1,40 @@
-import type { FastifyRequest, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import cron from 'node-cron'
 import { CronExpressionParser } from 'cron-parser'
 import prisma from '../db/prisma-client.js'
-import { WipeService } from '../services/wipe-service.js'
 import { dockerManager } from '../services/docker-manager.js'
 import { getAdapter } from '../services/rcon-adapter.js'
-import type { TaskType } from '../types.js'
+type TaskType = 'COMMAND' | 'RESTART'
 
 // ── Cron internals ───────────────────────────────────────────────────────────
 
 const cronJobs = new Map<string, cron.ScheduledTask>()
+
+// Module-level logger reference — set by the route plugin once the Fastify
+// instance is available.  Falls back to console so startup restores (before
+// the plugin initialises) still produce output.
+let _app: FastifyInstance | null = null
+
+/** Inject the Fastify instance so the scheduler can use its Pino logger. */
+export function setSchedulerApp(app: FastifyInstance): void {
+  _app = app
+}
+
+function logError(err: unknown, msg: string): void {
+  if (_app) {
+    _app.log.error(err, msg)
+  } else {
+    console.error(msg, err)
+  }
+}
+
+function logWarn(msg: string): void {
+  if (_app) {
+    _app.log.warn(msg)
+  } else {
+    console.warn(msg)
+  }
+}
 
 type TaskRow = {
   id: string
@@ -33,54 +58,58 @@ function computeNextRun(cronExpr: string): Date | null {
 }
 
 async function runTask(task: TaskRow): Promise<void> {
-  const server = await prisma.server.findUnique({ where: { id: task.serverId } })
+  // AUDIT-21: re-fetch from DB to avoid stale-closure data
+  const fresh = await prisma.scheduledTask.findUnique({ where: { id: task.id } })
+  if (!fresh) {
+    logWarn(`[scheduler] Scheduled task ${task.id} not found — skipping`)
+    return
+  }
+
+  const server = await prisma.server.findUnique({ where: { id: fresh.serverId } })
   if (!server) return
 
   try {
-    switch (task.type as TaskType) {
-      case 'WIPE': {
-        const config = JSON.parse(task.payload)
-        await new WipeService().executeWipe(task.serverId, config, 'scheduler')
-        break
-      }
+    switch (fresh.type as TaskType) {
       case 'COMMAND': {
         const adapter = await getAdapter(server)
-        await adapter.sendCommand(task.payload)
-        break
-      }
-      case 'ANNOUNCEMENT': {
-        const adapter = await getAdapter(server)
-        await adapter.sendCommand(`announcement ${task.payload}`)
+        await adapter.sendCommand(fresh.payload)
         break
       }
       case 'RESTART': {
-        await dockerManager.restart(task.serverId)
+        await dockerManager.restart(fresh.serverId)
         break
       }
     }
   } catch (err) {
-    console.error(`[scheduler] Task "${task.label}" failed:`, err)
+    // AUDIT-95: use Pino logger instead of console.error
+    logError(err, `[scheduler] Task "${fresh.label}" failed`)
   }
 
   await prisma.scheduledTask.update({
-    where: { id: task.id },
-    data: { lastRun: new Date(), nextRun: computeNextRun(task.cronExpr) },
+    where: { id: fresh.id },
+    data: { lastRun: new Date(), nextRun: computeNextRun(fresh.cronExpr) },
   })
 }
 
 /** Register a cron job for a task. Exported for use by server.ts on startup. */
 export function registerCronJob(task: TaskRow): void {
   if (!cron.validate(task.cronExpr)) {
-    console.warn(`[scheduler] Invalid cron expression for task "${task.label}": ${task.cronExpr}`)
+    // AUDIT-95: use Pino logger instead of console.warn
+    logWarn(`[scheduler] Invalid cron expression for task "${task.label}": ${task.cronExpr}`)
     return
   }
-  const job = cron.schedule(task.cronExpr, () => {
-    runTask(task)
+  // AUDIT-5: wrap callback in async with error handling so the promise is not floating
+  const job = cron.schedule(task.cronExpr, async () => {
+    try {
+      await runTask(task)
+    } catch (e) {
+      logError(e, 'Scheduled task failed')
+    }
   })
   cronJobs.set(task.id, job)
 }
 
-function unregisterCronJob(taskId: string): void {
+export function unregisterCronJob(taskId: string): void {
   const job = cronJobs.get(taskId)
   if (job) {
     job.stop()
@@ -138,13 +167,15 @@ export async function updateSchedule(
   })
   if (!existing) return reply.status(404).send({ error: 'Task not found' })
 
-  unregisterCronJob(req.params.taskId)
-
+  // AUDIT-61: update DB first, then touch cron registry.
+  // If the DB update throws, the old cron job continues correctly.
   const cronExpr = req.body.cronExpr ?? existing.cronExpr
   const task = await prisma.scheduledTask.update({
     where: { id: req.params.taskId },
     data: { ...req.body, nextRun: computeNextRun(cronExpr) },
   })
+
+  unregisterCronJob(req.params.taskId)
   if (task.enabled) registerCronJob(task)
   return task
 }

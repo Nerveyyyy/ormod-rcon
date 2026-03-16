@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWrite } from '../plugins/auth.js'
 import * as ctrl from '../controllers/access-lists.js'
+import { serverParams as sharedServerParams } from './_schemas.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -12,24 +13,27 @@ const listParams = {
 
 const listBody = {
   type: 'object',
-  required: ['name', 'type'],
+  // AUDIT-69: 'scope' added to required so ScopeBadge never receives undefined
+  required: ['name', 'type', 'scope'],
   properties: {
-    name: { type: 'string', minLength: 1 },
+    // AUDIT-68: add maxLength constraints
+    name: { type: 'string', minLength: 1, maxLength: 255 },
     type: { type: 'string', enum: ['BAN', 'WHITELIST', 'ADMIN'] },
     scope: { type: 'string', enum: ['GLOBAL', 'SERVER', 'EXTERNAL'] },
-    description: { type: 'string' },
-    externalUrl: { type: 'string' },
+    description: { type: 'string', maxLength: 255 },
+    externalUrl: { type: 'string', maxLength: 500 },
   },
 } as const
 
 const listUpdateBody = {
   type: 'object',
   properties: {
-    name: { type: 'string', minLength: 1 },
+    // AUDIT-68: add maxLength constraints
+    name: { type: 'string', minLength: 1, maxLength: 255 },
     type: { type: 'string', enum: ['BAN', 'WHITELIST', 'ADMIN'] },
     scope: { type: 'string', enum: ['GLOBAL', 'SERVER', 'EXTERNAL'] },
-    description: { type: 'string' },
-    externalUrl: { type: 'string' },
+    description: { type: 'string', maxLength: 255 },
+    externalUrl: { type: 'string', maxLength: 500 },
   },
 } as const
 
@@ -44,10 +48,15 @@ const entryBody = {
   required: ['steamId'],
   properties: {
     steamId: { type: 'string', pattern: '^\\d{17}$' },
-    playerName: { type: 'string' },
-    reason: { type: 'string' },
-    addedBy: { type: 'string' },
-    permission: { type: 'string' },
+    // AUDIT-68: add maxLength constraints
+    playerName: { type: 'string', maxLength: 255 },
+    reason: { type: 'string', maxLength: 255 },
+    addedBy: { type: 'string', maxLength: 255 },
+    // AUDIT-70: restrict permission to valid game permission levels (prevents injection)
+    permission: {
+      type: 'string',
+      enum: ['server', 'admin', 'operator', 'client'],
+    },
     expiresAt: { type: 'string', format: 'date-time' },
   },
 } as const
@@ -61,20 +70,8 @@ const entryDeleteParams = {
   },
 } as const
 
-const syncParams = {
-  type: 'object',
-  required: ['id', 'serverId'],
-  properties: {
-    id: { type: 'string' },
-    serverId: { type: 'string' },
-  },
-} as const
-
-const serverParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string' } },
-} as const
+// AUDIT-96: use shared serverParams from _schemas.ts
+const serverParams = sharedServerParams
 
 const assignmentsBody = {
   type: 'object',
@@ -149,25 +146,6 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
     schema: { params: entryDeleteParams },
     preHandler: [requireWrite],
     handler: ctrl.deleteEntry,
-  })
-
-  // ── Sync ───────────────────────────────────────────────────────────────────
-
-  // Sync to server — ADMIN+
-  app.route({
-    method: 'POST',
-    url: '/lists/:id/sync/:serverId',
-    schema: { params: syncParams },
-    preHandler: [requireWrite],
-    handler: ctrl.syncListToSingleServer,
-  })
-
-  // Sync all — ADMIN+
-  app.route({
-    method: 'POST',
-    url: '/lists/sync-all',
-    preHandler: [requireWrite],
-    handler: ctrl.syncAll,
   })
 
   // ── External URL refresh ───────────────────────────────────────────────────
