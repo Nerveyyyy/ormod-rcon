@@ -1,9 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
-import { WipeService } from '../services/wipe-service.js'
-import type { WipeConfig } from '../services/wipe-service.js'
-
-const wipeService = new WipeService()
+import { getAdapter } from '../services/rcon-adapter.js'
 
 export async function listWipes(req: FastifyRequest<{ Params: { id: string } }>) {
   return prisma.wipeLog.findMany({
@@ -13,16 +10,47 @@ export async function listWipes(req: FastifyRequest<{ Params: { id: string } }>)
 }
 
 export async function executeWipe(
-  req: FastifyRequest<{ Params: { id: string }; Body: WipeConfig }>,
+  req: FastifyRequest<{ Params: { id: string }; Body: { notes?: string } }>,
   reply: FastifyReply
 ) {
-  reply.raw.setTimeout(300_000, () => {}) // 5 min timeout for long wipes
+  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
+
+  const performedBy = req.session!.user.id
+  let success = true
+  let errorMsg: string | undefined
+
   try {
-    const log = await wipeService.executeWipe(req.params.id, req.body, 'dashboard')
-    return log
+    const adapter = await getAdapter(server)
+    await adapter.sendCommand('wipe')
   } catch (err) {
-    return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) })
+    success = false
+    errorMsg = err instanceof Error ? err.message : String(err)
   }
+
+  const log = await prisma.wipeLog.create({
+    data: {
+      serverId: req.params.id,
+      triggeredBy: performedBy,
+      notes: req.body.notes,
+      success,
+      errorMsg,
+    },
+  })
+
+  await prisma.actionLog.create({
+    data: {
+      serverId: req.params.id,
+      performedBy,
+      action: 'WIPE',
+      details: JSON.stringify({ success, errorMsg }),
+    },
+  })
+
+  if (!success) {
+    return reply.status(500).send({ error: errorMsg })
+  }
+  return log
 }
 
 export async function getWipeLog(
