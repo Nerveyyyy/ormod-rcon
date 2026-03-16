@@ -28,14 +28,14 @@ describe('Access Lists routes', () => {
 
     it('OWNER can create an access list', async () => {
       const res = await ctx.owner.post('/api/lists', {
-        payload: JSON.stringify({ name: 'Owner List', type: 'WHITELIST' }),
+        payload: JSON.stringify({ name: 'Owner List', type: 'WHITELIST', scope: 'GLOBAL' }),
       })
       expect(res.statusCode).toBe(201)
     })
 
     it('VIEWER cannot create an access list → 403', async () => {
       const res = await ctx.viewer.post('/api/lists', {
-        payload: JSON.stringify({ name: 'Viewer List', type: 'BAN' }),
+        payload: JSON.stringify({ name: 'Viewer List', type: 'BAN', scope: 'GLOBAL' }),
       })
       expect(res.statusCode).toBe(403)
     })
