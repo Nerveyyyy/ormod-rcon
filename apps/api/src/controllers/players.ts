@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
-import { FileIOService } from '../services/file-io.js'
+import { getAdapter } from '../services/rcon-adapter.js'
 
 export async function listPlayers(
   req: FastifyRequest<{ Params: { id: string } }>,
@@ -9,28 +9,17 @@ export async function listPlayers(
   const server = await prisma.server.findUnique({ where: { id: req.params.id } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
-  const io = new FileIOService(server.savePath)
+  const adapter = await getAdapter(server)
+  const raw = await adapter.sendCommand('getplayers')
 
-  let filePlayers: { steamId: string; data: unknown }[] = []
-  try {
-    filePlayers = await io.listPlayers()
-  } catch {
-    /* PlayerData dir may not exist yet */
-  }
+  // Update lastSeen for any known DB players when this command is called.
+  // Full parsing deferred until the game's response format is confirmed.
+  await prisma.playerRecord.updateMany({
+    where: { serverId: req.params.id },
+    data: { lastSeen: new Date() },
+  })
 
-  const adminLines = await io.readList('adminlist.txt')
-  const permMap = new Map<string, string>()
-  for (const line of adminLines) {
-    const [steamId, perm] = line.split(':')
-    if (steamId && perm) permMap.set(steamId.trim(), perm.trim())
-  }
-
-  return filePlayers.map((p) => ({
-    steamId: p.steamId,
-    permission: permMap.get(p.steamId) ?? 'client',
-    online: false,
-    data: p.data,
-  }))
+  return { raw }
 }
 
 export async function getPlayerHistory(req: FastifyRequest<{ Params: { steamId: string } }>) {
