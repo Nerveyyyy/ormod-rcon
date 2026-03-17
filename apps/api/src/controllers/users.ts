@@ -130,9 +130,7 @@ export async function deleteUser(
     }
   }
 
-  // Cascade: delete sessions and accounts first, then user
-  await prisma.session.deleteMany({ where: { userId: id } })
-  await prisma.account.deleteMany({ where: { userId: id } })
+  // Session and Account rows are deleted automatically via ON DELETE CASCADE.
   await prisma.user.delete({ where: { id } })
 
   return { ok: true }

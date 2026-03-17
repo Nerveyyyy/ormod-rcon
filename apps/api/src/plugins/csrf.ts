@@ -16,6 +16,9 @@ export default fp(
         httpOnly: true,
         sameSite: 'strict',
         path: '/',
+        // Secure=true when clients access via HTTPS — even if Fastify itself is
+        // plain HTTP behind a reverse proxy (Caddy/nginx/Cloudflare).
+        secure: fastify.config.PUBLIC_URL.startsWith('https'),
       },
     })
 

@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import ConfirmDialog from '../components/ui/ConfirmDialog.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
 type WipeLog = {
   id: string
-  wipeType: string
   triggeredBy: string
   createdAt: string
   notes: string | null
-  backupPath: string | null
+  success: boolean
+  errorMsg: string | null
 }
 
 const wipeTypes = [
@@ -63,14 +63,16 @@ export default function WipeManager() {
   const [tab, setTab] = useState<'quick' | 'history'>('quick')
   const [showConfirm, setShowConfirm] = useState(false)
   const [pendingType, setPendingType] = useState<string | null>(null)
-  const [createBackup, setCreateBackup] = useState(true)
-  const [restartAfter, setRestartAfter] = useState(true)
   const [wiping, setWiping] = useState(false)
   const [history, setHistory] = useState<WipeLog[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   const loadHistory = useCallback(() => {
     if (!activeServer?.id) return
-    api.get<WipeLog[]>(`/servers/${activeServer.id}/wipes`).then(setHistory).catch(console.error)
+    api
+      .get<WipeLog[]>(`/servers/${activeServer.id}/wipes`)
+      .then(setHistory)
+      .catch((e) => setError((e as Error).message || 'Failed to load wipe history'))
   }, [activeServer?.id])
 
   useEffect(() => {
@@ -92,18 +94,12 @@ export default function WipeManager() {
     if (!activeServer?.id || !pendingType) return
     closeConfirm()
     setWiping(true)
+    setError(null)
     try {
-      await api.post(`/servers/${activeServer.id}/wipe`, {
-        wipeType: pendingType,
-        createBackup,
-        serverWillRestart: restartAfter,
-        keepPlayerData: pendingType === 'MAP_ONLY',
-        keepAccessLists: true,
-      })
-      alert('Wipe completed successfully.')
+      await api.post(`/servers/${activeServer.id}/wipe`, {})
       loadHistory()
     } catch (e) {
-      alert(`Wipe failed: ${(e as Error).message}`)
+      setError(`Wipe failed: ${(e as Error).message}`)
     } finally {
       setWiping(false)
     }
@@ -113,7 +109,7 @@ export default function WipeManager() {
     <div className="main fadein">
       <PageHeader
         title="Wipe Manager"
-        subtitle="Stop server → backup → delete files → restart"
+        subtitle="Dispatch wipe command to server · view history"
         actions={
           <div className="btn-group">
             <button
@@ -133,9 +129,21 @@ export default function WipeManager() {
       />
 
       <div className="warn-banner">
-        ⚠ Wipes are <strong style={{ margin: '0 3px' }}>irreversible</strong>. The server will be
-        stopped automatically before any wipe executes.
+        ⚠ Wipes are <strong style={{ margin: '0 3px' }}>irreversible</strong>. The wipe command is dispatched to the game server immediately.
       </div>
+
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {wiping && (
         <div className="info-banner">
@@ -214,18 +222,17 @@ export default function WipeManager() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Triggered By</th>
-                <th>Date</th>
-                <th>Notes</th>
-                <th>Backup</th>
+                <th scope="col">Result</th>
+                <th scope="col">Triggered By</th>
+                <th scope="col">Date</th>
+                <th scope="col">Notes</th>
               </tr>
             </thead>
             <tbody>
               {history.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={4}
                     style={{ textAlign: 'center', padding: '24px', color: 'var(--dim)' }}
                   >
                     No wipe history.
@@ -235,20 +242,17 @@ export default function WipeManager() {
               {history.map((w) => (
                 <tr key={w.id}>
                   <td>
-                    <span className="pill pill-orange">{w.wipeType}</span>
+                    {w.success ? (
+                      <span className="pill pill-green">OK</span>
+                    ) : (
+                      <span className="pill pill-red" title={w.errorMsg ?? undefined}>Failed</span>
+                    )}
                   </td>
                   <td className="bright">{w.triggeredBy}</td>
                   <td className="mono" style={{ color: 'var(--dim)' }}>
                     {new Date(w.createdAt).toLocaleString()}
                   </td>
                   <td>{w.notes ?? '—'}</td>
-                  <td>
-                    {w.backupPath ? (
-                      <span className="pill pill-green">✓ Backup</span>
-                    ) : (
-                      <span className="pill pill-muted">None</span>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -270,7 +274,7 @@ export default function WipeManager() {
               {' '}
               {activeServer?.name ?? 'this server'}
             </strong>
-            . The server will be stopped first.
+            .
           </div>
           <div
             style={{
@@ -304,24 +308,6 @@ export default function WipeManager() {
                 ✕ {f}
               </div>
             ))}
-          </div>
-          <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
-              <div className="setting-name">Create backup before wiping</div>
-            </div>
-            <div
-              className={`toggle ${createBackup ? 'on' : ''}`}
-              onClick={() => setCreateBackup((p) => !p)}
-            />
-          </div>
-          <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
-              <div className="setting-name">Restart server after wipe</div>
-            </div>
-            <div
-              className={`toggle ${restartAfter ? 'on' : ''}`}
-              onClick={() => setRestartAfter((p) => !p)}
-            />
           </div>
         </ConfirmDialog>
       )}

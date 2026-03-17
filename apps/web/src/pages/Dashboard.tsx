@@ -1,23 +1,32 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { useLiveLog } from '../hooks/useLiveLog.js'
+import { useSettings } from '../hooks/useSettings.js'
 import { api } from '../api/client.js'
 
 type Schedule = {
   id: string
   label: string
-  cronExpr: string
   type: string
   enabled: boolean
   nextRun: string | null
 }
 
+const PLAYER_POLL_MS = 30_000
+
+function extractPlayerCount(raw: string): number | null {
+  const m = raw.match(/(\d+)\s+player/i)
+  if (m && m[1] !== undefined) return parseInt(m[1], 10)
+  return null
+}
+
 export default function Dashboard() {
   const { activeServer } = useServer()
-  const liveLog = useLiveLog(activeServer?.id ?? null)
+  const { lines: liveLog } = useLiveLog(activeServer?.id ?? null)
+  const { settings } = useSettings(activeServer?.id ?? null)
   const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
+  const [playerRaw, setPlayerRaw] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,11 +35,23 @@ export default function Dashboard() {
       .get<Schedule[]>(`/servers/${activeServer.id}/schedules`)
       .then(setSchedules)
       .catch(console.error)
-    api
-      .get<Record<string, unknown>>(`/servers/${activeServer.id}/settings`)
-      .then(setSettings)
-      .catch(console.error)
   }, [activeServer?.id])
+
+  // Poll getplayers every 30s
+  const pollPlayers = useCallback(() => {
+    if (!activeServer?.id) return
+    api
+      .get<{ raw?: string }>(`/servers/${activeServer.id}/players`)
+      .then((data) => setPlayerRaw(data?.raw ?? null))
+      .catch(() => {/* ignore — degraded mode */})
+  }, [activeServer?.id])
+
+  useEffect(() => {
+    if (!activeServer?.id) { setPlayerRaw(null); return }
+    pollPlayers()
+    const id = setInterval(pollPlayers, PLAYER_POLL_MS)
+    return () => clearInterval(id)
+  }, [activeServer?.id, pollPlayers])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -42,9 +63,8 @@ export default function Dashboard() {
   }
 
   const maxPlayers = settings?.MaxPlayers ?? '—'
-  // WorldName comes directly from serversettings.json — shows as soon as the
-  // game creates the file and is selected in the switcher.
   const worldName = settings?.WorldName ?? '—'
+  const playerCount = playerRaw !== null ? (extractPlayerCount(playerRaw) ?? '?') : '—'
   const enabledSchedules = schedules.filter((s) => s.enabled)
 
   return (
@@ -63,14 +83,9 @@ export default function Dashboard() {
           <div className="stat-sub">{activeServer?.name ?? 'No server selected'}</div>
         </div>
         <div className="stat-item">
-          <div className="stat-label">World</div>
-          <div
-            className="stat-value"
-            style={{ fontSize: '16px', paddingTop: '6px', color: 'var(--orange)' }}
-          >
-            {String(worldName)}
-          </div>
-          <div className="stat-sub">WorldName</div>
+          <div className="stat-label">Players</div>
+          <div className="stat-value">{String(playerCount)}</div>
+          <div className="stat-sub">Online now</div>
         </div>
         <div className="stat-item">
           <div className="stat-label">Max Players</div>
@@ -109,7 +124,7 @@ export default function Dashboard() {
               </div>
             )}
             {liveLog.map((l) => (
-              <div key={l.id} className="log-entry log-info">
+              <div key={l.lineId} className="log-entry log-info">
                 <span className="log-time">{new Date(l.ts).toLocaleTimeString()}</span>
                 <span className="log-msg">{l.raw}</span>
               </div>
@@ -130,7 +145,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => dispatch('say Attention: Server maintenance in 5 minutes.')}
+                  onClick={() => dispatch('announcement Server maintenance in 5 minutes.')}
                 >
                   Announcement
                 </button>
@@ -140,8 +155,8 @@ export default function Dashboard() {
                 >
                   Set Weather
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={() => dispatch('kickall')}>
-                  Kick All
+                <button className="btn btn-danger btn-sm" onClick={() => dispatch('killall')}>
+                  Kill All
                 </button>
               </div>
             </div>
@@ -163,11 +178,10 @@ export default function Dashboard() {
             {(
               [
                 ['Display Name', activeServer?.name ?? '—'],
-                ['Server Name', activeServer?.serverName ?? '—'],
-                ['World Name', String(settings?.WorldName ?? '—')],
+                ['World Name', String(worldName)],
                 ['Game Port', activeServer ? `${activeServer.gamePort} (UDP)` : '—'],
                 ['Query Port', activeServer ? `${activeServer.queryPort} (UDP)` : '—'],
-                ['Save Path', activeServer?.savePath ?? '—'],
+                ['Container', activeServer?.containerName ?? '(env default)'],
               ] as [string, string][]
             ).map(([k, v]) => (
               <div key={k} className="setting-row">
@@ -232,22 +246,15 @@ export default function Dashboard() {
                       marginTop: '2px',
                     }}
                   >
-                    {s.cronExpr}
+                    {s.nextRun ? new Date(s.nextRun).toLocaleString() : '—'}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div
-                    style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text)' }}
-                  >
-                    {s.nextRun ?? '—'}
-                  </div>
-                  <span
-                    className={`pill ${s.type === 'WIPE' ? 'pill-orange' : s.type === 'ANNOUNCEMENT' ? 'pill-blue' : 'pill-muted'}`}
-                    style={{ fontSize: '9px', marginTop: '4px' }}
-                  >
-                    {s.type}
-                  </span>
-                </div>
+                <span
+                  className={`pill ${s.type === 'RESTART' ? 'pill-orange' : 'pill-muted'}`}
+                  style={{ fontSize: '9px', flexShrink: 0 }}
+                >
+                  {s.type}
+                </span>
               </div>
             ))}
           </div>

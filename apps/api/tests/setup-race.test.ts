@@ -56,16 +56,9 @@ async function setupEmptyApp() {
 
   // Set env vars before any module that reads DATABASE_URL is imported
   process.env.DATABASE_URL = dbUrl
-  process.env.WEB_HOST = 'localhost'
-  process.env.WEB_PORT = '3000'
-  process.env.NODE_ENV = 'test'
   process.env.BETTER_AUTH_SECRET = 'test-secret-that-is-long-enough-for-auth'
-  process.env.DOCKER_CONTROL_ENABLED = 'true'
   process.env.DOCKER_SOCKET = '/var/run/docker.sock'
   process.env.GAME_CONTAINER_NAME = 'test-game'
-  process.env.SAVES_PATH = ''
-  process.env.SAVE_BASE_PATH = ''
-  process.env.BACKUP_PATH = './test-backups'
 
   // Push schema to the new isolated DB
   execSync('npx prisma db push --accept-data-loss', {

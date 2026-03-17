@@ -3,8 +3,9 @@ import { Outlet } from 'react-router'
 import NavTabs from './NavTabs.js'
 import ServerSwitcher from './ServerSwitcher.js'
 import ChangePasswordModal from '../ui/ChangePasswordModal.js'
-import { useServer } from '../../hooks/useServer.js'
+import { useServerContext as useServer } from '../../context/ServerContext.js'
 import { useAuth } from '../../context/AuthContext.js'
+import { roleToClass } from '../../lib/constants.js'
 
 function Clock() {
   const [t, setT] = useState(new Date())
@@ -26,8 +27,7 @@ export default function AppShell() {
   const running = activeServer?.running ?? false
   const [showPwModal, setShowPwModal] = useState(false)
 
-  const roleCls =
-    user?.role === 'OWNER' ? 'role-owner' : user?.role === 'ADMIN' ? 'role-admin' : 'role-viewer'
+  const roleCls = roleToClass(user?.role ?? '')
 
   return (
     <div className="app">

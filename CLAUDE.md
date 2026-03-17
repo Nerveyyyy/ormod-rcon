@@ -83,7 +83,7 @@ services:
       - ./certs:/certs:ro
 ```
 
-Other common override uses: changing `API_PORT`, binding to a specific `API_HOST` interface, mounting a local binary for testing, overriding `GAME_CONTAINER_NAME` when running multiple stacks on one host.
+Other common override uses: changing `PORT`, binding to a specific `HOST` interface, mounting a local binary for testing, overriding `GAME_CONTAINER_NAME` when running multiple stacks on one host.
 
 ---
 
@@ -164,12 +164,11 @@ ormod-rcon/
 │   │   │   │   ├── console.ts  # default=HTTP routes; named consoleWsRoutes (manual)
 │   │   │   │   ├── wipe.ts, schedule.ts
 │   │   │   │   ├── setup.ts         # GET+POST /api/setup (first-run)
-│   │   │   │   ├── capabilities.ts  # GET /api/capabilities
 │   │   │   │   ├── users.ts         # User CRUD (create/delete/role assignment)
 │   │   │   │   └── csrf.ts          # GET /api/csrf (CSRF token endpoint)
 │   │   │   ├── controllers/    # Handler logic (one file per route domain)
 │   │   │   │   └── users.ts
-│   │   │   ├── services/       # docker-manager, file-io, rcon-adapter, wipe-service, list-service
+│   │   │   ├── services/       # docker-manager, rcon-adapter
 │   │   │   ├── lib/            # auth.ts (BetterAuth config)
 │   │   │   └── db/
 │   │   └── prisma/
@@ -243,9 +242,10 @@ Three scopes implemented in `AccessList` Prisma model and AccessControl UI:
 - cron-parser v4/v5 API: use `CronExpressionParser.parse(expr).next().toDate()` (not `parseExpression`)
 - Prisma array-form `$transaction` does not support `skipDuplicates: true` at TypeScript level — remove it and use `deleteMany` before `createMany` instead
 - `@fastify/static` is registered in `app.ts` when `STATIC_PATH` env var is set (Docker production). Uses `prefix: '/'` and a catch-all 404 handler to serve `index.html` for SPA routing.
-- Prisma 7 uses driver adapters — `@prisma/adapter-better-sqlite3` is required. Client is generated to `src/generated/prisma/` (not `node_modules`). Config lives in `prisma.config.ts`. The `prisma db push --skip-generate` flag was removed in v7.
+- Prisma 7 uses driver adapters — `@prisma/adapter-better-sqlite3` is required. Client is generated to `prisma/generated/` (relative to `apps/api/`, i.e. `apps/api/prisma/generated/`) — not `node_modules` and not `src/generated/prisma/`. Config lives in `prisma.config.ts` at the `apps/api/` root. The `prisma db push --skip-generate` flag was removed in v7.
 - Fastify 5 requires async hooks — no callback-style `done` parameter. The `csrfProtection` callback is wrapped in a Promise in `plugins/csrf.ts`.
 - React Router v7 uses `react-router` package (not `react-router-dom`). The v6 future flags (`v7_startTransition`, `v7_relativeSplatPath`) are now defaults and were removed from `App.tsx`.
+- `docker-manager.ts` uses `globalThis.__ormod_docker_manager__` as a singleton key. This is intentional — `app.ts` statically imports `console.ts` (which imports `dockerManager`) causing Vitest's module registry to evaluate `docker-manager.ts`, then `@fastify/autoload` evaluates it again via native ESM. The global key ensures both evaluations return the same instance, so `mockDockerManager()` in tests patches the singleton that route handlers actually use.
 
 ---
 
@@ -278,24 +278,24 @@ Future flow: route → `getAdapter()` → `WebSocketRconAdapter` → RCON TCP
 ## Current Implementation Status
 
 - ✅ All 11 pages built and wired to real API
-- ✅ All API routes implemented (Prisma + file I/O)
+- ✅ All game interaction goes through `rcon-adapter.ts` → `DockerExecAdapter` → Docker exec → game stdin (no file I/O)
+- ✅ `ActionLog` model records every admin action (ban, unban, kick, wipe, permission change, etc.)
 - ✅ WebSocket console (ring buffer + EventEmitter → live stream)
-- ✅ Wipe service (fs.cp backup, file deletion, DB logging)
-- ✅ Scheduled tasks (node-cron, restore on startup)
-- ✅ Access lists with EXTERNAL URL refresh
+- ✅ Wipe dispatched via `wipe` console command + logged in WipeLog
+- ✅ Scheduled tasks (node-cron, restore on startup) — types: `COMMAND` | `RESTART`
+- ✅ Access lists with EXTERNAL URL refresh (diff-based, commands dispatched on change)
 - ✅ Server Management page (add/edit/delete servers, start/stop/restart)
-- ✅ `docker-manager.ts` — Docker socket replaces node-pty entirely
+- ✅ `docker-manager.ts` — Docker socket, global singleton (shared across ESM module registries)
 - ✅ Proper Fastify plugin architecture (`app.ts`/`server.ts` split, `@fastify/autoload`, numbered plugins)
 - ✅ Env validation via `@fastify/env` with typed `fastify.config.*`
 - ✅ Security plugins: `@fastify/helmet`, `@fastify/csrf-protection`, `@fastify/under-pressure`
 - ✅ `@fastify/static` registered in `app.ts` for Docker static serving
-- ✅ Bind-mount support for game binary and saves (`GAME_BINARY_PATH`, `SAVES_PATH`)
-- ✅ `API_HOST`/`API_PORT` for per-interface binding (both compose files use the same env var names)
+- ✅ `HOST`/`PORT` for per-interface binding (both compose files use the same env var names)
 - ✅ Auth (BetterAuth) — session-based, login/setup pages, HTTP-only cookies
 - ✅ RBAC enforcement — OWNER/ADMIN/VIEWER roles checked per-route via `requireWrite`/`requireOwner` preHandlers
 - ✅ WebSocket auth — explicit session validation on WS upgrade (not relying on preHandler hooks)
 - ✅ CSRF protection — double-submit cookie pattern with auto-fetch/retry on frontend
-- ✅ Backend test suite — 84 Vitest tests covering auth guards, RBAC, CSRF, and all route groups
+- ✅ Backend test suite — 126 Vitest tests covering auth guards, RBAC, CSRF, and all route groups
 - ✅ Login + Setup pages (full auth flow, first-run wizard)
 - ✅ User Management page (OWNER/ADMIN/VIEWER CRUD, self-protection)
 - ✅ `users.ts` API route (user create/delete/role)
@@ -321,36 +321,23 @@ npx vitest run --reporter=verbose  # Verbose output
 - `pool: 'forks'` — each test file gets its own Node.js process for PrismaClient isolation
 - `execArgv: ['--import', 'tsx/esm']` — enables TypeScript + `.js→.ts` resolution in forked processes
 - `tests/helpers/setup.ts` — creates isolated SQLite DB, builds Fastify app, creates 3 users (OWNER/ADMIN/VIEWER) with session cookies and CSRF tokens
-- Docker-dependent routes (start/stop/restart, console commands) are tested for RBAC enforcement only (not Docker integration) since `vi.mock()` can't reach the singleton loaded by `@fastify/autoload` through tsx
+- `mockDockerManager()` in `setup.ts` patches the global `dockerManager` singleton — works because `docker-manager.ts` stores the instance on `globalThis` to survive dual ESM evaluation (Vitest registry + `@fastify/autoload` native ESM)
 
-**Coverage:** 12 test files, 84 tests — health, auth-guards, csrf, setup, capabilities, servers, access-lists, wipe, schedule, settings, console, players
+**Coverage:** 15 test files, 126 tests — health, auth-guards, csrf, setup, setup-race, servers, access-lists, access-lists-ssrf, wipe, schedule, settings, console, players, users, schema-validation
 
 ---
 
 ## Getting Started (Docker)
 
 ```bash
-# Recommended dedi box layout — clone into ormod/rcon/
-mkdir -p /opt/ormod/{server,configs}
-cp -r /path/to/ormod-server/* /opt/ormod/server/
-chmod +x /opt/ormod/server/ORMODDirective
-chown -R 1000:1000 /opt/ormod/configs
-
-git clone https://github.com/Nerveyyyy/ormod-rcon /opt/ormod/rcon
-cd /opt/ormod/rcon
 cp .env.example .env
-# Edit .env — key vars to set:
-#   BETTER_AUTH_SECRET    — generate with: openssl rand -hex 32
-#   SERVER_NAME           — your server name
-#   GAME_BINARY_PATH      — host path to game binary dir (e.g. ../server)
-#   SAVES_PATH            — host path to save/config dir (e.g. ../configs)
-#   API_HOST, API_PORT    — bind address and port for the dashboard
-#   PUBLIC_URL            — full URL clients use (e.g. http://192.168.1.100:3000)
-#   GAME_CONTAINER_NAME   — Docker container name for the game (default: ormod-game)
-#   KCP_PORT              — KCP/Mirror networking port (default: 7777)
-# See .env.example for the full reference.
+# Edit .env:
+#   BETTER_AUTH_SECRET — generate with: openssl rand -hex 32
+#   PUBLIC_URL         — e.g. http://192.168.1.100:3000
 
 docker compose up -d
+# For internet-facing servers:
+# docker compose -f docker-compose.secure.yml up -d
 ```
 
 ## Getting Started (Local Dev)
@@ -358,8 +345,8 @@ docker compose up -d
 ```bash
 pnpm install
 cp .env.example .env
-# Edit .env: set DATABASE_URL=file:./prisma/ormod-rcon.db
-cd apps/api && pnpm db:migrate && cd ../..
+# Edit .env: set BETTER_AUTH_SECRET (openssl rand -hex 32)
+cd apps/api && pnpm db:migrate:dev && cd ../..
 pnpm dev   # API on :3001, web on :3000
 ```
 

@@ -4,23 +4,18 @@ set -e
 SERVER_NAME="${SERVER_NAME:-MyOrmodServer}"
 GAME_BINARY_NAME="${GAME_BINARY_NAME:-ORMODDirective}"
 
-echo "╔══════════════════════════════════════════════╗"
-echo "║   ORMOD: Directive — Dedicated Server        ║"
-echo "╠══════════════════════════════════════════════╣"
-printf  "║  Name:   %-35s║\n" "$SERVER_NAME"
-printf  "║  Binary: %-35s║\n" "$GAME_BINARY_NAME"
-echo "║  Ports:  configured via serversettings.json ║"
-echo "╚══════════════════════════════════════════════╝"
+echo "[gameserver] Starting: $SERVER_NAME (binary: $GAME_BINARY_NAME)"
 
-# Symlink so the game's hardcoded save path writes to our /saves volume.
-# Game expects: $HOME/.config/ORMOD/Playtest/<ServerName>/
-# Actual files: /saves/<ServerName>/
-mkdir -p /root/.config/ORMOD
-ln -sfn /saves /root/.config/ORMOD/Playtest
+# Fix volume permissions so the non-root gameserver user can write
+chown -R gameserver:gameserver /saves /game 2>/dev/null || true
+chmod +x "/game/${GAME_BINARY_NAME}" 2>/dev/null || true
 
-chmod +x "/game/${GAME_BINARY_NAME}" || true
+# Set up the save path symlink as root before dropping privileges
+mkdir -p /home/gameserver/.config/ORMOD
+ln -sfn /saves /home/gameserver/.config/ORMOD/Playtest
+chown -R gameserver:gameserver /home/gameserver/.config
 
-exec "/game/${GAME_BINARY_NAME}" \
-  -batchmode \
-  -nographics \
-  -servername "$SERVER_NAME"
+# Drop to non-root and run the game.
+# gosu exec-replaces itself so the game binary becomes PID 1 and
+# directly receives stdin from Docker attach (command dispatch).
+exec gosu gameserver "/game/${GAME_BINARY_NAME}" -batchmode -nographics -servername "${SERVER_NAME}"

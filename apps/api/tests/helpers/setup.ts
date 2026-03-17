@@ -168,11 +168,7 @@ export async function setupTestContext(): Promise<TestContext> {
 
   // 2. Set env vars before any module loads that reads them
   process.env.DATABASE_URL = dbUrl
-  process.env.WEB_HOST = 'localhost'
-  process.env.WEB_PORT = '3000'
-  process.env.NODE_ENV = 'test'
   process.env.BETTER_AUTH_SECRET = 'test-secret-that-is-long-enough-for-auth'
-  process.env.DOCKER_CONTROL_ENABLED = 'true'
   process.env.DOCKER_SOCKET = '/var/run/docker.sock'
   process.env.GAME_CONTAINER_NAME = 'test-game'
 
@@ -287,8 +283,9 @@ export async function setupTestContext(): Promise<TestContext> {
  * @fastify/autoload loaded for the controllers (both resolve through tsx).
  */
 export async function mockDockerManager(opts?: { isRunning?: boolean }) {
-  // Import using file:// URL — this goes through the same tsx loader that
-  // @fastify/autoload used, ensuring we get the same module singleton.
+  // Use @vite-ignore to bypass Vitest's module system and hit the native ESM
+  // cache that @fastify/autoload uses when loading app controllers at runtime.
+  // .ts extension matches the URL tsx caches native imports under.
   const modulePath = path.resolve(API_ROOT, 'src/services/docker-manager.ts')
   const fileUrl = 'file:///' + modulePath.replace(/\\/g, '/')
   const mod = await import(/* @vite-ignore */ fileUrl)

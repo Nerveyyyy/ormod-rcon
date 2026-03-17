@@ -8,9 +8,14 @@ export async function getSettings(
 ) {
   const server = await prisma.server.findUnique({ where: { id: req.params.id } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
-  const adapter = await getAdapter(server)
-  const raw = await adapter.sendCommand('getserversettings')
-  return { raw }
+  try {
+    const adapter = await getAdapter(server)
+    const raw = await adapter.sendCommand('getserversettings')
+    return { raw }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return reply.status(503).send({ error: `Server unavailable: ${msg}` })
+  }
 }
 
 export async function updateSettingKey(
@@ -21,9 +26,14 @@ export async function updateSettingKey(
     return reply.badRequest('Invalid setting key')
   const server = await prisma.server.findUnique({ where: { id: req.params.id } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
-  const adapter = await getAdapter(server)
-  const raw = await adapter.sendCommand(
-    `setserversetting ${req.params.key} ${req.body.value}`
-  )
-  return { ok: true, key: req.params.key, value: req.body.value, raw }
+  try {
+    const adapter = await getAdapter(server)
+    const raw = await adapter.sendCommand(
+      `setserversetting ${req.params.key} ${req.body.value}`
+    )
+    return { ok: true, key: req.params.key, value: req.body.value, raw }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return reply.status(503).send({ error: `Server unavailable: ${msg}` })
+  }
 }

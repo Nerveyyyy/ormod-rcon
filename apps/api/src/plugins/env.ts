@@ -9,14 +9,12 @@ export default fp(
       dotenv: { path: '../../.env' },
     })
 
-    // Production safety check: require a real secret
-    if (fastify.config.NODE_ENV === 'production') {
-      const secret = fastify.config.BETTER_AUTH_SECRET
-      if (!secret || secret === 'change_this_to_something_very_random_and_long') {
-        throw new Error(
-          '[FATAL] BETTER_AUTH_SECRET must be set in production. Run: openssl rand -hex 32'
-        )
-      }
+    // Safety check: always require a real secret (not just in production)
+    const secret = fastify.config.BETTER_AUTH_SECRET
+    if (!secret || secret === 'change_this_to_something_very_random_and_long') {
+      throw new Error(
+        '[FATAL] BETTER_AUTH_SECRET must be set to a unique value (min 32 chars). Run: openssl rand -hex 32'
+      )
     }
   },
   { name: 'env', dependencies: ['sensible'] }

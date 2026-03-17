@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import ConfirmDialog from '../components/ui/ConfirmDialog.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import type { Server } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
@@ -21,9 +21,7 @@ export default function ServerManagement() {
 
   // Add form state
   const [name, setName] = useState('')
-  const [serverName, setServerName] = useState('')
-  const [savePath, setSavePath] = useState('')
-  const [execPath, setExecPath] = useState('')
+  const [containerName, setContainerName] = useState('')
   const [gamePort, setGamePort] = useState('27015')
   const [queryPort, setQueryPort] = useState('27016')
   const [notes, setNotes] = useState('')
@@ -49,18 +47,15 @@ export default function ServerManagement() {
     try {
       await api.post('/servers', {
         name,
-        serverName,
-        savePath,
-        containerName: execPath || null, // null = use GAME_CONTAINER_NAME env default
+        serverName: name, // derive from display name
+        containerName: containerName || null, // null = use GAME_CONTAINER_NAME env default
         gamePort: parseInt(gamePort, 10),
         queryPort: parseInt(queryPort, 10),
         notes: notes || null,
       })
       setShowAdd(false)
       setName('')
-      setServerName('')
-      setSavePath('')
-      setExecPath('')
+      setContainerName('')
       setGamePort('27015')
       setQueryPort('27016')
       setNotes('')
@@ -125,18 +120,6 @@ export default function ServerManagement() {
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
                 <div className="setting-info">
-                  <div className="setting-name">Server Name</div>
-                  <div className="setting-desc">Passed as -servername launch flag</div>
-                </div>
-                <input
-                  className="text-input"
-                  value={serverName}
-                  onChange={(e) => setServerName(e.target.value)}
-                  placeholder="MySurvivalWorld"
-                />
-              </div>
-              <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
                   <div className="setting-name">Container Name</div>
                   <div className="setting-desc">
                     Docker container running this server (leave blank to use GAME_CONTAINER_NAME
@@ -145,24 +128,9 @@ export default function ServerManagement() {
                 </div>
                 <input
                   className="text-input"
-                  value={execPath}
-                  onChange={(e) => setExecPath(e.target.value)}
+                  value={containerName}
+                  onChange={(e) => setContainerName(e.target.value)}
                   placeholder="ormod-game"
-                  style={{ width: '300px' }}
-                />
-              </div>
-              <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
-                  <div className="setting-name">Save Path</div>
-                  <div className="setting-desc">
-                    Path inside the dashboard container, e.g. /saves/MySurvivalWorld
-                  </div>
-                </div>
-                <input
-                  className="text-input"
-                  value={savePath}
-                  onChange={(e) => setSavePath(e.target.value)}
-                  placeholder="/saves/MySurvivalWorld"
                   style={{ width: '300px' }}
                 />
               </div>
@@ -289,11 +257,7 @@ export default function ServerManagement() {
                   {(
                     [
                       ['Server Name', server.serverName],
-                      [
-                        'Container',
-                        server.containerName || server.executablePath || '(default from env)',
-                      ],
-                      ['Save Path', server.savePath || '— not set'],
+                      ['Container', server.containerName ?? '(default from env)'],
                       ['Game Port', `${server.gamePort} (UDP)`],
                       ['Query Port', `${server.queryPort} (UDP)`],
                       ['Notes', server.notes ?? '—'],

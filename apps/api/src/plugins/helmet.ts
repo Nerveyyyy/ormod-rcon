@@ -3,13 +3,23 @@ import helmet from '@fastify/helmet'
 
 export default fp(
   async function helmetPlugin(fastify) {
+    // Only enable HSTS when PUBLIC_URL uses HTTPS.
+    // Sending HSTS over plain HTTP permanently breaks non-TLS access for clients.
+    const tlsActive = fastify.config.PUBLIC_URL.startsWith('https')
+
     await fastify.register(helmet, {
-      // CSP disabled — Vite SPA build injects inline scripts that CSP would block.
-      // Enable with nonces if/when we add server-side HTML rendering.
-      contentSecurityPolicy: false,
-      // HSTS: only send Strict-Transport-Security when TLS is active.
-      // Sending HSTS over plain HTTP permanently breaks non-TLS access for clients.
-      hsts: fastify.config.TLS_CERT_PATH
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          fontSrc: ["'self'"],
+          connectSrc: ["'self'", 'ws:', 'wss:'],
+          imgSrc: ["'self'", 'data:'],
+          frameAncestors: ["'none'"],
+        },
+      },
+      hsts: tlsActive
         ? { maxAge: 63072000, includeSubDomains: true, preload: true }
         : false,
       // Prevent clickjacking

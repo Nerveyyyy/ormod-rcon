@@ -2,9 +2,14 @@
   "name": "@ormod-rcon/web",
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -1,14 +1,13 @@
 /**
  * app.ts — Builds and returns a configured Fastify instance.
- *
- * Separated from server.ts so the app can be imported in tests
- * without starting the HTTP listener.
  */
 
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import autoload from '@fastify/autoload'
 import websocket from '@fastify/websocket'
 import fastifyStatic from '@fastify/static'
+import rateLimit from '@fastify/rate-limit'
+import addFormats from 'ajv-formats'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { consoleWsRoutes } from './routes/console.js'
@@ -19,7 +18,24 @@ import './config.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default async function buildApp(opts?: FastifyServerOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true, ...opts })
+  const app = Fastify({
+    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    ajv: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      plugins: [addFormats as any],
+    },
+    ...opts,
+  })
+
+  // Global rate limit: 100 requests per minute per IP.
+  // Auth endpoints get a stricter limit (5 req/min) to mitigate brute-force attacks.
+  await app.register(rateLimit, {
+    max: (req) => {
+      if (req.url?.startsWith('/api/auth')) return 5
+      return 100
+    },
+    timeWindow: '1 minute',
+  })
 
   // Autoload plugins/ — ordered by fastify-plugin dependency graph
   await app.register(autoload, {
@@ -29,7 +45,7 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
   })
 
   // WebSocket plugin must be registered before WS routes
-  await app.register(websocket)
+  await app.register(websocket, { options: { maxPayload: 4096 } })
 
   // Health check (no /api prefix)
   app.get('/health', async () => ({ status: 'ok', ts: Date.now() }))
@@ -63,5 +79,5 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
     })
   }
 
-  return app
+  return app as FastifyInstance
 }

@@ -22,7 +22,13 @@ export default tseslint.config(
   // ── TypeScript base — all TS/TSX files ──────────────────────────────────────
   {
     files: ['**/*.{ts,tsx}'],
-    extends: [tseslint.configs.recommended],
+    extends: [tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
   },
 
   // ── React overlay — web only ─────────────────────────────────────────────────
@@ -43,7 +49,7 @@ export default tseslint.config(
       // (set-state-in-effect, preserve-manual-memoization, etc.) that flag valid
       // non-Compiler patterns. Opt in to only the two classic rules instead.
       'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/exhaustive-deps': 'error',
       // React 17+ JSX transform — no need to import React for JSX
       'react/react-in-jsx-scope': 'off',
       // TypeScript handles prop validation — prop-types redundant

@@ -38,8 +38,22 @@ export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, re
     data: { name, serverName, containerName, gamePort, queryPort, notes },
     select: SERVER_SELECT,
   })
+
+  // Check if the container is already running and reconnect log stream if so
+  let running = false
+  try {
+    const cName = containerName?.trim() || process.env.GAME_CONTAINER_NAME || 'ormod-game'
+    const info = await dockerManager.inspect(cName)
+    running = info?.running === true
+    if (running) {
+      await dockerManager.reconnectServer(server.id)
+    }
+  } catch {
+    // Docker unavailable — server created but status unknown
+  }
+
   reply.status(201)
-  return { ...server, running: false }
+  return { ...server, running }
 }
 
 export async function getServer(

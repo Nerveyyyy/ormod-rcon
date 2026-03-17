@@ -26,8 +26,9 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions  Session[]
-  accounts  Account[]
+  sessions   Session[]
+  accounts   Account[]
+  actionLogs ActionLog[]
 }
 
 // BetterAuth session — token stored in HTTP-only cookie
@@ -42,6 +43,8 @@ model Session {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // BetterAuth account — holds credentials per provider (password stored here)
@@ -60,6 +63,8 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 // BetterAuth verification tokens (email verification, password reset)
@@ -80,9 +85,7 @@ model Server {
   id             String   @id @default(cuid())
   name           String                          // Display name in UI
   serverName     String   @unique               // Matches -servername flag
-  savePath       String                          // Abs path inside dashboard container
   containerName  String?                         // Docker container name (null = env default)
-  executablePath String   @default("")          // Legacy — kept for DB compat; prefer containerName
   mode           String   @default("DOCKER")    // DOCKER | RCON (RCON reserved for future)
   gamePort       Int      @default(27015)
   queryPort      Int      @default(27016)
@@ -95,10 +98,11 @@ model Server {
   wipeLogs    WipeLog[]
   schedules   ScheduledTask[]
   listLinks   ServerListLink[]
+  actionLogs  ActionLog[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Player records (populated from PlayerData/ files)
+// Player records — populated from getplayers command output
 // ─────────────────────────────────────────────────────────────────────────────
 
 model PlayerRecord {
@@ -137,7 +141,7 @@ model ListEntry {
   playerName String?                        // cached display name
   reason     String?
   addedBy    String?
-  permission String?                        // for admin lists: server/admin/operator/client
+  permission String?                        // for ADMIN lists: server/admin/operator/client
   expiresAt  DateTime?
   createdAt  DateTime  @default(now())
 
@@ -145,6 +149,8 @@ model ListEntry {
   list       AccessList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
   @@unique([steamId, listId])
+  @@index([listId])
+  @@index([expiresAt])
 }
 
 // Link a server to one or more access lists
@@ -152,26 +158,26 @@ model ServerListLink {
   serverId String
   listId   String
   server   Server     @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  list     AccessList @relation(fields: [listId], references: [id])
+  list     AccessList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
   @@id([serverId, listId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wipe history
+// Wipe history — records when a wipe command was dispatched and by whom
 // ─────────────────────────────────────────────────────────────────────────────
 
 model WipeLog {
   id          String   @id @default(cuid())
   serverId    String
   server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  wipeType    String                        // FULL | MAP_ONLY | MAP_PLAYERS | CUSTOM
   triggeredBy String                        // dashboard user id
   notes       String?
-  backupPath  String?                       // path to pre-wipe backup
   success     Boolean
   errorMsg    String?
   createdAt   DateTime @default(now())
+
+  @@index([serverId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,12 +188,34 @@ model ScheduledTask {
   id        String    @id @default(cuid())
   serverId  String
   server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  type      String                          // WIPE | COMMAND | ANNOUNCEMENT | RESTART
+  type      String                          // COMMAND | RESTART
   cronExpr  String                          // e.g. "0 6 * * 1" = every Monday 6am
   label     String
-  payload   String                          // JSON - command string, wipe config, etc.
+  payload   String                          // COMMAND: the command string. RESTART: empty.
   enabled   Boolean   @default(true)
   lastRun   DateTime?
   nextRun   DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([serverId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action log — audit trail for all admin actions
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ActionLog {
+  id            String   @id @default(cuid())
+  serverId      String?
+  server        Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  performedBy   String                        // dashboard user id
+  user          User     @relation(fields: [performedBy], references: [id], onDelete: Cascade)
+  action        String                        // BAN | UNBAN | KICK | WHITELIST | REMOVEWHITELIST | SETPERMISSION | REMOVEPERMISSION | WIPE | COMMAND | RESTART | SETTINGS_GET | SETTINGS_SET
+  targetSteamId String?                       // player target (null for non-player actions)
+  details       String?                       // JSON string for extra context (reason, value, etc.)
+  createdAt     DateTime @default(now())
+
+  @@index([serverId])
+  @@index([performedBy])
+  @@index([targetSteamId])
 }

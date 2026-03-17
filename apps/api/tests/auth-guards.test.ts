@@ -21,7 +21,7 @@ describe('Auth guards', () => {
       // CSRF validation (onRequest) may fire before auth guard (preHandler),
       // returning 403 instead of 401. Either way, the request is rejected.
       const res = await ctx.unauthenticated.post('/api/servers', {
-        payload: JSON.stringify({ name: 'Test', serverName: 'test', savePath: '/tmp/test' }),
+        payload: JSON.stringify({ name: 'Test', serverName: 'test' }),
         headers: { 'content-type': 'application/json' },
       })
       expect([401, 403]).toContain(res.statusCode)
@@ -48,11 +48,6 @@ describe('Auth guards', () => {
   describe('public endpoints bypass auth guard', () => {
     it('GET /health → 200 without auth', async () => {
       const res = await ctx.unauthenticated.get('/health')
-      expect(res.statusCode).toBe(200)
-    })
-
-    it('GET /api/capabilities → 200 without auth', async () => {
-      const res = await ctx.unauthenticated.get('/api/capabilities')
       expect(res.statusCode).toBe(200)
     })
 

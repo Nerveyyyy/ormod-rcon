@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useServer } from '../../hooks/useServer.js'
+import { useServerContext as useServer } from '../../context/ServerContext.js'
 
 export default function ServerSwitcher() {
   const { servers, activeServer, setActiveServerId } = useServer()

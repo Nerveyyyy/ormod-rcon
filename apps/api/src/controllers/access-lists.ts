@@ -297,14 +297,6 @@ export async function refreshExternal(
         req.log.error({ err }, `External sync: failed to ban ${steamId} on server ${server.id}`)
       }
     }
-    await prisma.actionLog.create({
-      data: {
-        performedBy: 'system',
-        action: 'BAN',
-        targetSteamId: steamId,
-        details: JSON.stringify({ source: 'external-feed', listId: list.id }),
-      },
-    })
   }
 
   // Unban removed entries
@@ -318,14 +310,6 @@ export async function refreshExternal(
         req.log.error({ err }, `External sync: failed to unban ${steamId} on server ${server.id}`)
       }
     }
-    await prisma.actionLog.create({
-      data: {
-        performedBy: 'system',
-        action: 'UNBAN',
-        targetSteamId: steamId,
-        details: JSON.stringify({ source: 'external-feed-removal', listId: list.id }),
-      },
-    })
   }
 
   await prisma.accessList.update({ where: { id: list.id }, data: { syncedAt: new Date() } })

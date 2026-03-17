@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "outDir": "dist",
     "types": [],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",

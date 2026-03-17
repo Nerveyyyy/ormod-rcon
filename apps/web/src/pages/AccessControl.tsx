@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import EmptyState from '../components/ui/EmptyState.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
 type AccessList = {
@@ -33,12 +33,38 @@ const groups = [
   { label: 'Admin List', type: 'ADMIN' },
 ]
 
+function useFocusTrap(isOpen: boolean, ref: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    if (!isOpen) return
+    const modal = ref.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [isOpen, ref])
+}
+
 export default function AccessControl() {
   const { activeServer } = useServer()
   const [lists, setLists] = useState<AccessList[]>([])
   const [entries, setEntries] = useState<ListEntry[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // New list form
   const [showAddList, setShowAddList] = useState(false)
@@ -53,6 +79,13 @@ export default function AccessControl() {
   const [newNote, setNewNote] = useState('')
   const [newPerm, setNewPerm] = useState('admin')
 
+  // Modal refs for focus traps
+  const addListModalRef = useRef<HTMLDivElement>(null)
+  const addEntryModalRef = useRef<HTMLDivElement>(null)
+
+  useFocusTrap(showAddList, addListModalRef)
+  useFocusTrap(showAddEntry, addEntryModalRef)
+
   const loadLists = () => {
     setLoading(true)
     api
@@ -61,7 +94,7 @@ export default function AccessControl() {
         setLists(data)
         if (!selectedId && data.length > 0) setSelectedId(data[0]!.id)
       })
-      .catch(console.error)
+      .catch((e) => setError((e as Error).message || 'Failed to load lists'))
       .finally(() => setLoading(false))
   }
 
@@ -69,7 +102,7 @@ export default function AccessControl() {
     api
       .get<{ id: string; entries: ListEntry[] }>(`/lists/${listId}`)
       .then((data) => setEntries(data.entries ?? []))
-      .catch(console.error)
+      .catch((e) => setError((e as Error).message || 'Failed to load entries'))
   }
 
   useEffect(() => {
@@ -86,15 +119,15 @@ export default function AccessControl() {
     api
       .delete(`/lists/${selectedId}/entries/${steamId}`)
       .then(() => setEntries((e) => e.filter((x) => x.steamId !== steamId)))
-      .catch(console.error)
+      .catch((e) => setError((e as Error).message || 'Failed to remove entry'))
   }
 
   const syncList = () => {
     if (!selectedId || !activeServer?.id) return
     api
       .post(`/lists/${selectedId}/sync/${activeServer.id}`)
-      .then(() => alert('Synced to server successfully.'))
-      .catch((e) => alert(`Sync failed: ${(e as Error).message}`))
+      .then(() => setError(null))
+      .catch((e) => setError(`Sync failed: ${(e as Error).message}`))
   }
 
   const refreshFeed = () => {
@@ -102,11 +135,13 @@ export default function AccessControl() {
     api
       .post<{ imported: number }>(`/lists/${selectedId}/refresh`)
       .then((r) => {
-        alert(`Feed refreshed — ${r.imported} entries imported.`)
         if (selectedId) loadEntries(selectedId)
         loadLists()
+        setError(null)
+        // Show success inline rather than alert
+        console.log(`Feed refreshed — ${r.imported} entries imported.`)
       })
-      .catch((e) => alert(`Refresh failed: ${(e as Error).message}`))
+      .catch((e) => setError(`Refresh failed: ${(e as Error).message}`))
   }
 
   const createList = () => {
@@ -125,7 +160,7 @@ export default function AccessControl() {
         loadLists()
         setSelectedId(created.id)
       })
-      .catch((e) => alert(`Failed: ${(e as Error).message}`))
+      .catch((e) => setError(`Failed to create list: ${(e as Error).message}`))
   }
 
   const addEntry = () => {
@@ -143,7 +178,7 @@ export default function AccessControl() {
         if (selectedId) loadEntries(selectedId)
         loadLists()
       })
-      .catch((e) => alert(`Failed: ${(e as Error).message}`))
+      .catch((e) => setError(`Failed to add entry: ${(e as Error).message}`))
   }
 
   const addLabel = !selected
@@ -173,13 +208,37 @@ export default function AccessControl() {
         }
       />
 
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ── Add List Modal ──────────────────────────────────── */}
       {showAddList && (
         <div className="overlay" onClick={() => setShowAddList(false)}>
-          <div className="modal fadein" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={addListModalRef}
+            className="modal fadein"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-list-modal-title"
+          >
             <div className="card-header">
-              <span className="card-title">New Access List</span>
-              <button className="btn btn-ghost btn-xs" onClick={() => setShowAddList(false)}>
+              <span className="card-title" id="add-list-modal-title">New Access List</span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowAddList(false)}
+                aria-label="Close dialog"
+              >
                 ✕
               </button>
             </div>
@@ -188,10 +247,11 @@ export default function AccessControl() {
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="new-list-name" className="setting-info">
                   <div className="setting-name">Name</div>
-                </div>
+                </label>
                 <input
+                  id="new-list-name"
                   className="text-input"
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
@@ -199,10 +259,11 @@ export default function AccessControl() {
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="new-list-type" className="setting-info">
                   <div className="setting-name">Type</div>
-                </div>
+                </label>
                 <select
+                  id="new-list-type"
                   className="sel-input"
                   value={newListType}
                   onChange={(e) => setNewListType(e.target.value)}
@@ -213,10 +274,11 @@ export default function AccessControl() {
                 </select>
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="new-list-scope" className="setting-info">
                   <div className="setting-name">Scope</div>
-                </div>
+                </label>
                 <select
+                  id="new-list-scope"
                   className="sel-input"
                   value={newListScope}
                   onChange={(e) => setNewListScope(e.target.value)}
@@ -228,11 +290,12 @@ export default function AccessControl() {
               </div>
               {newListScope === 'EXTERNAL' && (
                 <div className="setting-row" style={{ padding: 0 }}>
-                  <div className="setting-info">
+                  <label htmlFor="new-list-url" className="setting-info">
                     <div className="setting-name">Feed URL</div>
                     <div className="setting-desc">Plain-text file of SteamID64s, one per line</div>
-                  </div>
+                  </label>
                   <input
+                    id="new-list-url"
                     className="text-input"
                     value={newListUrl}
                     onChange={(e) => setNewListUrl(e.target.value)}
@@ -261,10 +324,21 @@ export default function AccessControl() {
       {/* ── Add Entry Modal ─────────────────────────────────── */}
       {showAddEntry && selected && (
         <div className="overlay" onClick={() => setShowAddEntry(false)}>
-          <div className="modal fadein" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={addEntryModalRef}
+            className="modal fadein"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-entry-modal-title"
+          >
             <div className="card-header">
-              <span className="card-title">{addLabel}</span>
-              <button className="btn btn-ghost btn-xs" onClick={() => setShowAddEntry(false)}>
+              <span className="card-title" id="add-entry-modal-title">{addLabel}</span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowAddEntry(false)}
+                aria-label="Close dialog"
+              >
                 ✕
               </button>
             </div>
@@ -273,10 +347,11 @@ export default function AccessControl() {
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="new-entry-steamid" className="setting-info">
                   <div className="setting-name">Steam ID</div>
-                </div>
+                </label>
                 <input
+                  id="new-entry-steamid"
                   className="text-input"
                   value={newSteamId}
                   onChange={(e) => setNewSteamId(e.target.value)}
@@ -284,10 +359,11 @@ export default function AccessControl() {
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="new-entry-note" className="setting-info">
                   <div className="setting-name">Note / Reason</div>
-                </div>
+                </label>
                 <input
+                  id="new-entry-note"
                   className="text-input"
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
@@ -296,10 +372,11 @@ export default function AccessControl() {
               </div>
               {selected.type === 'ADMIN' && (
                 <div className="setting-row" style={{ padding: 0 }}>
-                  <div className="setting-info">
+                  <label htmlFor="new-entry-perm" className="setting-info">
                     <div className="setting-name">Permission</div>
-                  </div>
+                  </label>
                   <select
+                    id="new-entry-perm"
                     className="sel-input"
                     value={newPerm}
                     onChange={(e) => setNewPerm(e.target.value)}
@@ -364,7 +441,16 @@ export default function AccessControl() {
                   <div
                     key={l.id}
                     className={`sidebar-item${l.id === selectedId ? ' active' : ''}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedId(l.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedId(l.id)
+                      }
+                    }}
+                    aria-pressed={l.id === selectedId}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="sidebar-item-name">{l.name}</div>
@@ -484,11 +570,11 @@ export default function AccessControl() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Steam ID</th>
-                      {selected.type === 'ADMIN' && <th>Permission</th>}
-                      <th>Note</th>
-                      <th>Added</th>
-                      {!selected.readonly && <th>Actions</th>}
+                      <th scope="col">Steam ID</th>
+                      {selected.type === 'ADMIN' && <th scope="col">Permission</th>}
+                      <th scope="col">Note</th>
+                      <th scope="col">Added</th>
+                      {!selected.readonly && <th scope="col">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>

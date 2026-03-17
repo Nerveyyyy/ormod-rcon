@@ -9,21 +9,17 @@ const repoRoot = resolve(__dirname, '../..')
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repoRoot, '')
-
-  const webHost = env.WEB_HOST || 'localhost'
-  const webPort = env.WEB_PORT || '3000'
-  const apiHost = env.API_HOST || 'localhost'
-  const apiPort = env.API_PORT || '3001'
+  const apiPort = env.PORT || env.API_PORT || '3001'
 
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      port: webPort,
-      host: webHost,
+      port: 3000,
+      host: 'localhost',
       proxy: {
-        '/api': `http://${apiHost}:${apiPort}`,
+        '/api': `http://localhost:${apiPort}`,
         '/ws': {
-          target: `ws://${apiHost}:${apiPort}`,
+          target: `ws://localhost:${apiPort}`,
           ws: true,
         },
       },

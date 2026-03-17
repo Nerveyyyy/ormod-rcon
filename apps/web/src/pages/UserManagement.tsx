@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import ConfirmDialog from '../components/ui/ConfirmDialog.js'
 import { useAuth } from '../context/AuthContext.js'
 import { api } from '../api/client.js'
+import { roleToClass } from '../lib/constants.js'
 
 type User = {
   id: string
@@ -18,6 +19,7 @@ export default function UserManagement() {
   const [showAdd, setShowAdd] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Add form state
   const [name, setName] = useState('')
@@ -25,6 +27,33 @@ export default function UserManagement() {
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER')
   const [addError, setAddError] = useState('')
+
+  // Focus trap ref for Create User modal
+  const addModalRef = useRef<HTMLDivElement>(null)
+
+  // Focus trap effect for Create User modal
+  useEffect(() => {
+    if (!showAdd) return
+    const modal = addModalRef.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [showAdd])
 
   const fetchUsers = async () => {
     try {
@@ -62,7 +91,7 @@ export default function UserManagement() {
       await api.put(`/users/${userId}/role`, { role: newRole })
       fetchUsers()
     } catch (e) {
-      alert((e as Error).message || 'Failed to change role')
+      setError((e as Error).message || 'Failed to change role')
     }
   }
 
@@ -73,7 +102,7 @@ export default function UserManagement() {
       setDeleteTarget(null)
       fetchUsers()
     } catch (e) {
-      alert((e as Error).message || 'Failed to delete user')
+      setError((e as Error).message || 'Failed to delete user')
     }
   }
 
@@ -96,17 +125,38 @@ export default function UserManagement() {
         }
       />
 
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ── Create User Modal ──────────────────────────────── */}
       {showAdd && (
         <div className="overlay" onClick={() => setShowAdd(false)}>
           <div
+            ref={addModalRef}
             className="modal fadein"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '480px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-user-modal-title"
           >
             <div className="card-header">
-              <span className="card-title">Create User</span>
-              <button className="btn btn-ghost btn-xs" onClick={() => setShowAdd(false)}>
+              <span className="card-title" id="create-user-modal-title">Create User</span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowAdd(false)}
+                aria-label="Close dialog"
+              >
                 ✕
               </button>
             </div>
@@ -115,10 +165,11 @@ export default function UserManagement() {
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="create-user-name" className="setting-info">
                   <div className="setting-name">Name</div>
-                </div>
+                </label>
                 <input
+                  id="create-user-name"
                   className="text-input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -126,10 +177,11 @@ export default function UserManagement() {
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="create-user-email" className="setting-info">
                   <div className="setting-name">Email</div>
-                </div>
+                </label>
                 <input
+                  id="create-user-email"
                   className="text-input"
                   type="email"
                   value={email}
@@ -138,11 +190,12 @@ export default function UserManagement() {
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="create-user-password" className="setting-info">
                   <div className="setting-name">Password</div>
                   <div className="setting-desc">Minimum 8 characters</div>
-                </div>
+                </label>
                 <input
+                  id="create-user-password"
                   className="text-input"
                   type="password"
                   value={password}
@@ -151,10 +204,11 @@ export default function UserManagement() {
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="create-user-role" className="setting-info">
                   <div className="setting-name">Role</div>
-                </div>
+                </label>
                 <select
+                  id="create-user-role"
                   className="sel-input"
                   value={role}
                   onChange={(e) => setRole(e.target.value as 'ADMIN' | 'VIEWER')}
@@ -164,7 +218,10 @@ export default function UserManagement() {
                 </select>
               </div>
               {addError && (
-                <div style={{ fontSize: '11px', color: 'var(--red)', fontFamily: 'var(--mono)' }}>
+                <div
+                  style={{ fontSize: '11px', color: 'var(--red)', fontFamily: 'var(--mono)' }}
+                  role="alert"
+                >
                   {addError}
                 </div>
               )}
@@ -231,22 +288,17 @@ export default function UserManagement() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Created</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">Created</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => {
                 const self = isSelf(u)
-                const roleCls =
-                  u.role === 'OWNER'
-                    ? 'role-owner'
-                    : u.role === 'ADMIN'
-                      ? 'role-admin'
-                      : 'role-viewer'
+                const roleCls = roleToClass(u.role)
                 return (
                   <tr key={u.id}>
                     <td className="bright">
@@ -270,6 +322,7 @@ export default function UserManagement() {
                             value={u.role}
                             onChange={(e) => changeRole(u.id, e.target.value)}
                             style={{ fontSize: '10px', padding: '3px 6px' }}
+                            aria-label={`Change role for ${u.name}`}
                           >
                             <option value="OWNER">Owner</option>
                             <option value="ADMIN">Admin</option>

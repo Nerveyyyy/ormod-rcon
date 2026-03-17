@@ -2,7 +2,6 @@
  * auth.ts — BetterAuth configuration
  *
  * Self-hosted email+password auth backed by Prisma/SQLite.
- * No external services or paid tiers required.
  *
  * Session cookie is HTTP-only, SameSite=Lax, Secure in production.
  * RBAC roles (OWNER | ADMIN | VIEWER) are stored on the User model.
@@ -14,13 +13,9 @@ import prisma from '../db/prisma-client.js'
 import { computeOrigins } from '../config.js'
 
 const publicUrl = process.env.PUBLIC_URL ?? ''
-const apiHost = process.env.API_HOST ?? 'localhost'
-const apiPort = process.env.API_PORT ?? '3001'
-const webHost = process.env.WEB_HOST ?? 'localhost'
-const webPort = process.env.WEB_PORT ?? '3000'
-
-const BASE_URL = publicUrl || `http://${apiHost}:${apiPort}`
-const TRUSTED_ORIGINS = computeOrigins(publicUrl, webHost, webPort)
+const port = process.env.PORT ?? process.env.API_PORT ?? '3001'
+const BASE_URL = publicUrl || `http://localhost:${port}`
+const TRUSTED_ORIGINS = computeOrigins(publicUrl, port)
 
 export const auth = betterAuth({
   baseURL: BASE_URL,

@@ -51,8 +51,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
 
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`${method} ${path} → ${res.status}: ${text}`)
+    let message: string
+    try {
+      const data = await res.json()
+      message = (data as any)?.error ?? `Request failed (${res.status})`
+    } catch {
+      message = `Request failed (${res.status})`
+    }
+    throw new Error(message)
   }
   return res.json() as Promise<T>
 }

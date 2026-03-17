@@ -30,8 +30,9 @@
   --blue: #5b9dc9;
   --blue-dim: #1e3f5a;
   --blue-bg: rgba(91, 157, 201, 0.08);
-  --muted: #888a7c;
-  --dim: #4a4c42;
+  --red-rgb: 185, 70, 70;
+  --muted: #a0a295;
+  --dim: #6a6c62;
   --text: #dddbd0;
   --text-bright: #f0ede0;
   --mono: 'IBM Plex Mono', monospace;
@@ -1146,6 +1147,9 @@ body {
 .spacer {
   flex: 1;
 }
+.dim {
+  opacity: 0.5;
+}
 @keyframes fadein {
   from {
     opacity: 0;
@@ -1171,6 +1175,42 @@ body {
 }
 .mono {
   font-family: var(--mono);
+}
+
+/* ── Focus indicators (accessibility) ────────────────────────────────── */
+.btn:focus-visible,
+.nav-tab:focus-visible,
+[role="button"]:focus-visible,
+.quick-cmd:focus-visible,
+.sidebar-item:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────── */
+.error-banner {
+  background: var(--red-bg);
+  border: 1px solid var(--red-dim);
+  border-left: 3px solid var(--red);
+  border-radius: 2px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+}
+
+/* ── Toggle button (switch role) ──────────────────────────────────────── */
+button.toggle {
+  appearance: none;
+  -webkit-appearance: none;
+}
+button.toggle:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
 }
 
 /* ── Responsive: tablet (≤ 900px) ────────────────────────────────────── */

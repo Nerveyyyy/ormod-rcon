@@ -1,13 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as ctrl from '../controllers/players.js'
+import { serverParams as sharedServerParams } from './_schemas.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
-const serverParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string' } },
-} as const
+// AUDIT-96: use shared serverParams from _schemas.ts
+const serverParams = sharedServerParams
 
 const steamIdParams = {
   type: 'object',

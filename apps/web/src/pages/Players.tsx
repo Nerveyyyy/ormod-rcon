@@ -1,59 +1,125 @@
-import { Fragment, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
-type Player = {
-  steamId: string
-  permission: string | null
-  online: boolean
-  data: Record<string, unknown>
+const POLL_INTERVAL_MS = 30_000
+
+function extractPlayerCount(raw: string): number | null {
+  // Try to match a line containing "player" with a leading number, e.g. "3 players online"
+  const match = raw.match(/(\d+)\s+player/i)
+  if (match && match[1] !== undefined) return parseInt(match[1], 10)
+  return null
 }
 
 export default function Players() {
   const { activeServer } = useServer()
-  const [players, setPlayers] = useState<Player[]>([])
-  const [active, setActive] = useState<string | null>(null)
+
+  const [raw, setRaw] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [secondsAgo, setSecondsAgo] = useState(0)
+
+  const [steamIdInput, setSteamIdInput] = useState('')
+
+  const [showBroadcast, setShowBroadcast] = useState(false)
+  const [broadcastMsg, setBroadcastMsg] = useState('')
+  const broadcastModalRef = useRef<HTMLDivElement>(null)
+
+  // Focus trap for broadcast modal
+  useEffect(() => {
+    if (!showBroadcast) return
+    const modal = broadcastModalRef.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [showBroadcast])
 
   const load = useCallback(() => {
     if (!activeServer?.id) return
     setLoading(true)
     api
-      .get<Player[]>(`/servers/${activeServer.id}/players`)
-      .then(setPlayers)
-      .catch(console.error)
+      .get<{ raw: string }>(`/servers/${activeServer.id}/players`)
+      .then(({ raw: rawData }) => {
+        setRaw(rawData)
+        setLastUpdated(new Date())
+        setSecondsAgo(0)
+      })
+      .catch((e) => setError((e as Error).message || 'Failed to load players'))
       .finally(() => setLoading(false))
   }, [activeServer?.id])
 
+  // Initial load + poll every 30 s
   useEffect(() => {
-    if (activeServer?.id) load()
+    if (!activeServer?.id) return
+    load()
+    const pollTimer = setInterval(load, POLL_INTERVAL_MS)
+    return () => clearInterval(pollTimer)
   }, [activeServer?.id, load])
+
+  // Seconds-ago counter
+  useEffect(() => {
+    if (!lastUpdated) return
+    const ticker = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
+    }, 1000)
+    return () => clearInterval(ticker)
+  }, [lastUpdated])
 
   const dispatch = (cmd: string) => {
     if (!activeServer?.id) return
-    api.post(`/servers/${activeServer.id}/console/command`, { command: cmd }).catch(console.error)
+    api
+      .post(`/servers/${activeServer.id}/console/command`, { command: cmd })
+      .catch((e) => setError((e as Error).message || 'Command failed'))
   }
 
-  const online = players.filter((p) => p.online).length
-  const offline = players.filter((p) => !p.online).length
+  const sendBroadcast = () => {
+    if (!broadcastMsg.trim()) return
+    dispatch('say ' + broadcastMsg.trim())
+    setShowBroadcast(false)
+    setBroadcastMsg('')
+  }
+
+  const playerCount = raw !== null ? extractPlayerCount(raw) : null
+
+  const actionButtons: { label: string; cmd: (id: string) => string; danger?: boolean }[] = [
+    { label: 'Kick', cmd: (id) => `kick ${id}`, danger: true },
+    { label: 'Ban', cmd: (id) => `ban ${id}`, danger: true },
+    { label: 'Unban', cmd: (id) => `unban ${id}` },
+    { label: 'Heal', cmd: (id) => `heal ${id}` },
+    { label: 'Whitelist', cmd: (id) => `whitelist ${id}` },
+    { label: 'Set Admin', cmd: (id) => `setpermissions ${id} admin` },
+  ]
 
   return (
     <div className="main fadein">
       <PageHeader
         title="Player Management"
-        subtitle="adminlist.txt · setpermissions · kick · ban · whitelist"
+        subtitle="getplayers · kick · ban · unban · heal · whitelist · setpermissions"
         actions={
           <>
-            <button className="btn btn-ghost btn-sm" onClick={load}>
+            <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             <button
               className="btn btn-primary btn-sm"
-              onClick={() => {
-                const msg = prompt('Broadcast message:')
-                if (msg?.trim()) dispatch('say ' + msg.trim())
-              }}
+              onClick={() => setShowBroadcast(true)}
             >
               Broadcast
             </button>
@@ -61,192 +127,156 @@ export default function Players() {
         }
       />
 
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* ── Broadcast Modal ─────────────────────────────────── */}
+      {showBroadcast && (
+        <div className="overlay" onClick={() => setShowBroadcast(false)}>
+          <div
+            ref={broadcastModalRef}
+            className="modal fadein"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="broadcast-modal-title"
+          >
+            <div className="card-header">
+              <span className="card-title" id="broadcast-modal-title">Broadcast Message</span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowBroadcast(false)}
+                aria-label="Close dialog"
+              >
+                ✕
+              </button>
+            </div>
+            <div
+              className="card-body"
+              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+            >
+              <div className="setting-row" style={{ padding: 0 }}>
+                <label htmlFor="broadcast-msg" className="setting-info">
+                  <div className="setting-name">Message</div>
+                  <div className="setting-desc">Sent to all online players</div>
+                </label>
+                <input
+                  id="broadcast-msg"
+                  className="text-input"
+                  value={broadcastMsg}
+                  onChange={(e) => setBroadcastMsg(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendBroadcast() }}
+                  placeholder="Server message..."
+                  autoFocus
+                />
+              </div>
+              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={() => setShowBroadcast(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={sendBroadcast}
+                  disabled={!broadcastMsg.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live output ─────────────────────────────────────── */}
       <div className="card">
         <div className="card-header">
-          <span className="card-title">All Players</span>
-          <span className="card-meta">
-            {online} online · {offline} offline
+          <span className="card-title">
+            getplayers output
+            {playerCount !== null && (
+              <span
+                className="pill pill-green"
+                style={{ marginLeft: '10px', fontSize: '10px' }}
+              >
+                {playerCount} player{playerCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+          <span
+            className="card-meta"
+            style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}
+          >
+            {lastUpdated
+              ? secondsAgo < 5
+                ? 'just now'
+                : `${secondsAgo}s ago`
+              : 'not loaded'}
           </span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Steam ID</th>
-                <th>Permission</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {players.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{
-                      textAlign: 'center',
-                      padding: '24px',
-                      color: 'var(--dim)',
-                      fontFamily: 'var(--mono)',
-                    }}
-                  >
-                    {loading ? 'Loading…' : 'No players found. Click Refresh to load.'}
-                  </td>
-                </tr>
-              )}
-              {players.map((p) => (
-                <Fragment key={p.steamId}>
-                  <tr
-                    onClick={() => setActive(active === p.steamId ? null : p.steamId)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td className="mono bright">{p.steamId}</td>
-                    <td>
-                      <span className={`perm perm-${p.permission ?? 'client'}`}>
-                        [{p.permission ?? 'client'}]
-                      </span>
-                    </td>
-                    <td>
-                      {p.online ? (
-                        <span className="pill pill-green">
-                          <span className="dot dot-green pulse" />
-                          Online
-                        </span>
-                      ) : (
-                        <span className="pill pill-muted">Offline</span>
-                      )}
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="btn-group">
-                        <button
-                          className="btn btn-ghost btn-xs"
-                          onClick={() => dispatch(`teleport ${p.steamId}`)}
-                        >
-                          Teleport
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-xs"
-                          onClick={() => dispatch(`heal ${p.steamId}`)}
-                        >
-                          Heal
-                        </button>
-                        <button
-                          className="btn btn-danger btn-xs"
-                          onClick={() => dispatch(`kick ${p.steamId}`)}
-                        >
-                          Kick
-                        </button>
-                        <button
-                          className="btn btn-danger btn-xs"
-                          onClick={() => dispatch(`ban ${p.steamId}`)}
-                        >
-                          Ban
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {active === p.steamId && (
-                    <tr key={`detail-${p.steamId}`}>
-                      <td colSpan={4} style={{ padding: 0, background: 'var(--bg2)' }}>
-                        <div style={{ padding: '16px 20px' }}>
-                          <div className="row" style={{ marginBottom: '12px' }}>
-                            <span
-                              style={{
-                                fontFamily: 'var(--mono)',
-                                fontSize: '11px',
-                                color: 'var(--muted)',
-                              }}
-                            >
-                              {p.steamId}
-                            </span>
-                          </div>
-                          <div
-                            className="row"
-                            style={{ gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}
-                          >
-                            {(
-                              [
-                                [
-                                  'Permission',
-                                  <span
-                                    key="permission"
-                                    className={`perm perm-${p.permission ?? 'client'}`}
-                                  >
-                                    [{p.permission ?? 'client'}]
-                                  </span>,
-                                ],
-                                ['Status', p.online ? 'Online' : 'Offline'],
-                              ] as [string, ReactNode][]
-                            ).map(([label, val]) => (
-                              <div
-                                key={label as string}
-                                style={{
-                                  background: 'var(--bg3)',
-                                  border: '1px solid var(--border)',
-                                  borderRadius: '2px',
-                                  padding: '10px 16px',
-                                  minWidth: '130px',
-                                }}
-                              >
-                                <div className="stat-label">{label}</div>
-                                <div
-                                  style={{
-                                    fontSize: '13px',
-                                    color: 'var(--text)',
-                                    marginTop: '2px',
-                                  }}
-                                >
-                                  {val}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="btn-group">
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => dispatch(`setpermissions ${p.steamId} admin`)}
-                            >
-                              Set Admin
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => dispatch(`teleport ${p.steamId}`)}
-                            >
-                              Teleport To
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => dispatch(`heal ${p.steamId}`)}
-                            >
-                              Heal
-                            </button>
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => dispatch(`whitelist add ${p.steamId}`)}
-                            >
-                              Whitelist
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => dispatch(`kick ${p.steamId}`)}
-                            >
-                              Kick
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => dispatch(`ban ${p.steamId}`)}
-                            >
-                              Ban
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+        <div className="card-body-0">
+          <pre
+            style={{
+              margin: 0,
+              padding: '12px 16px',
+              fontFamily: 'var(--mono)',
+              fontSize: '11px',
+              color: 'var(--dim)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              minHeight: '80px',
+              maxHeight: '320px',
+              overflowY: 'auto',
+            }}
+          >
+            {loading && !raw
+              ? 'Loading…'
+              : raw ?? 'No data. Click Refresh or wait for the next poll.'}
+          </pre>
+        </div>
+      </div>
+
+      {/* ── Player Actions ───────────────────────────────────── */}
+      <div className="card" style={{ marginTop: '16px' }}>
+        <div className="card-header">
+          <span className="card-title">Player Actions</span>
+          <span className="card-meta">Enter a Steam ID, then choose an action</span>
+        </div>
+        <div className="card-body">
+          <div className="setting-row" style={{ padding: '0 0 14px' }}>
+            <label htmlFor="player-steamid" className="setting-info">
+              <div className="setting-name">Steam ID</div>
+              <div className="setting-desc">17-digit Steam ID of the target player</div>
+            </label>
+            <input
+              id="player-steamid"
+              className="text-input"
+              value={steamIdInput}
+              onChange={(e) => setSteamIdInput(e.target.value.trim())}
+              placeholder="76561198000000000"
+              aria-label="Target Steam ID"
+            />
+          </div>
+          <div className="btn-group">
+            {actionButtons.map(({ label, cmd, danger }) => (
+              <button
+                key={label}
+                className={`btn btn-sm ${danger ? 'btn-danger' : 'btn-ghost'}`}
+                disabled={!steamIdInput}
+                onClick={() => dispatch(cmd(steamIdInput))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

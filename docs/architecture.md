@@ -256,67 +256,6 @@ export async function getAdapter(server: {
 
 ---
 
-## File I/O Service
-
-All reads/writes to game save files go through `FileIOService`. It is the only piece that touches the file system — everything else goes through it.
-
-Key behaviors:
-
-- Returns sensible empty defaults on first boot (save dir doesn't exist yet)
-- `ensureDir()` called before every write
-- `serversettings.json` hot-reloads in the game — no restart needed
-
-```typescript
-// src/services/file-io.ts (abbreviated)
-
-export class FileIOService {
-  constructor(private savePath: string) {}
-
-  async readSettings(): Promise<Record<string, unknown>> {
-    try {
-      return JSON.parse(await fs.readFile(path.join(this.savePath, 'serversettings.json'), 'utf-8'))
-    } catch {
-      return {}
-    } // first boot — file doesn't exist yet
-  }
-
-  async writeSettings(data: Record<string, unknown>): Promise<void> {
-    await this.ensureDir()
-    await fs.writeFile(
-      path.join(this.savePath, 'serversettings.json'),
-      JSON.stringify(data, null, 2),
-      'utf-8'
-    )
-    // No restart needed — game hot-reloads this file
-  }
-
-  async readList(filename: 'banlist.txt' | 'whitelist.txt' | 'adminlist.txt'): Promise<string[]> {
-    try {
-      return (await fs.readFile(path.join(this.savePath, filename), 'utf-8'))
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-    } catch {
-      return []
-    }
-  }
-
-  async writeList(
-    filename: 'banlist.txt' | 'whitelist.txt' | 'adminlist.txt',
-    lines: string[]
-  ): Promise<void> {
-    await this.ensureDir()
-    await fs.writeFile(path.join(this.savePath, filename), lines.join('\n') + '\n', 'utf-8')
-  }
-
-  private async ensureDir(): Promise<void> {
-    await fs.mkdir(this.savePath, { recursive: true })
-  }
-}
-```
-
----
-
 ## Live Log Streaming
 
 Game output is captured by the dashboard by streaming Docker container logs. The output flows through a ring buffer and event emitter per-server, allowing both HTTP and WebSocket subscribers.
@@ -361,56 +300,23 @@ function useLiveLog(serverId: string | undefined) {
 
 ---
 
-## Wipe Service
-
-Wipes are the most critical and dangerous operation. Always: stop → backup → delete → restart.
-
-```typescript
-// Files deleted for each wipe type:
-const WIPE_TARGETS = {
-  MAP_ONLY: [
-    'ChunkData',
-    'RegionData',
-    'mapdata.json',
-    'entitydata.json',
-    'networkentities.json',
-    'buildareas.json',
-    'structuredata.dat',
-    'partialchunkdata.dat',
-    'pathfindingdata.dat',
-    'spawnregion.dat',
-    'loottables.json',
-    'weatherdata.dat',
-    'worldregrowth.json',
-  ],
-  MAP_PLAYERS: [/* MAP_ONLY + */ 'PlayerData'],
-  FULL: [/* MAP_PLAYERS + */ 'log.txt'],
-  CUSTOM: [], // populated from config.customFiles
-}
-
-// Backup uses fs.cp (cross-platform, works without tar):
-await fs.cp(savePath, backupDest, { recursive: true })
-```
-
----
-
 ## Shared Access Lists
 
-Lists live in the database and sync to disk files per server on demand:
+Lists live in the database. When an entry is added or removed, the dashboard dispatches the corresponding command to each linked server via `rcon-adapter.ts`:
 
 ```
-AccessList (DB)              Server A                Server B
-───────────────              ────────────────────    ────────────────────
-Global Ban List  ──sync──→   /saves/A/banlist.txt    /saves/B/banlist.txt
-VIP Whitelist    ──sync──→   /saves/A/whitelist.txt  (not linked to B)
-Admin List       ──sync──→   /saves/A/adminlist.txt  /saves/B/adminlist.txt
+AccessList (DB)              Command dispatch
+───────────────              ────────────────────────────────────────
+Global Ban List  ──ban──→    ban <steamId>    sent to ALL servers
+VIP Whitelist    ──wl──→     whitelist <steamId>  sent to linked servers
+Admin List       ──perm──→   setpermissions <steamId> <level>  sent to linked servers
 ```
 
 Three scopes:
 
-- **GLOBAL** — auto-synced to every server
-- **SERVER** — synced only to explicitly linked servers
-- **EXTERNAL** — URL feed of SteamID64s, refreshed on demand, merged into server files on sync
+- **GLOBAL** — commands dispatched to every server
+- **SERVER** — commands dispatched only to explicitly linked servers
+- **EXTERNAL** — URL feed of SteamID64s; refreshed on demand via `POST /api/lists/:id/refresh`, diff applied (new bans dispatched, removed bans lifted)
 
 ---
 
@@ -495,9 +401,7 @@ model Server {
   id             String   @id @default(cuid())
   name           String                          // Display name in UI
   serverName     String   @unique               // Matches -servername flag
-  savePath       String                          // Abs path inside dashboard container
   containerName  String?                         // Docker container name (null = env default)
-  executablePath String   @default("")          // Legacy — kept for DB compat; prefer containerName
   mode           String   @default("DOCKER")    // DOCKER | RCON (RCON reserved for future)
   gamePort       Int      @default(27015)
   queryPort      Int      @default(27016)
@@ -510,10 +414,11 @@ model Server {
   wipeLogs    WipeLog[]
   schedules   ScheduledTask[]
   listLinks   ServerListLink[]
+  actionLogs  ActionLog[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Player records (populated from PlayerData/ files)
+// Player records — populated from getplayers command output
 // ─────────────────────────────────────────────────────────────────────────────
 
 model PlayerRecord {
@@ -579,11 +484,9 @@ model ServerListLink {
 model WipeLog {
   id          String   @id @default(cuid())
   serverId    String
-  server      Server   @relation(fields: [serverId], references: [id])
-  wipeType    String                        // FULL | MAP_ONLY | MAP_PLAYERS | CUSTOM
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   triggeredBy String                        // dashboard user id
   notes       String?
-  backupPath  String?                       // path to pre-wipe backup
   success     Boolean
   errorMsg    String?
   createdAt   DateTime @default(now())
@@ -596,15 +499,31 @@ model WipeLog {
 model ScheduledTask {
   id        String    @id @default(cuid())
   serverId  String
-  server    Server    @relation(fields: [serverId], references: [id])
-  type      String                          // WIPE | COMMAND | ANNOUNCEMENT | RESTART
+  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  type      String                          // COMMAND | RESTART
   cronExpr  String                          // e.g. "0 6 * * 1" = every Monday 6am
   label     String
-  payload   String                          // JSON - command string, wipe config, etc.
+  payload   String                          // COMMAND: the command string. RESTART: empty.
   enabled   Boolean   @default(true)
   lastRun   DateTime?
   nextRun   DateTime?
   createdAt DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action log — audit trail for all admin actions
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ActionLog {
+  id            String   @id @default(cuid())
+  serverId      String?
+  server        Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  performedBy   String                        // dashboard user id
+  user          User     @relation(fields: [performedBy], references: [id], onDelete: Cascade)
+  action        String                        // BAN | UNBAN | KICK | WHITELIST | REMOVEWHITELIST | SETPERMISSION | REMOVEPERMISSION | WIPE | COMMAND | RESTART
+  targetSteamId String?                       // player target (null for non-player actions)
+  details       String?                       // JSON string for extra context (reason, value, etc.)
+  createdAt     DateTime @default(now())
 }
 ```
 
@@ -634,19 +553,17 @@ ormod-rcon/
 │   │   │   │   └── 10-auth.ts          # BetterAuth hooks + auth guard preHandlers
 │   │   │   ├── routes/                 # Autoloaded under /api prefix
 │   │   │   │   ├── setup.ts            # GET + POST /api/setup (first-run)
-│   │   │   │   ├── capabilities.ts     # GET /api/capabilities
 │   │   │   │   ├── csrf.ts             # GET /api/csrf-token
 │   │   │   │   ├── users.ts            # User management (OWNER only)
 │   │   │   │   ├── servers.ts          # CRUD + start/stop/restart
 │   │   │   │   ├── players.ts          # Player records and history
-│   │   │   │   ├── settings.ts         # serversettings.json R/W
+│   │   │   │   ├── settings.ts         # GET settings, PUT /:key (command-based)
 │   │   │   │   ├── access-lists.ts     # ban/whitelist/admin lists
 │   │   │   │   ├── console.ts          # Command dispatch + HTTP log
 │   │   │   │   ├── wipe.ts             # Wipe execution and history
 │   │   │   │   └── schedule.ts         # Cron task management
 │   │   │   ├── controllers/            # Handler logic (one file per route domain)
 │   │   │   │   ├── setup.ts
-│   │   │   │   ├── capabilities.ts
 │   │   │   │   ├── users.ts
 │   │   │   │   ├── servers.ts
 │   │   │   │   ├── players.ts
@@ -657,10 +574,7 @@ ormod-rcon/
 │   │   │   │   └── schedule.ts
 │   │   │   ├── services/               # Business logic
 │   │   │   │   ├── docker-manager.ts   # Docker socket API, log streaming, command dispatch
-│   │   │   │   ├── rcon-adapter.ts     # Abstraction layer (Docker now, RCON future)
-│   │   │   │   ├── file-io.ts          # Save directory reads/writes
-│   │   │   │   ├── wipe-service.ts     # Wipe logic
-│   │   │   │   └── list-service.ts     # Access list sync logic
+│   │   │   │   └── rcon-adapter.ts     # Abstraction layer (Docker now, RCON future)
 │   │   │   ├── lib/
 │   │   │   │   └── auth.ts             # BetterAuth instance + role helpers
 │   │   │   └── db/
@@ -747,12 +661,6 @@ GET    /api/setup                        Check if setup is needed (no auth requi
 POST   /api/setup                        Create initial OWNER account (no auth required)
 ```
 
-### Capabilities
-
-```
-GET    /api/capabilities                 List backend capabilities (auth required)
-```
-
 ### CSRF Protection
 
 ```
@@ -786,15 +694,14 @@ POST   /api/servers/:id/restart          Restart game container (ADMIN+)
 ### Settings
 
 ```
-GET    /api/servers/:id/settings         Read serversettings.json
-PUT    /api/servers/:id/settings         Write serversettings.json (hot-reloads)
-PUT    /api/servers/:id/settings/:key    Write single key
+GET    /api/servers/:id/settings         Get settings (dispatches getserversettings command)
+PUT    /api/servers/:id/settings/:key    Set a single key (dispatches setserversetting command) (ADMIN+)
 ```
 
 ### Players
 
 ```
-GET    /api/servers/:id/players          Players from PlayerData/ files
+GET    /api/servers/:id/players          Get player list (dispatches getplayers command)
 GET    /api/players/:steamId             Player history across all servers
 ```
 
@@ -815,11 +722,9 @@ GET    /api/lists/:id                    Get list + entries
 PUT    /api/lists/:id                    Update list metadata (ADMIN+)
 DELETE /api/lists/:id                    Delete list (cascades entries) (ADMIN+)
 
-POST   /api/lists/:id/entries            Add/upsert entry (ADMIN+)
-DELETE /api/lists/:id/entries/:steamId   Remove entry (ADMIN+)
-POST   /api/lists/:id/sync/:serverId     Push list to server .txt file (ADMIN+)
-POST   /api/lists/sync-all               Push all assigned lists to all servers (ADMIN+)
-POST   /api/lists/:id/refresh            Fetch externalUrl, import SteamID64s (ADMIN+)
+POST   /api/lists/:id/entries            Add/upsert entry + dispatch ban/whitelist/setpermissions (ADMIN+)
+DELETE /api/lists/:id/entries/:steamId   Remove entry + dispatch unban/removewhitelist/removepermissions (ADMIN+)
+POST   /api/lists/:id/refresh            Fetch externalUrl, diff-import SteamID64s, dispatch commands (ADMIN+)
 
 GET    /api/servers/:id/list-assignments Lists assigned to server
 PUT    /api/servers/:id/list-assignments Atomically replace all assignments (ADMIN+)
@@ -829,7 +734,7 @@ PUT    /api/servers/:id/list-assignments Atomically replace all assignments (ADM
 
 ```
 GET    /api/servers/:id/wipes            Wipe history
-POST   /api/servers/:id/wipe             Execute wipe (timeout: 300s) (ADMIN+)
+POST   /api/servers/:id/wipe             Dispatch wipe command + log result (ADMIN+)
 GET    /api/servers/:id/wipes/:wipeId    Wipe log detail
 ```
 
@@ -945,8 +850,7 @@ ServerContext (fetches /api/servers on mount)
 Page components → api.get/post('/api/servers/${id}/...') → Fastify routes
                                                               ↓
                                                        Prisma (DB)
-                                                       FileIOService (save files)
-                                                       DockerManager (process mgmt)
+                                                       rcon-adapter → DockerManager (commands)
 ```
 
 ### AuthContext
@@ -1025,21 +929,23 @@ Tailwind provides:
 
 ---
 
-## Scheduled Wipe Example
+## Scheduled Task Examples
 
 ```json
+// COMMAND type — dispatch any console command on a schedule
 {
-  "type": "WIPE",
+  "type": "COMMAND",
   "cronExpr": "0 6 * * 1",
-  "label": "Weekly Monday Map Wipe",
-  "payload": {
-    "wipeType": "MAP_ONLY",
-    "keepPlayerData": true,
-    "keepAccessLists": true,
-    "createBackup": true,
-    "serverWillRestart": true,
-    "notes": "Auto weekly wipe"
-  }
+  "label": "Weekly announce",
+  "payload": "say Server wipe in 5 minutes!"
+}
+
+// RESTART type — restart the game container on a schedule
+{
+  "type": "RESTART",
+  "cronExpr": "0 4 * * *",
+  "label": "Daily restart",
+  "payload": ""
 }
 ```
 

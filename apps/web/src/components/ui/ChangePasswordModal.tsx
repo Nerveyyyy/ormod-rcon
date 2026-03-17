@@ -13,6 +13,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(
     () => () => {
@@ -20,6 +21,29 @@ export default function ChangePasswordModal({ onClose }: Props) {
     },
     []
   )
+
+  // Focus trap
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleTab as EventListener)
+    return () => document.removeEventListener('keydown', handleTab as EventListener)
+  }, [])
 
   const valid =
     currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword
@@ -49,13 +73,21 @@ export default function ChangePasswordModal({ onClose }: Props) {
   return (
     <div className="overlay" onClick={onClose}>
       <div
+        ref={modalRef}
         className="modal fadein"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: '420px' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="change-password-modal-title"
       >
         <div className="card-header">
-          <span className="card-title">Change Password</span>
-          <button className="btn btn-ghost btn-xs" onClick={onClose}>
+          <span className="card-title" id="change-password-modal-title">Change Password</span>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
             ✕
           </button>
         </div>
@@ -71,6 +103,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
                 fontSize: '12px',
                 padding: '12px 0',
               }}
+              role="alert"
             >
               Password changed successfully.
             </div>
@@ -78,12 +111,14 @@ export default function ChangePasswordModal({ onClose }: Props) {
             <>
               <div>
                 <label
+                  htmlFor="change-pw-current"
                   className="setting-name"
                   style={{ fontSize: '11px', marginBottom: '6px', display: 'block' }}
                 >
                   Current Password
                 </label>
                 <input
+                  id="change-pw-current"
                   className="text-input text-input-full"
                   type="password"
                   value={currentPassword}
@@ -94,12 +129,14 @@ export default function ChangePasswordModal({ onClose }: Props) {
               </div>
               <div>
                 <label
+                  htmlFor="change-pw-new"
                   className="setting-name"
                   style={{ fontSize: '11px', marginBottom: '6px', display: 'block' }}
                 >
                   New Password
                 </label>
                 <input
+                  id="change-pw-new"
                   className="text-input text-input-full"
                   type="password"
                   value={newPassword}
@@ -114,6 +151,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
                       marginTop: '4px',
                       fontFamily: 'var(--mono)',
                     }}
+                    role="alert"
                   >
                     Minimum 8 characters
                   </div>
@@ -121,12 +159,14 @@ export default function ChangePasswordModal({ onClose }: Props) {
               </div>
               <div>
                 <label
+                  htmlFor="change-pw-confirm"
                   className="setting-name"
                   style={{ fontSize: '11px', marginBottom: '6px', display: 'block' }}
                 >
                   Confirm New Password
                 </label>
                 <input
+                  id="change-pw-confirm"
                   className="text-input text-input-full"
                   type="password"
                   value={confirmPassword}
@@ -141,13 +181,17 @@ export default function ChangePasswordModal({ onClose }: Props) {
                       marginTop: '4px',
                       fontFamily: 'var(--mono)',
                     }}
+                    role="alert"
                   >
                     Passwords do not match
                   </div>
                 )}
               </div>
               {error && (
-                <div style={{ fontSize: '11px', color: 'var(--red)', fontFamily: 'var(--mono)' }}>
+                <div
+                  style={{ fontSize: '11px', color: 'var(--red)', fontFamily: 'var(--mono)' }}
+                  role="alert"
+                >
                   {error}
                 </div>
               )}

@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import EmptyState from '../components/ui/EmptyState.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
 type ScheduledTask = {
@@ -15,11 +15,50 @@ type ScheduledTask = {
   lastRun: string | null
 }
 
+type CronFreq = 'daily' | 'weekly' | 'monthly' | 'custom'
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function ordinal(n: number): string {
+  if (n === 1) return '1st'
+  if (n === 2) return '2nd'
+  if (n === 3) return '3rd'
+  return `${n}th`
+}
+
+function buildCron(
+  freq: CronFreq,
+  hour: number,
+  minute: number,
+  weekday: number,
+  monthDay: number,
+  custom: string
+): string {
+  if (freq === 'daily') return `${minute} ${hour} * * *`
+  if (freq === 'weekly') return `${minute} ${hour} * * ${weekday}`
+  if (freq === 'monthly') return `${minute} ${hour} ${monthDay} * *`
+  return custom.trim() || '0 6 * * *'
+}
+
+function friendlyScheduleDesc(
+  freq: CronFreq,
+  hour: number,
+  minute: number,
+  weekday: number,
+  monthDay: number
+): string {
+  const hh = String(hour).padStart(2, '0')
+  const mm = String(minute).padStart(2, '0')
+  const time = `${hh}:${mm}`
+  if (freq === 'daily') return `Every day at ${time}`
+  if (freq === 'weekly') return `Every ${WEEKDAY_NAMES[weekday] ?? 'weekday'} at ${time}`
+  if (freq === 'monthly') return `Every month on the ${ordinal(monthDay)} at ${time}`
+  return 'Custom schedule'
+}
+
 const typeColor: Record<string, string> = {
-  WIPE: 'pill-orange',
-  ANNOUNCEMENT: 'pill-blue',
   COMMAND: 'pill-green',
-  RESTART: 'pill-muted',
+  RESTART: 'pill-orange',
 }
 
 export default function Schedules() {
@@ -27,13 +66,45 @@ export default function Schedules() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Add form state
   const [newLabel, setNewLabel] = useState('')
-  const [newType, setNewType] = useState('COMMAND')
-  const [newCron, setNewCron] = useState('0 0 * * 5')
+  const [newType, setNewType] = useState<'COMMAND' | 'RESTART'>('COMMAND')
+  const [newFreq, setNewFreq] = useState<CronFreq>('daily')
+  const [newHour, setNewHour] = useState(6)
+  const [newMinute, setNewMinute] = useState(0)
+  const [newWeekday, setNewWeekday] = useState(1)
+  const [newMonthDay, setNewMonthDay] = useState(1)
+  const [newCustomCron, setNewCustomCron] = useState('')
   const [newPayload, setNewPayload] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
+
+  const addModalRef = useRef<HTMLDivElement>(null)
+
+  // Focus trap for add modal
+  useEffect(() => {
+    if (!showAdd) return
+    const modal = addModalRef.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [showAdd])
 
   const load = useCallback(() => {
     if (!activeServer?.id) return
@@ -41,7 +112,7 @@ export default function Schedules() {
     api
       .get<ScheduledTask[]>(`/servers/${activeServer.id}/schedules`)
       .then(setTasks)
-      .catch(console.error)
+      .catch((e) => setError((e as Error).message || 'Failed to load schedules'))
       .finally(() => setLoading(false))
   }, [activeServer?.id])
 
@@ -54,49 +125,68 @@ export default function Schedules() {
     api
       .put(`/servers/${activeServer.id}/schedules/${task.id}`, { enabled: !task.enabled })
       .then(load)
-      .catch(console.error)
+      .catch((e) => setError((e as Error).message || 'Failed to update schedule'))
   }
 
   const deleteTask = (taskId: string) => {
     if (!activeServer?.id) return
-    api.delete(`/servers/${activeServer.id}/schedules/${taskId}`).then(load).catch(console.error)
+    api
+      .delete(`/servers/${activeServer.id}/schedules/${taskId}`)
+      .then(load)
+      .catch((e) => setError((e as Error).message || 'Failed to delete task'))
   }
 
   const runNow = (taskId: string) => {
     if (!activeServer?.id) return
     api
       .post(`/servers/${activeServer.id}/schedules/${taskId}/run`)
-      .then(() => alert('Task triggered manually.'))
-      .catch((e) => alert(`Failed: ${(e as Error).message}`))
+      .catch((e) => setError(`Failed to trigger task: ${(e as Error).message}`))
+  }
+
+  const resetAddForm = () => {
+    setNewLabel('')
+    setNewType('COMMAND')
+    setNewFreq('daily')
+    setNewHour(6)
+    setNewMinute(0)
+    setNewWeekday(1)
+    setNewMonthDay(1)
+    setNewCustomCron('')
+    setNewPayload('')
+    setNewEnabled(true)
   }
 
   const createTask = () => {
     if (!activeServer?.id || !newLabel.trim()) return
+    const cronExpr = buildCron(newFreq, newHour, newMinute, newWeekday, newMonthDay, newCustomCron)
     api
       .post(`/servers/${activeServer.id}/schedules`, {
-        label: newLabel,
+        label: newLabel.trim(),
         type: newType,
-        cronExpr: newCron,
-        payload: newPayload || null,
+        cronExpr,
+        payload: newType === 'COMMAND' ? (newPayload || null) : null,
         enabled: newEnabled,
       })
       .then(() => {
         setShowAdd(false)
-        setNewLabel('')
-        setNewPayload('')
+        resetAddForm()
         load()
       })
-      .catch((e) => alert(`Failed: ${(e as Error).message}`))
+      .catch((e) => setError(`Failed to create task: ${(e as Error).message}`))
   }
 
-  const active = tasks.filter((s) => s.enabled).length
+  const activeCount = tasks.filter((s) => s.enabled).length
   const paused = tasks.filter((s) => !s.enabled).length
+
+  const schedulePreview = newFreq !== 'custom'
+    ? friendlyScheduleDesc(newFreq, newHour, newMinute, newWeekday, newMonthDay)
+    : newCustomCron.trim() || '—'
 
   return (
     <div className="main fadein">
       <PageHeader
         title="Schedules"
-        subtitle="Cron-based tasks · wipe · command · announcement · restart"
+        subtitle="Cron-based tasks · command · restart"
         actions={
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             + Add Schedule
@@ -104,13 +194,37 @@ export default function Schedules() {
         }
       />
 
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ── Add Schedule Modal ────────────────────────────────── */}
       {showAdd && (
         <div className="overlay" onClick={() => setShowAdd(false)}>
-          <div className="modal fadein" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={addModalRef}
+            className="modal fadein"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-schedule-modal-title"
+          >
             <div className="card-header">
-              <span className="card-title">New Scheduled Task</span>
-              <button className="btn btn-ghost btn-xs" onClick={() => setShowAdd(false)}>
+              <span className="card-title" id="add-schedule-modal-title">New Scheduled Task</span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowAdd(false)}
+                aria-label="Close dialog"
+              >
                 ✕
               </button>
             </div>
@@ -118,67 +232,197 @@ export default function Schedules() {
               className="card-body"
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
+              {/* Label */}
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="sched-label" className="setting-info">
                   <div className="setting-name">Label</div>
-                </div>
+                </label>
                 <input
+                  id="sched-label"
                   className="text-input"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
-                  placeholder="Weekly Map Wipe"
+                  placeholder="Daily Restart"
                 />
               </div>
+
+              {/* Type */}
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
+                <label htmlFor="sched-type" className="setting-info">
                   <div className="setting-name">Type</div>
-                </div>
+                </label>
                 <select
+                  id="sched-type"
                   className="sel-input"
                   value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
+                  onChange={(e) => setNewType(e.target.value as 'COMMAND' | 'RESTART')}
                 >
                   <option value="COMMAND">Command</option>
-                  <option value="ANNOUNCEMENT">Announcement</option>
-                  <option value="WIPE">Wipe</option>
                   <option value="RESTART">Restart</option>
                 </select>
               </div>
+
+              {/* Frequency */}
               <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
-                  <div className="setting-name">Cron Expression</div>
-                  <div className="setting-desc">e.g. 0 0 * * 5 = Every Friday midnight UTC</div>
-                </div>
-                <input
-                  className="text-input"
-                  value={newCron}
-                  onChange={(e) => setNewCron(e.target.value)}
-                  placeholder="0 0 * * 5"
-                />
+                <label htmlFor="sched-freq" className="setting-info">
+                  <div className="setting-name">Frequency</div>
+                </label>
+                <select
+                  id="sched-freq"
+                  className="sel-input"
+                  value={newFreq}
+                  onChange={(e) => setNewFreq(e.target.value as CronFreq)}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Custom</option>
+                </select>
               </div>
-              <div className="setting-row" style={{ padding: 0 }}>
-                <div className="setting-info">
-                  <div className="setting-name">Payload</div>
-                  <div className="setting-desc">
-                    Command text, announcement, or wipe type (MAP_ONLY / FULL / MAP_PLAYERS)
+
+              {/* Weekday (weekly only) */}
+              {newFreq === 'weekly' && (
+                <div className="setting-row" style={{ padding: 0 }}>
+                  <label htmlFor="sched-weekday" className="setting-info">
+                    <div className="setting-name">Day of Week</div>
+                  </label>
+                  <select
+                    id="sched-weekday"
+                    className="sel-input"
+                    value={newWeekday}
+                    onChange={(e) => setNewWeekday(Number(e.target.value))}
+                  >
+                    {WEEKDAY_NAMES.map((name, i) => (
+                      <option key={name} value={i}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Day of month (monthly only) */}
+              {newFreq === 'monthly' && (
+                <div className="setting-row" style={{ padding: 0 }}>
+                  <label htmlFor="sched-monthday" className="setting-info">
+                    <div className="setting-name">Day of Month</div>
+                    <div className="setting-desc">1–28</div>
+                  </label>
+                  <input
+                    id="sched-monthday"
+                    className="num-input"
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={newMonthDay}
+                    onChange={(e) => setNewMonthDay(Math.min(28, Math.max(1, Number(e.target.value))))}
+                    aria-label="Day of month"
+                  />
+                </div>
+              )}
+
+              {/* Hour + Minute (daily / weekly / monthly) */}
+              {newFreq !== 'custom' && (
+                <div className="setting-row" style={{ padding: 0 }}>
+                  <div className="setting-info">
+                    <div className="setting-name">Time (UTC)</div>
+                    <div className="setting-desc">Hour (0–23) and minute (0–59)</div>
+                  </div>
+                  <div className="row" style={{ gap: '8px' }}>
+                    <input
+                      className="num-input"
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={newHour}
+                      onChange={(e) => setNewHour(Math.min(23, Math.max(0, Number(e.target.value))))}
+                      aria-label="Hour"
+                      style={{ width: '72px' }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: 'var(--mono)',
+                        fontSize: '13px',
+                        color: 'var(--muted)',
+                        lineHeight: '32px',
+                      }}
+                    >
+                      :
+                    </span>
+                    <input
+                      className="num-input"
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={newMinute}
+                      onChange={(e) => setNewMinute(Math.min(59, Math.max(0, Number(e.target.value))))}
+                      aria-label="Minute"
+                      style={{ width: '72px' }}
+                    />
                   </div>
                 </div>
-                <input
-                  className="text-input"
-                  value={newPayload}
-                  onChange={(e) => setNewPayload(e.target.value)}
-                  placeholder="e.g. MAP_ONLY or forcesave"
-                />
+              )}
+
+              {/* Custom cron */}
+              {newFreq === 'custom' && (
+                <div className="setting-row" style={{ padding: 0 }}>
+                  <label htmlFor="sched-cron" className="setting-info">
+                    <div className="setting-name">Cron Expression</div>
+                    <div className="setting-desc">min hour dom month dow — e.g. 0 6 * * 1</div>
+                  </label>
+                  <input
+                    id="sched-cron"
+                    className="text-input"
+                    value={newCustomCron}
+                    onChange={(e) => setNewCustomCron(e.target.value)}
+                    placeholder="0 6 * * *"
+                  />
+                </div>
+              )}
+
+              {/* Schedule preview */}
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--border)',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '11px',
+                  color: 'var(--muted)',
+                }}
+              >
+                {schedulePreview}
               </div>
+
+              {/* Payload (COMMAND only) */}
+              {newType === 'COMMAND' && (
+                <div className="setting-row" style={{ padding: 0 }}>
+                  <label htmlFor="sched-payload" className="setting-info">
+                    <div className="setting-name">Payload</div>
+                    <div className="setting-desc">Console command to dispatch</div>
+                  </label>
+                  <input
+                    id="sched-payload"
+                    className="text-input"
+                    value={newPayload}
+                    onChange={(e) => setNewPayload(e.target.value)}
+                    placeholder="e.g. forcesave"
+                  />
+                </div>
+              )}
+
+              {/* Enable immediately */}
               <div className="setting-row" style={{ padding: 0 }}>
                 <div className="setting-info">
                   <div className="setting-name">Enable immediately</div>
                 </div>
-                <div
+                <button
                   className={`toggle ${newEnabled ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={newEnabled}
+                  aria-label="Enable immediately"
                   onClick={() => setNewEnabled((p) => !p)}
                 />
               </div>
+
               <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>
                   Cancel
@@ -186,7 +430,11 @@ export default function Schedules() {
                 <button
                   className="btn btn-primary"
                   onClick={createTask}
-                  disabled={!newLabel.trim()}
+                  disabled={
+                    !newLabel.trim() ||
+                    (newType === 'COMMAND' && !newPayload.trim()) ||
+                    (newFreq === 'custom' && !newCustomCron.trim())
+                  }
                 >
                   Create
                 </button>
@@ -200,7 +448,7 @@ export default function Schedules() {
         <div className="card-header">
           <span className="card-title">Scheduled Tasks</span>
           <span className="card-meta">
-            {active} active · {paused} paused
+            {activeCount} active · {paused} paused
           </span>
         </div>
         <div className="card-body-0">
@@ -220,7 +468,7 @@ export default function Schedules() {
             <EmptyState
               icon="◷"
               title="No scheduled tasks"
-              desc="Add a scheduled wipe, announcement, command, or restart."
+              desc="Add a scheduled command or restart."
             />
           ) : (
             <div
@@ -265,10 +513,15 @@ export default function Schedules() {
                   <div className="task-meta">
                     {(
                       [
-                        ['Cron', s.cronExpr],
                         ['Payload', s.payload ?? '—'],
-                        ['Next Run', s.nextRun ?? '—'],
-                        ['Last Run', s.lastRun ?? '—'],
+                        [
+                          'Next Run',
+                          s.nextRun ? new Date(s.nextRun).toLocaleString() : '—',
+                        ],
+                        [
+                          'Last Run',
+                          s.lastRun ? new Date(s.lastRun).toLocaleString() : '—',
+                        ],
                       ] as [string, string][]
                     ).map(([k, v]) => (
                       <div key={k} className="task-meta-item">
@@ -288,7 +541,7 @@ export default function Schedules() {
                   fontFamily: 'var(--mono)',
                 }}
               >
-                Pre-wipe announcements are sent automatically at T-60min and T-5min.
+                COMMAND tasks dispatch the payload as a console command. RESTART tasks restart the container.
               </div>
             </div>
           )}

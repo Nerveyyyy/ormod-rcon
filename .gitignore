@@ -54,4 +54,13 @@ certs/*.pem
 /tmp
 
 # Implementation plans (local only)
-docs/plans/
+docs/plans
+.superpowers
+
+apps/api/prisma/ormod-rcon.db
+apps/api/prisma/ormod-rcon.db-shm
+apps/api/prisma/ormod-rcon.db-wal
+
+docker-compose.override.yml
+
+serversettings.json

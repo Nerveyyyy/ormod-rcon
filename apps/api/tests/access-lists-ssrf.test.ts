@@ -146,7 +146,7 @@ describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
     expect(body.ok).toBe(true)
-    expect(body.imported).toBe(3) // exactly 3 valid Steam IDs
+    expect(body.banned).toBe(3) // exactly 3 valid Steam IDs
   })
 
   it('VIEWER cannot refresh → 403', async () => {

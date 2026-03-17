@@ -61,10 +61,11 @@ export default function Login() {
           </div>
 
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="login-email" className="setting-info">
               <div className="setting-name">Email</div>
-            </div>
+            </label>
             <input
+              id="login-email"
               className="text-input"
               type="email"
               autoComplete="email"
@@ -76,10 +77,11 @@ export default function Login() {
           </div>
 
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="login-password" className="setting-info">
               <div className="setting-name">Password</div>
-            </div>
+            </label>
             <input
+              id="login-password"
               className="text-input"
               type="password"
               autoComplete="current-password"
@@ -100,6 +102,7 @@ export default function Login() {
                 padding: '8px 10px',
                 border: '1px solid var(--red)',
               }}
+              role="alert"
             >
               {error}
             </div>

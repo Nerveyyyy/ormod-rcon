@@ -4,13 +4,28 @@ import { auth, canWrite, isOwner } from '../lib/auth.js'
 import type { SessionData } from '../config.js'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 
-const PUBLIC_PREFIXES = [
-  '/api/auth',
+// Routes that use prefix matching (genuinely cover multiple sub-paths)
+const PUBLIC_PREFIX_ROUTES = ['/api/auth']
+
+// Routes that must match exactly (no sub-path access)
+const PUBLIC_EXACT_ROUTES = [
   '/api/setup',
   '/api/capabilities',
   '/api/csrf-token',
   '/health',
 ]
+
+const VALID_ROLES = ['OWNER', 'ADMIN', 'VIEWER']
+
+/**
+ * Runtime guard that validates the session role is a known value.
+ * Throws if the role is missing or not in the allowed set.
+ */
+export function assertSessionRole(session: SessionData): void {
+  if (!VALID_ROLES.includes(session.user.role)) {
+    throw new Error(`Invalid session role: ${session.user.role}`)
+  }
+}
 
 export default fp(
   async function authPlugin(fastify) {
@@ -23,15 +38,19 @@ export default fp(
     })
 
     // Auth guard: all /api/* and /ws/* routes require a valid session.
-    // Exceptions: PUBLIC_PREFIXES whitelist.
+    // Exceptions: public routes whitelist.
     fastify.addHook('preHandler', async (request, reply) => {
       const url = request.url ?? ''
 
       // Static assets and non-API paths are public
       if (!url.startsWith('/api') && !url.startsWith('/ws')) return
 
-      // Whitelisted public API paths
-      if (PUBLIC_PREFIXES.some((p) => url === p || url.startsWith(p))) return
+      // Exact-match public routes (strip querystring for comparison)
+      const urlPath = url.split('?')[0] ?? url
+      if (PUBLIC_EXACT_ROUTES.includes(urlPath)) return
+
+      // Prefix-match public routes (e.g. /api/auth/*)
+      if (PUBLIC_PREFIX_ROUTES.some((p) => url.startsWith(p))) return
 
       const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) })
       if (!session?.user) {
@@ -39,7 +58,9 @@ export default fp(
       }
 
       // Attach to request so route handlers can read user/role without re-fetching
-      request.session = session as SessionData
+      const typedSession = session as SessionData
+      assertSessionRole(typedSession)
+      request.session = typedSession
     })
   },
   { name: 'auth', dependencies: ['env'] }

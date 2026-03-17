@@ -76,10 +76,11 @@ export default function Setup() {
           onSubmit={submit}
         >
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="setup-name" className="setting-info">
               <div className="setting-name">Display Name</div>
-            </div>
+            </label>
             <input
+              id="setup-name"
               className="text-input"
               required
               value={name}
@@ -88,10 +89,11 @@ export default function Setup() {
             />
           </div>
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="setup-email" className="setting-info">
               <div className="setting-name">Email</div>
-            </div>
+            </label>
             <input
+              id="setup-email"
               className="text-input"
               type="email"
               autoComplete="email"
@@ -102,10 +104,11 @@ export default function Setup() {
             />
           </div>
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="setup-password" className="setting-info">
               <div className="setting-name">Password</div>
-            </div>
+            </label>
             <input
+              id="setup-password"
               className="text-input"
               type="password"
               autoComplete="new-password"
@@ -116,10 +119,11 @@ export default function Setup() {
             />
           </div>
           <div className="setting-row" style={{ padding: 0 }}>
-            <div className="setting-info">
+            <label htmlFor="setup-confirm" className="setting-info">
               <div className="setting-name">Confirm Password</div>
-            </div>
+            </label>
             <input
+              id="setup-confirm"
               className="text-input"
               type="password"
               autoComplete="new-password"
@@ -140,6 +144,7 @@ export default function Setup() {
                 padding: '8px 10px',
                 border: '1px solid var(--red)',
               }}
+              role="alert"
             >
               {error}
             </div>

@@ -6,15 +6,16 @@
  */
 
 import fs from 'fs'
+import cron from 'node-cron'
 import type { FastifyServerOptions } from 'fastify'
 import buildApp from './app.js'
 import { dockerManager } from './services/docker-manager.js'
-import prisma from './db/prisma-client.js'
+import prisma, { scheduleSqliteMaintenance } from './db/prisma-client.js'
 import { registerCronJob } from './routes/schedule.js'
 
 // ── Optional TLS ────────────────────────────────────────────────────────────
 // Read cert paths from process.env BEFORE building the Fastify instance
-// (@fastify/env isn't available yet — chicken-and-egg).
+// (@fastify/env isn't available yet).
 const certPath = process.env.TLS_CERT_PATH || ''
 const keyPath = process.env.TLS_KEY_PATH || ''
 const tlsEnabled = certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)
@@ -27,19 +28,69 @@ const tlsOpts: FastifyServerOptions = tlsEnabled
 
 const app = await buildApp(tlsOpts)
 
+process.on('SIGTERM', async () => {
+  await app.close()
+  process.exit(0)
+})
+process.on('SIGINT', async () => {
+  await app.close()
+  process.exit(0)
+})
+
+// Prevent unhandled promise rejections from crashing the process.
+// Docker socket errors and similar infrastructure failures should degrade
+// gracefully, not kill the entire dashboard.
+process.on('unhandledRejection', (err) => {
+  app.log.error({ err }, 'Unhandled promise rejection (process kept alive)')
+})
+
+const port = Number(process.env.PORT ?? process.env.API_PORT) || app.config.PORT
+const host = process.env.HOST ?? process.env.API_HOST ?? app.config.HOST
+
 try {
-  await app.listen({ port: app.config.API_PORT, host: app.config.API_HOST })
+  await app.listen({ port, host })
   app.log.info(`TLS: ${tlsEnabled ? 'enabled' : 'disabled (no certs configured)'}`)
-
-  await dockerManager.reconnect()
-  app.log.info('Docker manager reconnected to running containers')
-
-  const tasks = await prisma.scheduledTask.findMany({ where: { enabled: true } })
-  for (const task of tasks) {
-    registerCronJob(task)
-  }
-  app.log.info(`Restored ${tasks.length} scheduled task(s) from DB`)
 } catch (err) {
   app.log.error(err)
   process.exit(1)
 }
+
+if (app.config.STATIC_PATH && !app.config.PUBLIC_URL) {
+  app.log.warn(
+    'PUBLIC_URL is not set but STATIC_PATH is (Docker mode). ' +
+    'CORS and auth will only trust localhost — set PUBLIC_URL to your dashboard URL.'
+  )
+}
+
+dockerManager.setLogger(app.log)
+
+// Start in degraded mode (no live log streams) if Docker is unavailable.
+try {
+  await dockerManager.reconnect()
+  app.log.info('Docker manager reconnected to running containers')
+} catch (err) {
+  app.log.warn({ err }, 'Docker manager reconnect failed — API starting in degraded mode (Docker unavailable)')
+}
+
+const tasks = await prisma.scheduledTask.findMany({ where: { enabled: true } })
+let restoredCount = 0
+for (const task of tasks) {
+  try {
+    registerCronJob(task)
+    restoredCount++
+  } catch (err) {
+    app.log.error({ err, taskId: task.id }, `Failed to restore scheduled task ${task.id} — skipping`)
+  }
+}
+app.log.info(`Restored ${restoredCount}/${tasks.length} scheduled task(s) from DB`)
+
+scheduleSqliteMaintenance()
+
+cron.schedule('0 2 * * *', async () => {
+  try {
+    await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    await prisma.verification.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+  } catch (err) {
+    app.log.error({ err }, 'Cleanup cron failed')
+  }
+})

@@ -1,13 +1,11 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { api } from '../api/client.js'
 
 export type Server = {
   id: string
   name: string
   serverName: string
-  savePath: string
   containerName: string | null // Docker container name (null = uses env default)
-  executablePath: string // Legacy field — prefer containerName
   mode: string // DOCKER | RCON
   gamePort: number
   queryPort: number
@@ -54,16 +52,19 @@ export function ServerProvider({ children }: { children: ReactNode }) {
 
   const activeServer = servers.find((s) => s.id === activeId) ?? null
 
+  const value = useMemo(
+    () => ({
+      servers,
+      activeServer,
+      setActiveServerId: setActiveId,
+      refresh: load,
+      loading,
+    }),
+    [servers, activeServer, load, loading]
+  )
+
   return (
-    <ServerContext.Provider
-      value={{
-        servers,
-        activeServer,
-        setActiveServerId: setActiveId,
-        refresh: load,
-        loading,
-      }}
-    >
+    <ServerContext.Provider value={value}>
       {children}
     </ServerContext.Provider>
   )

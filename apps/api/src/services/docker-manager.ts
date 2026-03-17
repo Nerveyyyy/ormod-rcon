@@ -29,11 +29,13 @@
 
 import http from 'http'
 import { EventEmitter } from 'events'
+import type { FastifyBaseLogger } from 'fastify'
 import prisma from '../db/prisma-client.js'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const OUTPUT_BUFFER_SIZE = 1000 // lines kept in memory per server
 const BUFFER_LINGER_MS = 60_000 // keep buffer 60s after container stops
+const DOCKER_REQUEST_TIMEOUT_MS = 30_000 // abort stalled Docker API calls
 
 // ── Docker connection helper ──────────────────────────────────────────────────
 // Supports both a Unix socket (default) and a TCP proxy (docker-compose.secure.yml).
@@ -73,6 +75,7 @@ function stripAnsi(str: string): string {
 /**
  * Send a request to the Docker API over the Unix socket.
  * Returns the parsed JSON response body (or raw string on parse failure).
+ * Throws if the HTTP status code is >= 400.
  */
 async function dockerRequest(method: string, path: string, body?: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -86,11 +89,23 @@ async function dockerRequest(method: string, path: string, body?: unknown): Prom
     const req = http.request(
       dockerOptions(method, path, Object.keys(headers).length ? headers : undefined),
       (res) => {
+        // AUDIT-75: listen for mid-response connection drops
+        res.on('error', reject)
+
         let data = ''
         res.on('data', (chunk: string) => {
           data += chunk
         })
         res.on('end', () => {
+          // AUDIT-4: check HTTP response status codes
+          if ((res.statusCode ?? 0) >= 400) {
+            reject(
+              new Error(
+                `Docker API error ${res.statusCode} ${method} ${path}: ${data.trim()}`
+              )
+            )
+            return
+          }
           try {
             resolve(data ? JSON.parse(data) : {})
           } catch {
@@ -99,6 +114,11 @@ async function dockerRequest(method: string, path: string, body?: unknown): Prom
         })
       }
     )
+
+    // AUDIT-60: apply a request-level timeout
+    req.setTimeout(DOCKER_REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Docker request timeout after ${DOCKER_REQUEST_TIMEOUT_MS}ms: ${method} ${path}`))
+    })
 
     req.on('error', reject)
     if (bodyStr) req.write(bodyStr)
@@ -139,19 +159,26 @@ class DockerManager {
   private outputEmitters = new Map<string, EventEmitter>()
   /** Active Docker log stream requests, keyed by serverId */
   private logStreams = new Map<string, http.ClientRequest>()
+  /** AUDIT-57: pending linger timers keyed by serverId */
+  private lingerTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Pino-compatible logger injected at startup */
+  private log: FastifyBaseLogger = console as unknown as FastifyBaseLogger
+
+  /** Inject the Fastify logger so all output goes through Pino. */
+  setLogger(logger: FastifyBaseLogger): void {
+    this.log = logger
+  }
 
   // ── Container name resolution ─────────────────────────────────────────────
 
   /**
    * Resolve the Docker container name for a server.
-   * Prefers the explicit `containerName` field (new), falls back to the legacy
-   * `executablePath` field (repurposed), then falls back to GAME_CONTAINER_NAME.
+   * Uses the explicit `containerName` field, falling back to GAME_CONTAINER_NAME.
    */
   private async getContainerName(serverId: string): Promise<string> {
     const server = await prisma.server.findUniqueOrThrow({ where: { id: serverId } })
     const name =
       server.containerName?.trim() ||
-      server.executablePath.trim() ||
       process.env.GAME_CONTAINER_NAME ||
       'ormod-game'
     // Defense in depth: reject names that could inject Docker API path segments.
@@ -269,6 +296,8 @@ class DockerManager {
 
       // 101 Switching Protocols → socket is now the raw PTY master connection
       req.on('upgrade', (_res, socket) => {
+        // AUDIT-77: listen for socket errors before writing
+        socket.on('error', (err: Error) => settle(reject, err))
         socket.write(`${cmd}\n`, (err) => {
           socket.end()
           if (err) settle(reject, err as Error)
@@ -307,6 +336,13 @@ class DockerManager {
    *                We parse frames, extract payload, then split lines.
    */
   private startLogStream(serverId: string, containerName: string): void {
+    // AUDIT-57: cancel any pending linger timer before starting a fresh stream
+    const existingLinger = this.lingerTimers.get(serverId)
+    if (existingLinger !== undefined) {
+      clearTimeout(existingLinger)
+      this.lingerTimers.delete(serverId)
+    }
+
     this.stopLogStream(serverId) // clean up any existing stream
 
     const outputBuffer: string[] = []
@@ -323,71 +359,81 @@ class DockerManager {
       emitter.emit('line', text)
     }
 
-    // Inspect first to detect TTY mode; default to true (our game container)
-    this.inspect(containerName).then((info) => {
-      const isTty = info?.tty !== false // true if unknown or explicitly true
+    // AUDIT-6: inspect().then() now has a .catch() to emit exit on failure
+    this.inspect(containerName)
+      .then((info) => {
+        const isTty = info?.tty !== false // true if unknown or explicitly true
 
-      const req = http.request(
-        dockerOptions(
-          'GET',
-          `/containers/${containerName}/logs?follow=true&stdout=true&stderr=true&tail=100`
-        ),
-        (res) => {
-          if (isTty) {
-            // ── TTY mode: raw PTY bytes, \r\n line endings ─────────────────
-            let lineBuffer = ''
-
-            res.on('data', (chunk: Buffer) => {
-              lineBuffer += stripAnsi(chunk.toString('utf-8'))
-              const lines = lineBuffer.split(/\r?\n/)
-              lineBuffer = lines.pop() ?? '' // last may be incomplete
-              for (const line of lines) {
-                pushLine(line.trimEnd())
-              }
+        const req = http.request(
+          dockerOptions(
+            'GET',
+            `/containers/${containerName}/logs?follow=true&stdout=true&stderr=true&tail=100`
+          ),
+          (res) => {
+            // AUDIT-75: handled at res level for mid-stream connection drops
+            res.on('error', (err: Error) => {
+              pushLine(`# Log stream error: ${err.message}`)
+              emitter.emit('exit')
             })
 
-            res.on('end', () => {
-              if (lineBuffer) pushLine(lineBuffer.trimEnd())
-              this._onStreamEnd(serverId, emitter)
-            })
-          } else {
-            // ── Non-TTY mode: 8-byte Docker multiplex frames ───────────────
-            // Frame header: [stream(1B), 0, 0, 0, size(4B big-endian)]
-            let frameBuffer = Buffer.alloc(0)
+            if (isTty) {
+              // ── TTY mode: raw PTY bytes, \r\n line endings ─────────────────
+              let lineBuffer = ''
 
-            res.on('data', (chunk: Buffer) => {
-              frameBuffer = Buffer.concat([frameBuffer, chunk])
-              while (frameBuffer.length >= 8) {
-                const frameSize = frameBuffer.readUInt32BE(4)
-                if (frameBuffer.length < 8 + frameSize) break
-                const payload = frameBuffer.subarray(8, 8 + frameSize).toString('utf-8')
-                frameBuffer = frameBuffer.subarray(8 + frameSize)
-                for (const raw of stripAnsi(payload).split('\n')) {
-                  pushLine(raw.trimEnd())
+              res.on('data', (chunk: Buffer) => {
+                lineBuffer += stripAnsi(chunk.toString('utf-8'))
+                const lines = lineBuffer.split(/\r?\n/)
+                lineBuffer = lines.pop() ?? '' // last may be incomplete
+                for (const line of lines) {
+                  pushLine(line.trimEnd())
                 }
-              }
-            })
+              })
 
-            res.on('end', () => {
-              this._onStreamEnd(serverId, emitter)
-            })
+              res.on('end', () => {
+                if (lineBuffer) pushLine(lineBuffer.trimEnd())
+                this._onStreamEnd(serverId, emitter)
+              })
+            } else {
+              // ── Non-TTY mode: 8-byte Docker multiplex frames ───────────────
+              // Frame header: [stream(1B), 0, 0, 0, size(4B big-endian)]
+              let frameBuffer = Buffer.alloc(0)
+
+              res.on('data', (chunk: Buffer) => {
+                frameBuffer = Buffer.concat([frameBuffer, chunk])
+                while (frameBuffer.length >= 8) {
+                  const frameSize = frameBuffer.readUInt32BE(4)
+                  if (frameBuffer.length < 8 + frameSize) break
+                  const payload = frameBuffer.subarray(8, 8 + frameSize).toString('utf-8')
+                  frameBuffer = frameBuffer.subarray(8 + frameSize)
+                  for (const raw of stripAnsi(payload).split('\n')) {
+                    pushLine(raw.trimEnd())
+                  }
+                }
+              })
+
+              res.on('end', () => {
+                this._onStreamEnd(serverId, emitter)
+              })
+            }
           }
+        )
 
-          res.on('error', (err: Error) => {
-            pushLine(`# Log stream error: ${err.message}`)
-            emitter.emit('exit')
-          })
-        }
-      )
+        // No timeout on log streams — they follow indefinitely until the
+        // container stops or stopLogStream() destroys the request.
 
-      req.on('error', (err: Error) => {
-        emitter.emit('line', `# Docker connection error: ${err.message}`)
+        req.on('error', (err: Error) => {
+          emitter.emit('line', `# Docker connection error: ${err.message}`)
+          emitter.emit('exit')
+        })
+
+        req.end()
+        this.logStreams.set(serverId, req)
+      })
+      .catch((err: Error) => {
+        // AUDIT-6: inspect() failure — emit exit so callers know the stream died
+        this.log.error({ err, serverId }, 'docker-manager: inspect failed, log stream not started')
         emitter.emit('exit')
       })
-
-      req.end()
-      this.logStreams.set(serverId, req)
-    })
   }
 
   private _onStreamEnd(serverId: string, emitter: EventEmitter): void {
@@ -397,10 +443,13 @@ class DockerManager {
     emitter.emit('exit')
     this.logStreams.delete(serverId)
 
-    setTimeout(() => {
+    // AUDIT-57: store timer ID so a quick restart can cancel it
+    const timer = setTimeout(() => {
       this.outputBuffers.delete(serverId)
       this.outputEmitters.delete(serverId)
+      this.lingerTimers.delete(serverId)
     }, BUFFER_LINGER_MS)
+    this.lingerTimers.set(serverId, timer)
   }
 
   private stopLogStream(serverId: string): void {
@@ -424,6 +473,28 @@ class DockerManager {
   // ── Startup reconciliation ────────────────────────────────────────────────
 
   /**
+   * Reconnect a single server — used when a new server is added and its
+   * container may already be running.
+   */
+  async reconnectServer(serverId: string): Promise<void> {
+    const server = await prisma.server.findUniqueOrThrow({ where: { id: serverId } })
+    const name =
+      server.containerName?.trim() ||
+      process.env.GAME_CONTAINER_NAME ||
+      'ormod-game'
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) return
+    try {
+      const info = await this.inspect(name)
+      if (info?.running) {
+        this.runningContainers.add(serverId)
+        this.startLogStream(serverId, name)
+      }
+    } catch {
+      // Docker unavailable — skip
+    }
+  }
+
+  /**
    * Called once on server startup.
    * Checks each registered server's container state and reconnects log
    * streams for any that are already running.
@@ -434,11 +505,11 @@ class DockerManager {
     for (const server of servers) {
       const name =
         server.containerName?.trim() ||
-        server.executablePath.trim() ||
         process.env.GAME_CONTAINER_NAME ||
         'ormod-game'
       if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) {
-        console.warn(`[reconnect] Skipping server ${server.id}: invalid container name`)
+        // AUDIT-95: use this.log instead of console.warn
+        this.log.warn({ serverId: server.id }, '[reconnect] Skipping server: invalid container name')
         continue
       }
       try {
@@ -454,4 +525,13 @@ class DockerManager {
   }
 }
 
-export const dockerManager = new DockerManager()
+// Use a global singleton so the same instance is shared even when this module
+// is evaluated twice (once by Vitest's module registry and once by the native
+// ESM loader used by @fastify/autoload). Without this, mocks applied in tests
+// patch the Vitest-registry instance while route handlers use the native-ESM
+// instance, causing real Docker socket calls in test runs.
+const SINGLETON_KEY = '__ormod_docker_manager__'
+if (!(globalThis as any)[SINGLETON_KEY]) {
+  ;(globalThis as any)[SINGLETON_KEY] = new DockerManager()
+}
+export const dockerManager: DockerManager = (globalThis as any)[SINGLETON_KEY]

@@ -1,37 +1,49 @@
 import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
-import { useServer } from '../hooks/useServer.js'
+import { useServerContext as useServer } from '../context/ServerContext.js'
 import { useLiveLog } from '../hooks/useLiveLog.js'
 import { api } from '../api/client.js'
 import { GAME_COMMANDS } from '../lib/constants.js'
 
-type ConsoleLine = { cls: string; text: string }
+type ConsoleLine = { lineId: number; cls: string; text: string }
+
+let _consoleLineId = 0
 
 export default function Console() {
   const { activeServer } = useServer()
-  const liveLog = useLiveLog(activeServer?.id ?? null)
+  const { lines: liveLog, status: wsStatus } = useLiveLog(activeServer?.id ?? null)
   const [lines, setLines] = useState<ConsoleLine[]>([
-    { cls: 'c-comment', text: '# Console ready.' },
+    { lineId: _consoleLineId++, cls: 'c-comment', text: '# Console ready.' },
   ])
   const [input, setInput] = useState('')
   const [hist, setHist] = useState<string[]>([])
   const [hi, setHi] = useState(-1)
+  const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const lastLogRef = useRef<number>(0)
+
+  const appendLine = (cls: string, text: string) => {
+    setLines((prev) => [...prev.slice(-999), { lineId: _consoleLineId++, cls, text }])
+  }
 
   // Load historical log on mount / server change
   useEffect(() => {
     if (!activeServer?.id) return
-    setLines([{ cls: 'c-comment', text: '# Loading log history…' }])
+    setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Loading log history…' }])
     api
-      .get<{ lines: string[] }>(`/servers/${activeServer.id}/console/log?lines=100`)
+      .get<{ lines: string[] }>(`/servers/${activeServer.id}/console/log?lines=1000`)
       .then((data) => {
-        const initial = (data.lines ?? []).map((l) => ({ cls: 'c-log', text: l }))
-        setLines([...initial, { cls: 'c-comment', text: '# Live stream active.' }])
+        const initial = (data.lines ?? []).map((l) => ({
+          lineId: _consoleLineId++,
+          cls: 'c-log',
+          text: l,
+        }))
+        setLines([...initial.slice(-999), { lineId: _consoleLineId++, cls: 'c-comment', text: '# Live stream active.' }])
       })
-      .catch(() =>
-        setLines([{ cls: 'c-comment', text: '# Log unavailable — server may not be running.' }])
-      )
+      .catch((e) => {
+        setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Log unavailable — server may not be running.' }])
+        setError((e as Error).message || 'Failed to load log history')
+      })
     lastLogRef.current = 0
   }, [activeServer?.id])
 
@@ -41,7 +53,13 @@ export default function Console() {
     const newLines = liveLog.slice(lastLogRef.current)
     if (newLines.length === 0) return
     lastLogRef.current = liveLog.length
-    setLines((l) => [...l, ...newLines.map((ll) => ({ cls: 'c-log', text: ll.raw }))])
+    setLines((prev) => {
+      const appended = [
+        ...prev,
+        ...newLines.map((ll) => ({ lineId: ll.lineId, cls: 'c-log', text: ll.raw })),
+      ]
+      return appended.slice(-1000)
+    })
   }, [liveLog])
 
   useEffect(() => {
@@ -51,26 +69,31 @@ export default function Console() {
   const run = () => {
     if (!input.trim()) return
     const cmd = input.trim()
-    setLines((l) => [...l, { cls: 'c-input', text: `  ${cmd}` }])
     setHist((h) => [cmd, ...h])
     setHi(-1)
     setInput('')
     if (activeServer?.id) {
       api
         .post(`/servers/${activeServer.id}/console/command`, { command: cmd })
-        .then(() => setLines((l) => [...l, { cls: 'c-ok', text: '  [OK] Command dispatched.' }]))
-        .catch(() =>
-          setLines((l) => [
-            ...l,
-            { cls: 'c-err', text: '  [ERR] Command failed — server not running?' },
-          ])
-        )
+        .then(() => appendLine('c-ok', '  [OK] Command dispatched.'))
+        .catch((e) => {
+          appendLine('c-err', '  [ERR] Command failed — server not running?')
+          setError((e as Error).message || 'Command failed')
+        })
     } else {
-      setLines((l) => [...l, { cls: 'c-err', text: '  [ERR] No active server selected.' }])
+      appendLine('c-err', '  [ERR] No active server selected.')
     }
   }
 
   const connected = activeServer?.running ?? false
+
+  const wsStatusLabel =
+    wsStatus === 'connected' ? 'Connected' :
+    wsStatus === 'connecting' ? 'Connecting…' : 'Not Running'
+
+  const wsStatusPill =
+    wsStatus === 'connected' ? 'pill-green' :
+    wsStatus === 'connecting' ? 'pill-orange' : 'pill-muted'
 
   return (
     <div className="main fadein">
@@ -80,27 +103,42 @@ export default function Console() {
         actions={
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => setLines([{ cls: 'c-comment', text: '# Console cleared.' }])}
+            onClick={() => setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Console cleared.' }])}
           >
             Clear
           </button>
         }
       />
 
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="grid-3">
         <div className="col">
           <div className="card">
             <div className="card-header">
               <span className="card-title">Terminal</span>
-              <span className={`pill ${connected ? 'pill-green' : 'pill-muted'}`}>
-                {connected && <span className="dot dot-green pulse" />}
-                {connected ? 'Connected' : 'Not Running'}
+              <span className={`pill ${wsStatusPill}`}>
+                {connected && wsStatus === 'connected' && (
+                  <span className="dot dot-green pulse" />
+                )}
+                {wsStatusLabel}
               </span>
             </div>
             <div className="card-body">
-              <div className="console-out">
-                {lines.map((l, i) => (
-                  <div key={`${l.cls}-${i}`} className={`c-line ${l.cls}`}>
+              <div className="console-out" aria-live="polite" aria-label="Console output">
+                {lines.map((l) => (
+                  <div key={l.lineId} className={`c-line ${l.cls}`}>
                     {l.text || '\u00A0'}
                   </div>
                 ))}
@@ -127,6 +165,7 @@ export default function Console() {
                   }}
                   placeholder="type a command..."
                   autoFocus
+                  aria-label="Console command input"
                 />
                 <button className="btn btn-primary btn-sm" onClick={run}>
                   Run
@@ -142,7 +181,19 @@ export default function Console() {
           </div>
           <div className="card-body-0" style={{ maxHeight: '460px', overflowY: 'auto' }}>
             {GAME_COMMANDS.map((q) => (
-              <div key={q.cmd} className="quick-cmd" onClick={() => setInput(q.cmd + ' ')}>
+              <div
+                key={q.cmd}
+                className="quick-cmd"
+                role="button"
+                tabIndex={0}
+                onClick={() => setInput(q.cmd + ' ')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setInput(q.cmd + ' ')
+                  }
+                }}
+              >
                 <span className={`perm perm-${q.perm}`} style={{ flexShrink: 0 }}>
                   [{q.perm}]
                 </span>

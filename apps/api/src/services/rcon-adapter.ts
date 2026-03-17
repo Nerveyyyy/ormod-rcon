@@ -11,6 +11,8 @@
  *   route → getAdapter() → WebSocketRconAdapter → TCP binary RCON → game
  */
 
+import { dockerManager } from './docker-manager.js'
+
 export interface RconAdapter {
   sendCommand(cmd: string): Promise<string>
   isConnected(): boolean
@@ -21,8 +23,6 @@ export class DockerExecAdapter implements RconAdapter {
   constructor(private serverId: string) {}
 
   async sendCommand(cmd: string): Promise<string> {
-    // Lazy import avoids circular dependency chain
-    const { dockerManager } = await import('./docker-manager.js')
     await dockerManager.sendCommand(this.serverId, cmd)
     return 'Command dispatched via docker exec'
   }

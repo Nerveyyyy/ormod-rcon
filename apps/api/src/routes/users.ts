@@ -14,9 +14,10 @@ const createUserBody = {
   type: 'object',
   required: ['name', 'email', 'password', 'role'],
   properties: {
-    name: { type: 'string', minLength: 1 },
-    email: { type: 'string', format: 'email' },
-    password: { type: 'string', minLength: 8 },
+    // AUDIT-68: add maxLength constraints
+    name: { type: 'string', minLength: 1, maxLength: 255 },
+    email: { type: 'string', format: 'email', maxLength: 255 },
+    password: { type: 'string', minLength: 8, maxLength: 255 },
     role: { type: 'string', enum: ['ADMIN', 'VIEWER'] },
   },
 } as const
@@ -33,8 +34,28 @@ const changePasswordBody = {
   type: 'object',
   required: ['currentPassword', 'newPassword'],
   properties: {
-    currentPassword: { type: 'string', minLength: 1 },
-    newPassword: { type: 'string', minLength: 8 },
+    currentPassword: { type: 'string', minLength: 1, maxLength: 255 },
+    newPassword: { type: 'string', minLength: 8, maxLength: 255 },
+  },
+} as const
+
+// AUDIT-39: reply schema for listUsers — omits password fields, additionalProperties: false
+const userItem = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    email: { type: 'string' },
+    role: { type: 'string' },
+    createdAt: { type: 'string' },
+  },
+} as const
+
+const listUsersReply = {
+  200: {
+    type: 'array',
+    items: userItem,
   },
 } as const
 
@@ -45,6 +66,7 @@ const usersRoutes: FastifyPluginAsync = async (app) => {
   app.route({
     method: 'GET',
     url: '/users',
+    schema: { response: listUsersReply },
     preHandler: [requireOwner],
     handler: ctrl.listUsers,
   })

@@ -1,28 +1,3 @@
-# ── ORMOD: Directive — Game Server ────────────────────────────────────────
-#
-# Simple game server container. Runs as root (standard for game servers).
-# No permission headaches — root can write anywhere.
-#
-# Volume mounts:
-#   /game   — game binary directory (bind-mount or SteamCMD install)
-#   /saves  — save data / server config files
-#
-# The entrypoint symlinks /saves → $HOME/.config/ORMOD/Playtest so the
-# game writes saves to the mounted volume transparently.
-#
-# ┌─ CURRENT: Manual binary ───────────────────────────────────────────────┐
-# │  Binary is bind-mounted from the host via GAME_BINARY_PATH.           │
-# └────────────────────────────────────────────────────────────────────────┘
-#
-# ┌─ FUTURE: SteamCMD auto-update ─────────────────────────────────────────┐
-# │  SteamCMD is already installed. To switch:                             │
-# │  1. Add to entrypoint or Dockerfile:                                   │
-# │       steamcmd +force_install_dir /game +login anonymous \             │
-# │               +app_update <STEAM_APP_ID> validate +quit                │
-# │  2. Remove GAME_BINARY_PATH volume mount from docker-compose.yml      │
-# │  3. Add a named volume for /game to persist the install               │
-# └────────────────────────────────────────────────────────────────────────┘
-
 FROM ubuntu:22.04
 
 RUN dpkg --add-architecture i386 \
@@ -30,25 +5,29 @@ RUN dpkg --add-architecture i386 \
  && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    gosu \
     lib32gcc-s1 \
     libstdc++6 \
     libgcc-s1 \
  && rm -rf /var/lib/apt/lists/*
 
-# Install SteamCMD and run it once to download the Steam client runtime.
-# The game binary links against steamclient.so from the Steamworks SDK.
+# SteamCMD + Steam client runtime (game binary links against steamclient.so)
 RUN mkdir -p /root/steamcmd \
  && curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
     | tar zxf - -C /root/steamcmd \
- && /root/steamcmd/steamcmd.sh +quit \
- && mkdir -p /root/.steam/sdk64 /root/.steam/sdk32 \
- && ln -sf /root/steamcmd/linux64/steamclient.so /root/.steam/sdk64/steamclient.so \
- && ln -sf /root/steamcmd/linux32/steamclient.so /root/.steam/sdk32/steamclient.so
+ && /root/steamcmd/steamcmd.sh +quit
 
-# Mount points
+RUN groupadd --gid 1000 gameserver \
+ && useradd --uid 1000 --gid 1000 --home /home/gameserver --create-home gameserver
+
+# Copy steamclient.so into the gameserver user's home (where the binary looks for it).
+# Must be a copy, not a symlink — gameserver user cannot traverse /root/.
+RUN mkdir -p /home/gameserver/.steam/sdk64 /home/gameserver/.steam/sdk32 \
+ && cp /root/steamcmd/linux64/steamclient.so /home/gameserver/.steam/sdk64/steamclient.so \
+ && cp /root/steamcmd/linux32/steamclient.so /home/gameserver/.steam/sdk32/steamclient.so \
+ && chown -R gameserver:gameserver /home/gameserver/.steam
+
 RUN mkdir -p /game /saves
-
-ENV HOME=/root
 
 EXPOSE 27015/udp
 EXPOSE 27016/udp

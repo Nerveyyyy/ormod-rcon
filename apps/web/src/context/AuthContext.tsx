@@ -44,21 +44,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Don't run auth check on public pages
-    if (PUBLIC_PATHS.includes(location.pathname)) {
-      setLoading(false)
-      return
-    }
-
     async function checkAuth() {
       try {
-        // 1. Check if first-run setup is needed
-        const setupRes = await fetch('/api/setup')
-        const setupData = await setupRes.json().catch(() => ({}))
-        if (setupData?.setupRequired) {
-          navigate('/setup', { replace: true })
-          return
+        // 1. Check if first-run setup is needed (always, except when already on /setup)
+        if (location.pathname !== '/setup') {
+          const setupRes = await fetch('/api/setup')
+          const setupData = await setupRes.json().catch(() => ({}))
+          if (setupData?.setupRequired) {
+            navigate('/setup', { replace: true })
+            return
+          }
         }
+
+        // Don't validate session on public pages
+        if (PUBLIC_PATHS.includes(location.pathname)) return
+
+        // Skip re-validation if user is already populated
+        if (user) return
 
         // 2. Check current session
         const { data: session } = await authClient.getSession()
