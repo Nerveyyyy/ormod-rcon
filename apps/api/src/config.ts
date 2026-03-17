@@ -46,9 +46,11 @@ export type EnvConfig = {
  * - If PUBLIC_URL is set (production / Docker): that URL only.
  * - Otherwise: localhost variants on the given port so local dev just works.
  */
-export function computeOrigins(publicUrl: string, port: number | string): string[] {
+export function computeOrigins(publicUrl: string, _port: number | string): string[] {
   if (publicUrl) return [publicUrl]
-  return [`http://localhost:${port}`, `http://127.0.0.1:${port}`]
+  // Local dev: trust any localhost origin regardless of port.
+  // Vite defaults to :3000, API to :3001, but users may change either.
+  return ['http://localhost:*', 'http://127.0.0.1:*']
 }
 
 // ── Session type (attached by auth plugin preHandler) ────────────────────────

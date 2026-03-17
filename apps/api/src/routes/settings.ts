@@ -20,6 +20,20 @@ const settingKeyBody = {
   properties: { value: {} },
 } as const
 
+const bulkSettingsBody = {
+  type: 'object',
+  required: ['changes'],
+  additionalProperties: false,
+  properties: {
+    changes: {
+      type: 'object',
+      additionalProperties: {
+        oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+      },
+    },
+  },
+} as const
+
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.route({
     method: 'GET',
@@ -34,6 +48,14 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     schema: { params: settingKeyParams, body: settingKeyBody },
     preHandler: [requireWrite],
     handler: ctrl.updateSettingKey,
+  })
+
+  app.route({
+    method: 'PUT',
+    url: '/servers/:id/settings',
+    schema: { params: serverParams, body: bulkSettingsBody },
+    preHandler: [requireWrite],
+    handler: ctrl.bulkUpdateSettings,
   })
 }
 

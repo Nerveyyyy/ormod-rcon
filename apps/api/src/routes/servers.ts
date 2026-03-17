@@ -91,6 +91,57 @@ const serversRoutes: FastifyPluginAsync = async (app) => {
     schema: { params: serverParams },
     preHandler: [requireWrite],
     handler: ctrl.restartServer })
+
+  // ── Dashboard Quick Actions ─────────────────────────────────────────────────
+
+  app.route({ method: 'POST',   url: '/servers/:id/actions/forcesave',
+    schema: { params: serverParams },
+    preHandler: [requireWrite],
+    handler: ctrl.forceSave })
+
+  app.route({ method: 'POST',   url: '/servers/:id/actions/announcement',
+    schema: {
+      params: serverParams,
+      body: {
+        type: 'object',
+        required: ['message'],
+        additionalProperties: false,
+        properties: { message: { type: 'string', minLength: 1 } },
+      },
+    },
+    preHandler: [requireWrite],
+    handler: ctrl.sendAnnouncement })
+
+  app.route({ method: 'POST',   url: '/servers/:id/actions/weather',
+    schema: {
+      params: serverParams,
+      body: {
+        type: 'object',
+        required: ['type'],
+        additionalProperties: false,
+        properties: { type: { type: 'string' } },
+      },
+    },
+    preHandler: [requireWrite],
+    handler: ctrl.setWeather })
+
+  app.route({ method: 'POST',   url: '/servers/:id/actions/killall',
+    schema: { params: serverParams },
+    preHandler: [requireWrite],
+    handler: ctrl.killAll })
+
+  app.route({ method: 'POST',   url: '/servers/:id/actions/broadcast',
+    schema: {
+      params: serverParams,
+      body: {
+        type: 'object',
+        required: ['message'],
+        additionalProperties: false,
+        properties: { message: { type: 'string', minLength: 1 } },
+      },
+    },
+    preHandler: [requireWrite],
+    handler: ctrl.broadcastMessage })
 }
 
 export default serversRoutes

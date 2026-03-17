@@ -57,11 +57,6 @@ export default function Dashboard() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [liveLog])
 
-  const dispatch = (command: string) => {
-    if (!activeServer?.id) return
-    api.post(`/servers/${activeServer.id}/console/command`, { command }).catch(console.error)
-  }
-
   const maxPlayers = settings?.MaxPlayers ?? '—'
   const worldName = settings?.WorldName ?? '—'
   const playerCount = playerRaw !== null ? (extractPlayerCount(playerRaw) ?? '?') : '—'
@@ -140,22 +135,46 @@ export default function Dashboard() {
             </div>
             <div className="card-body">
               <div className="btn-group">
-                <button className="btn btn-primary btn-sm" onClick={() => dispatch('forcesave')}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() =>
+                    activeServer?.id &&
+                    api.post(`/servers/${activeServer.id}/actions/forcesave`).catch(console.error)
+                  }
+                >
                   Force Save
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => dispatch('announcement Server maintenance in 5 minutes.')}
+                  onClick={() =>
+                    activeServer?.id &&
+                    api
+                      .post(`/servers/${activeServer.id}/actions/announcement`, {
+                        message: 'Server maintenance in 5 minutes.',
+                      })
+                      .catch(console.error)
+                  }
                 >
                   Announcement
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => dispatch('setweather clear')}
+                  onClick={() =>
+                    activeServer?.id &&
+                    api
+                      .post(`/servers/${activeServer.id}/actions/weather`, { type: 'clear' })
+                      .catch(console.error)
+                  }
                 >
                   Set Weather
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={() => dispatch('killall')}>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() =>
+                    activeServer?.id &&
+                    api.post(`/servers/${activeServer.id}/actions/killall`).catch(console.error)
+                  }
+                >
                   Kill All
                 </button>
               </div>

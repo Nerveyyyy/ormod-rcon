@@ -1,7 +1,18 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { dockerManager } from '../services/docker-manager.js'
+import { getAdapter } from '../services/rcon-adapter.js'
 import { unregisterCronJob } from './schedule.js'
+
+const VALID_WEATHER_TYPES = [
+  'cloudy',
+  'stormy',
+  'overcast',
+  'sparse',
+  'clear',
+  'lightningstorm',
+  'lightrain',
+] as const
 
 type ServerBody = {
   name: string
@@ -130,4 +141,83 @@ export async function restartServer(
   } catch (err) {
     return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) })
   }
+}
+
+// ── Dashboard Quick Actions ───────────────────────────────────────────────────
+
+type ActionParams = { id: string }
+
+async function dispatchServerAction(
+  req: FastifyRequest<{ Params: ActionParams }>,
+  reply: FastifyReply,
+  command: string,
+  action: string
+): Promise<{ ok: boolean; raw: string } | FastifyReply> {
+  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
+  try {
+    const adapter = await getAdapter(server)
+    const raw = await adapter.sendCommand(command)
+    await prisma.actionLog.create({
+      data: {
+        serverId: server.id,
+        performedBy: req.session!.user.id,
+        action,
+        details: command,
+      },
+    })
+    return { ok: true, raw }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return reply.status(503).send({ error: `Server unavailable: ${msg}` })
+  }
+}
+
+export async function forceSave(
+  req: FastifyRequest<{ Params: ActionParams }>,
+  reply: FastifyReply
+) {
+  return dispatchServerAction(req, reply, 'forcesave', 'COMMAND')
+}
+
+export async function sendAnnouncement(
+  req: FastifyRequest<{ Params: ActionParams; Body: { message: string } }>,
+  reply: FastifyReply
+) {
+  const { message } = req.body
+  if (!message || !message.trim()) {
+    return reply.status(400).send({ error: 'message must be a non-empty string' })
+  }
+  return dispatchServerAction(req, reply, `announcement ${message}`, 'COMMAND')
+}
+
+export async function setWeather(
+  req: FastifyRequest<{ Params: ActionParams; Body: { type: string } }>,
+  reply: FastifyReply
+) {
+  const { type } = req.body
+  if (!(VALID_WEATHER_TYPES as readonly string[]).includes(type)) {
+    return reply.status(400).send({
+      error: `Invalid weather type. Must be one of: ${VALID_WEATHER_TYPES.join(', ')}`,
+    })
+  }
+  return dispatchServerAction(req, reply, `setweather ${type}`, 'COMMAND')
+}
+
+export async function killAll(
+  req: FastifyRequest<{ Params: ActionParams }>,
+  reply: FastifyReply
+) {
+  return dispatchServerAction(req, reply, 'killall', 'COMMAND')
+}
+
+export async function broadcastMessage(
+  req: FastifyRequest<{ Params: ActionParams; Body: { message: string } }>,
+  reply: FastifyReply
+) {
+  const { message } = req.body
+  if (!message || !message.trim()) {
+    return reply.status(400).send({ error: 'message must be a non-empty string' })
+  }
+  return dispatchServerAction(req, reply, `say ${message}`, 'COMMAND')
 }

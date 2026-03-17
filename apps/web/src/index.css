@@ -1187,6 +1187,124 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Settings sidebar ─────────────────────────────────────────────────── */
+.settings-layout {
+  display: flex;
+  gap: 0;
+  min-height: 480px;
+}
+
+.settings-sidebar {
+  width: 180px;
+  background: var(--bg1);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.settings-sidebar-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  padding: 14px 16px 8px;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--muted);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.settings-tab:hover {
+  color: var(--text);
+  background: var(--bg2);
+}
+.settings-tab.active {
+  color: var(--orange);
+  background: var(--orange-bg);
+  border-left-color: var(--orange);
+}
+.settings-tab-abbr {
+  display: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.settings-tab-full {
+  display: inline;
+}
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.settings-section-header {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 14px 18px 8px;
+  font-style: italic;
+}
+
+.settings-banner {
+  padding: 10px 16px;
+  background: var(--orange-bg);
+  border-bottom: 1px solid rgba(217, 122, 48, 0.2);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.settings-banner-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.settings-banner-title {
+  font-size: 12px;
+  color: var(--orange);
+  font-weight: 500;
+}
+.settings-banner-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.setting-row.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .settings-sidebar {
+    width: 52px;
+  }
+  .settings-tab {
+    padding: 9px 0;
+    justify-content: center;
+  }
+  .settings-tab-abbr {
+    display: inline;
+  }
+  .settings-tab-full {
+    display: none;
+  }
+  .settings-sidebar-label {
+    display: none;
+  }
+}
+
 /* ── Error banner ─────────────────────────────────────────────────────── */
 .error-banner {
   background: var(--red-bg);
