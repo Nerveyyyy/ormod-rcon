@@ -176,4 +176,4 @@ Issues and pull requests are welcome. See the [Local Development](https://github
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) -- free to use and contribute to, no commercial use permitted.
+[PolyForm Noncommercial 1.0.0](LICENSE) - free to use and contribute to, no commercial use permitted.
