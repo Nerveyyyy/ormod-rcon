@@ -130,7 +130,7 @@ export default function ServerManagement() {
                   className="text-input"
                   value={containerName}
                   onChange={(e) => setContainerName(e.target.value)}
-                  placeholder="ormod-game"
+                  placeholder="ormod-server"
                   style={{ width: '300px' }}
                 />
               </div>

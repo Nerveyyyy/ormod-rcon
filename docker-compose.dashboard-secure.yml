@@ -1,0 +1,81 @@
+# Dashboard-only deployment with socket proxy hardening.
+# Use this when the game server runs separately and you want the dashboard
+# to access Docker through a filtered proxy instead of the raw socket.
+#
+# Usage:
+#   docker compose -f docker-compose.dashboard-secure.yml up -d
+
+services:
+  # ── Socket proxy ─────────────────────────────────────────────────────────────
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: ormod-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      POST: 1
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      INFO: 0
+      PING: 0
+      SERVICES: 0
+      SWARM: 0
+      TASKS: 0
+      SECRETS: 0
+      NODES: 0
+      BUILD: 0
+      EVENTS: 0
+      AUTH: 0
+      DISTRIBUTION: 0
+      PLUGINS: 0
+      SYSTEM: 0
+    networks:
+      - proxy-internal
+
+  # ── Dashboard ────────────────────────────────────────────────────────────────
+  ormod-dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: ormod-dashboard
+    restart: unless-stopped
+    depends_on:
+      socket-proxy:
+        condition: service_started
+    environment:
+      DATABASE_URL: file:/app/data/ormod-rcon.db
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      HOST: '0.0.0.0'
+      PORT: '3000'
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      STATIC_PATH: /app/apps/web/dist
+      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-server}
+      DOCKER_HOST: tcp://socket-proxy:2375
+    volumes:
+      - dashboard-data:/app/data
+    ports:
+      - '${DASHBOARD_PORT:-3000}:3000'
+    networks:
+      - default
+      - proxy-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+        reservations:
+          memory: 128M
+
+volumes:
+  dashboard-data:
+
+networks:
+  default:
+    name: ormod-network
+  proxy-internal:
+    internal: true
+    name: ormod-proxy-internal

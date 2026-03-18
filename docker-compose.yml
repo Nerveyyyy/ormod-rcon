@@ -9,28 +9,33 @@
 services:
 
   # ══════════════════════════════════════════════════════════════════════════════
-  # GAME SERVER
-  # This section will move to its own repo when WebSocket RCON lands.
-  # All vars here are compose-only — the dashboard API does not read them.
+  # GAME SERVER (convenience — included so `docker compose up` runs everything)
+  # This is a standalone image. Configure it directly below or run it separately
+  # using docker-compose.dashboard.yml and your own game server compose.
+  # See https://github.com/Nerveyyyy/ormod-server for full env var reference.
   # ══════════════════════════════════════════════════════════════════════════════
-  ormod-game:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.gameserver
-    container_name: ${GAME_CONTAINER_NAME:-ormod-game}
+  ormod-server:
+    image: ghcr.io/nerveyyyy/ormod-server:latest
+    container_name: ormod-server
     restart: unless-stopped
-    environment:
-      SERVER_NAME: ${SERVER_NAME:-MyOrmodServer}
-      GAME_BINARY_NAME: ${GAME_BINARY_NAME:-ORMODDirective}
     volumes:
-      - ${GAME_BINARY_PATH:-./docker/game-binary}:/game   # game binary directory
-      - ${SAVES_PATH:-game-saves}:/saves                  # save data + server configs
+      - ormod-game:/ormod
+      - ./config:/config
     ports:
-      - '${GAME_HOST:-0.0.0.0}:${GAME_PORT:-27015}:${GAME_PORT:-27015}/udp'
-      - '${GAME_HOST:-0.0.0.0}:${QUERY_PORT:-27016}:${QUERY_PORT:-27016}/udp'
-      - '${GAME_HOST:-0.0.0.0}:${KCP_PORT:-7777}:${KCP_PORT:-7777}/udp'
+      - '27015:27015/udp'
+      - '27016:27016/udp'
+      - '7777:7777/udp'
+    environment:
+      SERVER_NAME: MyServer
+      DESCRIPTION: An ORMOD Server
+      MAX_PLAYERS: '8'
     stdin_open: true  # dashboard writes commands to game stdin
     tty: true         # game reads commands via PTY; also produces raw log bytes (no framing)
+    logging:
+      driver: json-file
+      options:
+        max-size: '50m'
+        max-file: '3'
     deploy:
       resources:
         limits:
@@ -49,7 +54,7 @@ services:
     container_name: ormod-dashboard
     restart: unless-stopped
     depends_on:
-      ormod-game:
+      ormod-server:
         condition: service_started
     environment:
       DATABASE_URL: file:/app/data/ormod-rcon.db
@@ -58,7 +63,7 @@ services:
       PORT: '3000'
       PUBLIC_URL: ${PUBLIC_URL:-}
       STATIC_PATH: /app/apps/web/dist
-      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-game}
+      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-server}
     volumes:
       - dashboard-data:/app/data                # SQLite database (persisted)
       - /var/run/docker.sock:/var/run/docker.sock
@@ -73,5 +78,5 @@ services:
           memory: 128M
 
 volumes:
-  game-saves:
+  ormod-game:
   dashboard-data:

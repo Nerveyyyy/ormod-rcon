@@ -18,7 +18,7 @@ export const envSchema = {
     DATABASE_URL: { type: 'string' },
     DOCKER_SOCKET: { type: 'string', default: '/var/run/docker.sock' },
     DOCKER_HOST: { type: 'string', default: '' },
-    GAME_CONTAINER_NAME: { type: 'string', default: 'ormod-game' },
+    GAME_CONTAINER_NAME: { type: 'string', default: 'ormod-server' },
     TLS_CERT_PATH: { type: 'string', default: '' },
     TLS_KEY_PATH: { type: 'string', default: '' },
     LOG_LEVEL: { type: 'string', default: 'info' },

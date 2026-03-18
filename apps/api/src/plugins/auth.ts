@@ -10,7 +10,6 @@ const PUBLIC_PREFIX_ROUTES = ['/api/auth']
 // Routes that must match exactly (no sub-path access)
 const PUBLIC_EXACT_ROUTES = [
   '/api/setup',
-  '/api/capabilities',
   '/api/csrf-token',
   '/health',
 ]

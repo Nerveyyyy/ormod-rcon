@@ -1,0 +1,43 @@
+# Dashboard-only deployment.
+# Use this when the game server runs separately (its own host, its own compose,
+# or a standalone Docker run). The dashboard still controls the game container
+# via the Docker socket — both containers must be visible to the same Docker daemon.
+#
+# WARNING: mounts the raw Docker socket.
+# For internet-facing servers use docker-compose.dashboard-secure.yml (socket proxy).
+#
+# Quick start:
+#   cp .env.example .env
+#   # Edit .env — set BETTER_AUTH_SECRET, PUBLIC_URL, and GAME_CONTAINER_NAME
+#   docker compose -f docker-compose.dashboard.yml up -d
+
+services:
+  ormod-dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: ormod-dashboard
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: file:/app/data/ormod-rcon.db
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      HOST: '0.0.0.0'
+      PORT: '3000'
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      STATIC_PATH: /app/apps/web/dist
+      GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-server}
+    volumes:
+      - dashboard-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '${DASHBOARD_PORT:-3000}:3000'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+        reservations:
+          memory: 128M
+
+volumes:
+  dashboard-data:

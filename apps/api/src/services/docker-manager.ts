@@ -180,7 +180,7 @@ class DockerManager {
     const name =
       server.containerName?.trim() ||
       process.env.GAME_CONTAINER_NAME ||
-      'ormod-game'
+      'ormod-server'
     // Defense in depth: reject names that could inject Docker API path segments.
     // Upstream schema validation (routes/servers.ts) is the first line of defense.
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) {
@@ -481,7 +481,7 @@ class DockerManager {
     const name =
       server.containerName?.trim() ||
       process.env.GAME_CONTAINER_NAME ||
-      'ormod-game'
+      'ormod-server'
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) return
     try {
       const info = await this.inspect(name)
@@ -506,7 +506,7 @@ class DockerManager {
       const name =
         server.containerName?.trim() ||
         process.env.GAME_CONTAINER_NAME ||
-        'ormod-game'
+        'ormod-server'
       if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) {
         // AUDIT-95: use this.log instead of console.warn
         this.log.warn({ serverId: server.id }, '[reconnect] Skipping server: invalid container name')
