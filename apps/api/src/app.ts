@@ -27,13 +27,11 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
     ...opts,
   })
 
-  // Global rate limit: 100 requests per minute per IP.
-  // Auth endpoints get a stricter limit (5 req/min) to mitigate brute-force attacks.
+  // Global rate limit: 1000 requests per minute per IP.
+  // Auth endpoints (/api/auth/*) are rate-limited by BetterAuth internally
+  // (5 req/60s) since reply.hijack() bypasses Fastify's rate limiter.
   await app.register(rateLimit, {
-    max: (req) => {
-      if (req.url?.startsWith('/api/auth')) return 5
-      return 100
-    },
+    max: 1000,
     timeWindow: '1 minute',
   })
 
@@ -73,6 +71,14 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
     })
     app.setNotFoundHandler(async (req, reply) => {
       if (!req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+        // Block /setup after setup is complete — redirect to /login server-side
+        if (req.url === '/setup') {
+          const { default: prisma } = await import('./db/prisma-client.js')
+          const count = await prisma.user.count()
+          if (count > 0) {
+            return reply.redirect('/login')
+          }
+        }
         return reply.sendFile('index.html', staticPath)
       }
       return reply.status(404).send({ error: 'Not found' })

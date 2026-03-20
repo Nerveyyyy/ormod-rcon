@@ -25,7 +25,7 @@ export default function UserManagement() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER')
+  const [role, setRole] = useState<'OWNER' | 'ADMIN' | 'VIEWER'>('VIEWER')
   const [addError, setAddError] = useState('')
 
   // Focus trap ref for Create User modal
@@ -211,10 +211,11 @@ export default function UserManagement() {
                   id="create-user-role"
                   className="sel-input"
                   value={role}
-                  onChange={(e) => setRole(e.target.value as 'ADMIN' | 'VIEWER')}
+                  onChange={(e) => setRole(e.target.value as 'OWNER' | 'ADMIN' | 'VIEWER')}
                 >
                   <option value="VIEWER">Viewer</option>
                   <option value="ADMIN">Admin</option>
+                  <option value="OWNER">Owner</option>
                 </select>
               </div>
               {addError && (

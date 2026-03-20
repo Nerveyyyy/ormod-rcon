@@ -139,10 +139,16 @@ export default function Players() {
   // Initial load + poll every 30 s
   useEffect(() => {
     if (!activeServer?.id) return
+    if (!activeServer.running) {
+      setPlayers([])
+      setRaw(null)
+      setError(null)
+      return
+    }
     load()
     const pollTimer = setInterval(load, POLL_INTERVAL_MS)
     return () => clearInterval(pollTimer)
-  }, [activeServer?.id, load])
+  }, [activeServer?.id, activeServer?.running, load])
 
   // Seconds-ago counter
   useEffect(() => {
@@ -221,12 +227,13 @@ export default function Players() {
         subtitle="getplayers · kick · ban · unban · heal · whitelist · setpermissions"
         actions={
           <>
-            <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+            <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading || !activeServer?.running}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setShowBroadcast(true)}
+              disabled={!activeServer?.running}
             >
               Broadcast
             </button>
@@ -244,6 +251,12 @@ export default function Players() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {activeServer && !activeServer.running && (
+        <div className="info-banner">
+          Server is offline — player data is unavailable. Start the server from Server Management to see live player data.
         </div>
       )}
 

@@ -68,6 +68,20 @@ async function runTask(task: TaskRow): Promise<void> {
   const server = await prisma.server.findUnique({ where: { id: fresh.serverId } })
   if (!server) return
 
+  // Skip execution when the container is not running — avoids queuing commands
+  // against a stopped or unreachable container.
+  const containerName =
+    server.containerName?.trim() || process.env.GAME_CONTAINER_NAME || 'ormod-server'
+  const containerInfo = await dockerManager.inspect(containerName)
+  if (!containerInfo?.running) {
+    logWarn(`[scheduler] Task "${fresh.label}" skipped — server "${server.name}" is offline`)
+    await prisma.scheduledTask.update({
+      where: { id: fresh.id },
+      data: { lastRun: new Date(), nextRun: computeNextRun(fresh.cronExpr) },
+    })
+    return
+  }
+
   try {
     switch (fresh.type as TaskType) {
       case 'COMMAND': {

@@ -28,7 +28,7 @@ const bulkSettingsBody = {
     changes: {
       type: 'object',
       additionalProperties: {
-        oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+        anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
       },
     },
   },

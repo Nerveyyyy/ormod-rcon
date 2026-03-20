@@ -8,6 +8,29 @@ export async function checkSetup() {
   return { setupRequired: count === 0 }
 }
 
+export async function getBootstrapSession(req: FastifyRequest, reply: FastifyReply) {
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) })
+
+  if (session?.user) {
+    const user = session.user as { id: string; name: string; email: string; role?: string }
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role ?? 'VIEWER',
+      },
+    }
+  }
+
+  const count = await prisma.user.count()
+  if (count === 0) {
+    return { setupRequired: true }
+  }
+
+  return reply.status(401).send({ error: 'Unauthorized' })
+}
+
 export async function createOwner(
   req: FastifyRequest<{ Body: { name: string; email: string; password: string } }>,
   reply: FastifyReply

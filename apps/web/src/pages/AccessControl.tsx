@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import EmptyState from '../components/ui/EmptyState.js'
+import ConfirmDialog from '../components/ui/ConfirmDialog.js'
 import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
@@ -79,6 +80,8 @@ export default function AccessControl() {
   const [newNote, setNewNote] = useState('')
   const [newPerm, setNewPerm] = useState('admin')
 
+  const [deleteTarget, setDeleteTarget] = useState<AccessList | null>(null)
+
   // Modal refs for focus traps
   const addListModalRef = useRef<HTMLDivElement>(null)
   const addEntryModalRef = useRef<HTMLDivElement>(null)
@@ -128,6 +131,21 @@ export default function AccessControl() {
       .post(`/lists/${selectedId}/sync/${activeServer.id}`)
       .then(() => setError(null))
       .catch((e) => setError(`Sync failed: ${(e as Error).message}`))
+  }
+
+  const deleteList = () => {
+    if (!deleteTarget) return
+    api
+      .delete(`/lists/${deleteTarget.id}`)
+      .then(() => {
+        setDeleteTarget(null)
+        if (selectedId === deleteTarget.id) {
+          setSelectedId(null)
+          setEntries([])
+        }
+        loadLists()
+      })
+      .catch((e) => setError(`Failed to delete list: ${(e as Error).message}`))
   }
 
   const refreshFeed = () => {
@@ -196,10 +214,10 @@ export default function AccessControl() {
         subtitle="Manage ban lists, whitelists, and admin rosters · Global · Per-server · External feeds"
         actions={
           <div className="btn-group">
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddList(true)}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddList(true)} disabled={!activeServer?.running}>
               + New List
             </button>
-            {selected && !selected.readonly && (
+            {selected && !selected.readonly && selected.scope !== 'EXTERNAL' && activeServer?.running && (
               <button className="btn btn-primary btn-sm" onClick={() => setShowAddEntry(true)}>
                 {addLabel}
               </button>
@@ -218,6 +236,12 @@ export default function AccessControl() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {activeServer && !activeServer.running && (
+        <div className="info-banner">
+          Server is offline — access list changes won't be synced until the server is running.
         </div>
       )}
 
@@ -405,6 +429,21 @@ export default function AccessControl() {
         </div>
       )}
 
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Access List"
+          confirmWord={deleteTarget.name}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={deleteList}
+        >
+          <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
+            This will permanently delete the list{' '}
+            <strong style={{ color: 'var(--orange)' }}>{deleteTarget.name}</strong> and
+            all {deleteTarget.entryCount} entries. This cannot be undone.
+          </div>
+        </ConfirmDialog>
+      )}
+
       <div className="split-panel">
         {/* ── Left sidebar: list selector ────────────────────── */}
         <div className="sidebar">
@@ -479,13 +518,20 @@ export default function AccessControl() {
                   <span className="card-title">{selected.name}</span>
                   <ScopeBadge scope={selected.scope} />
                 </div>
-                <div className="row">
+                <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
                   {selected.readonly && <span className="card-meta">read-only</span>}
                   {selected.syncedAt && (
                     <span className="card-meta">
                       synced {new Date(selected.syncedAt).toLocaleString()}
                     </span>
                   )}
+                  <button
+                    className="btn btn-danger btn-xs"
+                    onClick={() => setDeleteTarget(selected)}
+                    disabled={!activeServer?.running}
+                  >
+                    Delete List
+                  </button>
                 </div>
               </div>
 
@@ -516,6 +562,7 @@ export default function AccessControl() {
                     className="btn btn-ghost btn-xs"
                     style={{ marginLeft: 'auto' }}
                     onClick={refreshFeed}
+                    disabled={!activeServer?.running}
                   >
                     Refresh Feed
                   </button>
@@ -537,6 +584,7 @@ export default function AccessControl() {
                     className="btn btn-ghost btn-xs"
                     style={{ marginLeft: 'auto' }}
                     onClick={syncList}
+                    disabled={!activeServer?.running}
                   >
                     Sync Now
                   </button>

@@ -14,6 +14,7 @@ import WipeManager from './pages/WipeManager.js'
 import Schedules from './pages/Schedules.js'
 import ServerManagement from './pages/ServerManagement.js'
 import UserManagement from './pages/UserManagement.js'
+import NotFound from './pages/NotFound.js'
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -63,6 +64,8 @@ export default function App() {
                 <Route path="servers" element={<ServerManagement />} />
                 <Route path="users" element={<UserManagement />} />
               </Route>
+
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </ErrorBoundary>
         </ServerProvider>

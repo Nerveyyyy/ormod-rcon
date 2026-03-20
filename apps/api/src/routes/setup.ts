@@ -17,6 +17,13 @@ const setupBody = {
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 const setupRoutes: FastifyPluginAsync = async (app) => {
+  // Bootstrap: single call for session + setup check
+  app.route({
+    method: 'GET',
+    url: '/me',
+    handler: ctrl.getBootstrapSession,
+  })
+
   // Check if first-run setup is required
   app.route({
     method: 'GET',

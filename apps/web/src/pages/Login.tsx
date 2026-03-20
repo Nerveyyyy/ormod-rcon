@@ -16,7 +16,11 @@ export default function Login() {
     try {
       const { error: authErr } = await authClient.signIn.email({ email, password })
       if (authErr) {
-        setError(authErr.message ?? 'Login failed. Check your credentials.')
+        if (authErr.status === 429) {
+          setError('Too many login attempts. Please wait a moment and try again.')
+        } else {
+          setError(authErr.message ?? 'Login failed. Check your credentials.')
+        }
       } else {
         navigate('/dashboard', { replace: true })
       }

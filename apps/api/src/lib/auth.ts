@@ -21,6 +21,21 @@ export const auth = betterAuth({
   baseURL: BASE_URL,
   database: prismaAdapter(prisma, { provider: 'sqlite' }),
 
+  // Rate limit auth endpoints — runs inside BetterAuth's handler (bypasses
+  // Fastify's rate limiter because reply.hijack() hands control to raw Node res).
+  rateLimit: {
+    enabled: true,
+    // window: 60,
+    // max: 100, // generous default for non-auth paths
+    // storage: 'memory',
+    // customRules: {
+    //   '/api/auth/sign-in/*': { window: 10, max: 3 },
+    //   '/api/auth/sign-up/*': { window: 10, max: 3 },
+    //   '/api/auth/change-password': { window: 10, max: 3 },
+    //   '/api/auth/change-email': { window: 10, max: 3 },
+    // },
+  },
+
   // Email + password is the only auth method for self-hosted installs.
   // OAuth / magic-links can be added via BetterAuth plugins in future.
   emailAndPassword: {

@@ -23,8 +23,9 @@ function extractPlayerCount(raw: string): number | null {
 
 export default function Dashboard() {
   const { activeServer } = useServer()
+  const running = activeServer?.running ?? false
   const { lines: liveLog } = useLiveLog(activeServer?.id ?? null)
-  const { settings } = useSettings(activeServer?.id ?? null)
+  const { settings } = useSettings(running ? (activeServer?.id ?? null) : null)
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [playerRaw, setPlayerRaw] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
@@ -37,21 +38,21 @@ export default function Dashboard() {
       .catch(console.error)
   }, [activeServer?.id])
 
-  // Poll getplayers every 30s
+  // Poll getplayers every 30s (only when server is running)
   const pollPlayers = useCallback(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.id || !running) return
     api
       .get<{ raw?: string }>(`/servers/${activeServer.id}/players`)
       .then((data) => setPlayerRaw(data?.raw ?? null))
       .catch(() => {/* ignore — degraded mode */})
-  }, [activeServer?.id])
+  }, [activeServer?.id, running])
 
   useEffect(() => {
-    if (!activeServer?.id) { setPlayerRaw(null); return }
+    if (!activeServer?.id || !running) { setPlayerRaw(null); return }
     pollPlayers()
     const id = setInterval(pollPlayers, PLAYER_POLL_MS)
     return () => clearInterval(id)
-  }, [activeServer?.id, pollPlayers])
+  }, [activeServer?.id, running, pollPlayers])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -59,7 +60,7 @@ export default function Dashboard() {
 
   const maxPlayers = settings?.MaxPlayers ?? '—'
   const worldName = settings?.WorldName ?? '—'
-  const playerCount = playerRaw !== null ? (extractPlayerCount(playerRaw) ?? '?') : '—'
+  const playerCount = playerRaw !== null ? (extractPlayerCount(playerRaw) ?? '—') : '—'
   const enabledSchedules = schedules.filter((s) => s.enabled)
 
   return (

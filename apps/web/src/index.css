@@ -534,6 +534,15 @@ body {
   color: var(--text);
   background: var(--bg2);
 }
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+}
 .btn-green {
   border-color: var(--green-dim);
   color: var(--green);

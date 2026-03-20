@@ -61,6 +61,46 @@ const typeColor: Record<string, string> = {
   RESTART: 'pill-orange',
 }
 
+const SCHEDULE_COMMANDS = [
+  {
+    value: 'forcesave',
+    label: 'Force Save',
+    desc: 'Immediately saves all world and player data to disk.',
+    hasParam: false,
+  },
+  {
+    value: 'settime',
+    label: 'Set Time',
+    desc: 'Sets the in-game time of day. Value is a number from 0 (midnight) to 24 (next midnight). Example: 12 = noon, 6 = sunrise.',
+    hasParam: true,
+    paramLabel: 'Time (0\u201324)',
+    paramPlaceholder: '12',
+  },
+  {
+    value: 'setweather',
+    label: 'Set Weather',
+    desc: 'Changes the current weather condition. Available options: Clear, Rain, Storm, Fog.',
+    hasParam: true,
+    paramLabel: 'Weather',
+    paramPlaceholder: 'Clear',
+    paramOptions: ['Clear', 'Rain', 'Storm', 'Fog'],
+  },
+  {
+    value: 'forcerespawnloot',
+    label: 'Force Respawn Loot',
+    desc: 'Immediately respawns all loot containers across the map. Useful after a scheduled restart or for events.',
+    hasParam: false,
+  },
+  {
+    value: 'announcement',
+    label: 'Announcement',
+    desc: 'Broadcasts a message to all connected players in the in-game chat. Use for maintenance warnings, event notifications, etc.',
+    hasParam: true,
+    paramLabel: 'Message',
+    paramPlaceholder: 'Server restarting in 5 minutes!',
+  },
+] as const
+
 export default function Schedules() {
   const { activeServer } = useServer()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
@@ -77,7 +117,8 @@ export default function Schedules() {
   const [newWeekday, setNewWeekday] = useState(1)
   const [newMonthDay, setNewMonthDay] = useState(1)
   const [newCustomCron, setNewCustomCron] = useState('')
-  const [newPayload, setNewPayload] = useState('')
+  const [newCommand, setNewCommand] = useState<string>('forcesave')
+  const [newParam, setNewParam] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
 
   const addModalRef = useRef<HTMLDivElement>(null)
@@ -152,7 +193,8 @@ export default function Schedules() {
     setNewWeekday(1)
     setNewMonthDay(1)
     setNewCustomCron('')
-    setNewPayload('')
+    setNewCommand('forcesave')
+    setNewParam('')
     setNewEnabled(true)
   }
 
@@ -164,7 +206,13 @@ export default function Schedules() {
         label: newLabel.trim(),
         type: newType,
         cronExpr,
-        payload: newType === 'COMMAND' ? (newPayload || null) : null,
+        payload: newType === 'COMMAND'
+          ? (() => {
+              const cmd = SCHEDULE_COMMANDS.find(c => c.value === newCommand)
+              if (!cmd) return newCommand
+              return cmd.hasParam && newParam ? `${cmd.value} ${newParam}` : cmd.value
+            })()
+          : null,
         enabled: newEnabled,
       })
       .then(() => {
@@ -392,21 +440,75 @@ export default function Schedules() {
                 {schedulePreview}
               </div>
 
-              {/* Payload (COMMAND only) */}
+              {/* Command (COMMAND only) */}
               {newType === 'COMMAND' && (
-                <div className="setting-row" style={{ padding: 0 }}>
-                  <label htmlFor="sched-payload" className="setting-info">
-                    <div className="setting-name">Payload</div>
-                    <div className="setting-desc">Console command to dispatch</div>
-                  </label>
-                  <input
-                    id="sched-payload"
-                    className="text-input"
-                    value={newPayload}
-                    onChange={(e) => setNewPayload(e.target.value)}
-                    placeholder="e.g. forcesave"
-                  />
-                </div>
+                <>
+                  <div className="setting-row" style={{ padding: 0 }}>
+                    <label htmlFor="sched-command" className="setting-info">
+                      <div className="setting-name">Command</div>
+                    </label>
+                    <select
+                      id="sched-command"
+                      className="sel-input"
+                      value={newCommand}
+                      onChange={(e) => { setNewCommand(e.target.value); setNewParam('') }}
+                    >
+                      {SCHEDULE_COMMANDS.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Parameter input (if command needs one) */}
+                  {(() => {
+                    const cmd = SCHEDULE_COMMANDS.find(c => c.value === newCommand)
+                    if (!cmd?.hasParam) return null
+                    return (
+                      <div className="setting-row" style={{ padding: 0 }}>
+                        <label htmlFor="sched-param" className="setting-info">
+                          <div className="setting-name">{cmd.paramLabel}</div>
+                        </label>
+                        {'paramOptions' in cmd && cmd.paramOptions ? (
+                          <select
+                            id="sched-param"
+                            className="sel-input"
+                            value={newParam}
+                            onChange={(e) => setNewParam(e.target.value)}
+                          >
+                            <option value="">Select...</option>
+                            {cmd.paramOptions.map((o) => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            id="sched-param"
+                            className="text-input"
+                            value={newParam}
+                            onChange={(e) => setNewParam(e.target.value)}
+                            placeholder={cmd.paramPlaceholder}
+                          />
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Command info panel */}
+                  <div style={{
+                    padding: '10px 14px',
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    color: 'var(--muted)',
+                    lineHeight: '1.5',
+                  }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-bright)', marginBottom: '4px', fontSize: '11px', fontFamily: 'var(--mono)' }}>
+                      {SCHEDULE_COMMANDS.find(c => c.value === newCommand)?.label}
+                    </div>
+                    {SCHEDULE_COMMANDS.find(c => c.value === newCommand)?.desc}
+                  </div>
+                </>
               )}
 
               {/* Enable immediately */}
@@ -432,7 +534,10 @@ export default function Schedules() {
                   onClick={createTask}
                   disabled={
                     !newLabel.trim() ||
-                    (newType === 'COMMAND' && !newPayload.trim()) ||
+                    (newType === 'COMMAND' && (() => {
+                      const cmd = SCHEDULE_COMMANDS.find(c => c.value === newCommand)
+                      return !!(cmd?.hasParam && !newParam.trim())
+                    })()) ||
                     (newFreq === 'custom' && !newCustomCron.trim())
                   }
                 >

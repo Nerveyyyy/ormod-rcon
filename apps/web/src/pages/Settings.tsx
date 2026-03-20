@@ -209,8 +209,8 @@ export default function Settings() {
   }, [activeServer?.id])
 
   useEffect(() => {
-    if (activeServer?.id) load()
-  }, [activeServer?.id, load])
+    if (activeServer?.id && activeServer.running) load()
+  }, [activeServer?.id, activeServer?.running, load])
 
   const set = (k: string, v: SettingValue) => {
     setVals((prev) => ({ ...prev, [k]: v }))
@@ -244,6 +244,7 @@ export default function Settings() {
     }
   }
 
+  const isOffline = !activeServer?.running
   const group = SERVER_SETTING_GROUPS[activeTab]
 
   return (
@@ -252,7 +253,7 @@ export default function Settings() {
         title="Server Settings"
         subtitle="getserversettings · setserversetting [key] [value]"
         actions={
-          <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+          <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading || isOffline}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         }
@@ -268,6 +269,12 @@ export default function Settings() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {activeServer && !activeServer.running && (
+        <div className="info-banner">
+          Server is offline — settings are read-only. Start the server to make changes.
         </div>
       )}
 
@@ -289,9 +296,15 @@ export default function Settings() {
           <span className="card-title">Parameters</span>
           <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
             <button
-              className={`btn btn-sm ${dirtyCount > 0 ? 'btn-primary' : 'btn-ghost'}`}
+              className={`btn btn-sm ${
+                bulkSaveState === 'saved'
+                  ? 'btn-green'
+                  : dirtyCount > 0
+                    ? 'btn-primary'
+                    : 'btn-outline'
+              }`}
               onClick={saveAll}
-              disabled={dirtyCount === 0 || bulkSaveState === 'saving'}
+              disabled={dirtyCount === 0 || bulkSaveState === 'saving' || isOffline}
             >
               {bulkSaveState === 'saving'
                 ? 'Saving...'
@@ -301,9 +314,8 @@ export default function Settings() {
                     ? `Save ${dirtyCount} Change${dirtyCount !== 1 ? 's' : ''}`
                     : 'No Changes'}
             </button>
-            <span className="pill pill-green">
-              <span className="dot dot-green pulse" />
-              Live Reload Active
+            <span style={{ fontSize: '10px', color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+              Changes apply immediately
             </span>
           </div>
         </div>
@@ -344,7 +356,7 @@ export default function Settings() {
                   {group.settings.map((s) => {
                     const isReadonly = s.type === 'readonly'
                     const isAvailable = AVAILABLE_SETTINGS.has(s.key)
-                    const isDisabled = !isReadonly && !isAvailable
+                    const isDisabled = isOffline || (!isReadonly && !isAvailable)
                     const isDirty = isAvailable && vals[s.key] !== loadedVals.current[s.key]
                     return (
                       <div

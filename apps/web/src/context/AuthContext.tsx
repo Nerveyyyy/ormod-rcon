@@ -1,16 +1,18 @@
 /**
  * AuthContext.tsx
  *
- * Wraps the app in an auth gate:
- *   1. Checks GET /api/setup — if no users exist, redirect to /setup.
- *   2. Checks current BetterAuth session — if no session, redirect to /login.
- *   3. Provides { user, role, signOut } to all children.
+ * Wraps the app in an auth gate using a single GET /api/me call:
+ *   - 200 + { user } → authenticated, set user
+ *   - 200 + { setupRequired } → redirect to /setup
+ *   - 401 → redirect to /login
+ *   - 429 → keep current user (if loaded), surface rate-limit message
  *
- * The session is fetched once on mount; BetterAuth's HTTP-only cookie handles
+ * The call fires once on mount. Subsequent navigations skip the fetch
+ * if a user is already loaded. BetterAuth's HTTP-only cookie handles
  * automatic renewal — no polling needed.
  */
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router'
 import { authClient } from '../lib/auth-client.js'
 import { clearCsrfToken } from '../api/client.js'
@@ -25,74 +27,107 @@ type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null
   loading: boolean
+  rateLimitMsg: string | null
+  dismissRateLimit: () => void
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
+  rateLimitMsg: null,
+  dismissRateLimit: () => {},
   signOut: async () => {},
 })
-
-// Public paths that don't require auth — auth guard skips these
-const PUBLIC_PATHS = ['/login', '/setup']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null)
+  // Ref tracks user across effect re-runs without triggering them
+  const userRef = useRef<AuthUser | null>(null)
+
+  const dismissRateLimit = useCallback(() => setRateLimitMsg(null), [])
 
   useEffect(() => {
-    async function checkAuth() {
+    async function bootstrap() {
       try {
-        // 1. Check if first-run setup is needed (always, except when already on /setup)
-        if (location.pathname !== '/setup') {
-          const setupRes = await fetch('/api/setup')
-          const setupData = await setupRes.json().catch(() => ({}))
-          if (setupData?.setupRequired) {
-            navigate('/setup', { replace: true })
+        // User already loaded — just guard /setup and /login
+        if (userRef.current) {
+          if (location.pathname === '/setup' || location.pathname === '/login') {
+            navigate('/', { replace: true })
+          }
+          return
+        }
+
+        // On /login, let the page render without fetching
+        if (location.pathname === '/login') return
+
+        const res = await fetch('/api/me')
+
+        // Rate-limited — stay on current page. Session is still valid;
+        // the user just needs to wait. Don't clear existing user state.
+        if (res.status === 429) {
+          let message = 'Rate limit exceeded. Please wait a moment and try again.'
+          try {
+            const data = await res.json()
+            if (data?.message) message = data.message
+          } catch { /* use default */ }
+          setRateLimitMsg(message)
+          return
+        }
+
+        if (res.ok) {
+          const data = await res.json()
+
+          if (data.setupRequired) {
+            if (location.pathname !== '/setup') {
+              navigate('/setup', { replace: true })
+            }
+            return
+          }
+
+          if (data.user) {
+            userRef.current = data.user
+            setUser(data.user)
+            if (location.pathname === '/setup') {
+              navigate('/', { replace: true })
+            }
             return
           }
         }
 
-        // Don't validate session on public pages
-        if (PUBLIC_PATHS.includes(location.pathname)) return
-
-        // Skip re-validation if user is already populated
-        if (user) return
-
-        // 2. Check current session
-        const { data: session } = await authClient.getSession()
-        if (!session?.user) {
+        // 401 or unexpected response — send to login
+        if (location.pathname !== '/login' && location.pathname !== '/setup') {
           navigate('/login', { replace: true })
-          return
         }
-
-        setUser({
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email,
-          role: ((session.user as Record<string, unknown>).role as string | undefined) ?? 'VIEWER',
-        })
       } catch {
-        navigate('/login', { replace: true })
+        if (location.pathname !== '/login') {
+          navigate('/login', { replace: true })
+        }
       } finally {
         setLoading(false)
       }
     }
 
-    checkAuth()
+    bootstrap()
   }, [location.pathname])
 
   const signOut = async () => {
     await authClient.signOut()
     clearCsrfToken()
+    userRef.current = null
     setUser(null)
     navigate('/login', { replace: true })
   }
 
-  return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, loading, rateLimitMsg, dismissRateLimit, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

@@ -23,11 +23,41 @@ function Clock() {
 
 export default function AppShell() {
   const { activeServer } = useServer()
-  const { user, signOut } = useAuth()
+  const { user, signOut, rateLimitMsg, dismissRateLimit } = useAuth()
   const running = activeServer?.running ?? false
   const [showPwModal, setShowPwModal] = useState(false)
 
   const roleCls = roleToClass(user?.role ?? '')
+
+  // Rate-limited before user was loaded (e.g. page refresh while throttled).
+  // Show a full-page message instead of a broken shell with no user info.
+  if (!user && rateLimitMsg) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          background: 'var(--bg0)',
+        }}
+      >
+        <div className="card fadein" style={{ width: '400px' }}>
+          <div className="card-header">
+            <span className="card-title">Rate Limited</span>
+          </div>
+          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="warn-banner" style={{ fontFamily: 'var(--mono)' }}>
+              {rateLimitMsg}
+            </div>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -71,6 +101,18 @@ export default function AppShell() {
         </div>
       </div>
       <NavTabs />
+      {rateLimitMsg && (
+        <div className="warn-banner" style={{ margin: '16px 24px 0', fontFamily: 'var(--mono)' }}>
+          {rateLimitMsg}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={dismissRateLimit}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <Outlet />
       {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
     </div>

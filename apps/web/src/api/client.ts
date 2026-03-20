@@ -54,9 +54,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     let message: string
     try {
       const data = await res.json()
-      message = (data as any)?.error ?? `Request failed (${res.status})`
+      if (res.status === 429) {
+        message = (data as any)?.message ?? 'Rate limit exceeded. Please wait a moment and try again.'
+      } else {
+        message = (data as any)?.error ?? `Request failed (${res.status})`
+      }
     } catch {
-      message = `Request failed (${res.status})`
+      message = res.status === 429
+        ? 'Rate limit exceeded. Please wait a moment and try again.'
+        : `Request failed (${res.status})`
     }
     throw new Error(message)
   }

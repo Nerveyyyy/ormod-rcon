@@ -132,6 +132,12 @@ export default function WipeManager() {
         ⚠ Wipes are <strong style={{ margin: '0 3px' }}>irreversible</strong>. The wipe command is dispatched to the game server immediately.
       </div>
 
+      {activeServer && !activeServer.running && (
+        <div className="info-banner">
+          Server is offline — wipes cannot be executed until the server is running.
+        </div>
+      )}
+
       {error && (
         <div className="error-banner" role="alert">
           {error}
@@ -204,7 +210,7 @@ export default function WipeManager() {
                   className={`btn ${w.color} btn-sm`}
                   style={{ marginTop: 'auto' }}
                   onClick={() => openConfirm(w.id)}
-                  disabled={wiping || !activeServer?.id}
+                  disabled={wiping || !activeServer?.id || !activeServer?.running}
                 >
                   Execute {w.label}
                 </button>
