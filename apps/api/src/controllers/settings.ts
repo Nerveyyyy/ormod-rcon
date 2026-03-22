@@ -3,10 +3,10 @@ import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
 
 export async function getSettings(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
@@ -18,19 +18,31 @@ export async function getSettings(
   }
 }
 
+const KEY_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/
+
 export async function updateSettingKey(
-  req: FastifyRequest<{ Params: { id: string; key: string }; Body: { value: unknown } }>,
+  req: FastifyRequest<{ Params: { serverName: string; key: string }; Body: { value: unknown } }>,
   reply: FastifyReply
 ) {
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(req.params.key))
+  if (!KEY_PATTERN.test(req.params.key))
     return reply.badRequest('Invalid setting key')
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
     const raw = await adapter.sendCommand(
       `setserversetting ${req.params.key} ${req.body.value}`
     )
+    await prisma.actionLog.create({
+      data: {
+        serverId: server.id,
+        performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
+        action: 'SETTINGS_SET',
+        details: JSON.stringify({ key: req.params.key, value: req.body.value }),
+        afterValue: JSON.stringify({ [req.params.key]: req.body.value }),
+      },
+    })
     return { ok: true, key: req.params.key, value: req.body.value, raw }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -38,11 +50,9 @@ export async function updateSettingKey(
   }
 }
 
-const KEY_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/
-
 export async function bulkUpdateSettings(
   req: FastifyRequest<{
-    Params: { id: string }
+    Params: { serverName: string }
     Body: { changes: Record<string, string | number | boolean> }
   }>,
   reply: FastifyReply
@@ -61,7 +71,7 @@ export async function bulkUpdateSettings(
     })
   }
 
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
   try {
@@ -79,8 +89,11 @@ export async function bulkUpdateSettings(
       data: {
         serverId: server.id,
         performedBy: req.session!.user.id,
-        action: 'SETTINGS_BULK',
+        userId: req.session!.user.id,
+        action: 'SETTINGS_SET',
         details: `Updated settings: ${changedKeys}`,
+        beforeValue: null,
+        afterValue: JSON.stringify(changes),
       },
     })
 

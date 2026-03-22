@@ -191,11 +191,11 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(0)
 
   const load = useCallback(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     setLoading(true)
     setError(null)
     api
-      .get<{ raw: string }>(`/servers/${activeServer.id}/settings`)
+      .get<{ raw: string }>(`/servers/${activeServer.serverName}/settings`)
       .then(({ raw }) => {
         const parsed = tryParseSettings(raw)
         if (parsed) {
@@ -206,11 +206,11 @@ export default function Settings() {
       })
       .catch((e) => setError((e as Error).message || 'Failed to load settings'))
       .finally(() => setLoading(false))
-  }, [activeServer?.id])
+  }, [activeServer?.serverName])
 
   useEffect(() => {
-    if (activeServer?.id && activeServer.running) load()
-  }, [activeServer?.id, activeServer?.running, load])
+    if (activeServer?.serverName && activeServer.running) load()
+  }, [activeServer?.serverName, activeServer?.running, load])
 
   const set = (k: string, v: SettingValue) => {
     setVals((prev) => ({ ...prev, [k]: v }))
@@ -223,7 +223,7 @@ export default function Settings() {
   const dirtyCount = dirtyKeys.length
 
   const saveAll = async () => {
-    if (!activeServer?.id || dirtyCount === 0) return
+    if (!activeServer?.serverName || dirtyCount === 0) return
     setBulkSaveState('saving')
     setError(null)
     const changes: Record<string, SettingValue> = {}
@@ -231,7 +231,7 @@ export default function Settings() {
       changes[k] = vals[k] ?? ''
     }
     try {
-      await api.put(`/servers/${activeServer.id}/settings`, { changes })
+      await api.put(`/servers/${activeServer.serverName}/settings`, { changes })
       // Commit the saved values so dirty tracking resets
       loadedVals.current = { ...loadedVals.current, ...changes }
       // Force a re-render so dirty indicators clear

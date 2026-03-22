@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupTestContext, mockDockerManager, type TestContext } from './helpers/setup.js'
 
 let ctx: TestContext
-let serverId: string
+let serverName: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -14,7 +14,7 @@ beforeAll(async () => {
       serverName: 'wipe-test-server',
     }),
   })
-  serverId = JSON.parse(res.body).id
+  serverName = JSON.parse(res.body).serverName
 })
 
 afterAll(async () => {
@@ -22,22 +22,22 @@ afterAll(async () => {
 })
 
 describe('Wipe routes', () => {
-  describe('GET /api/servers/:id/wipes', () => {
+  describe('GET /api/servers/:serverName/wipes', () => {
     it('any authenticated user can list wipes', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${serverId}/wipes`)
+      const res = await ctx.viewer.get(`/api/servers/${serverName}/wipes`)
       expect(res.statusCode).toBe(200)
       expect(Array.isArray(JSON.parse(res.body))).toBe(true)
     })
 
     it('unauthenticated → 401', async () => {
-      const res = await ctx.unauthenticated.get(`/api/servers/${serverId}/wipes`)
+      const res = await ctx.unauthenticated.get(`/api/servers/${serverName}/wipes`)
       expect(res.statusCode).toBe(401)
     })
   })
 
-  describe('POST /api/servers/:id/wipe', () => {
+  describe('POST /api/servers/:serverName/wipe', () => {
     it('OWNER can execute a wipe', async () => {
-      const res = await ctx.owner.post(`/api/servers/${serverId}/wipe`, {
+      const res = await ctx.owner.post(`/api/servers/${serverName}/wipe`, {
         payload: JSON.stringify({}),
       })
       expect(res.statusCode).toBe(200)
@@ -47,14 +47,14 @@ describe('Wipe routes', () => {
     })
 
     it('ADMIN cannot execute a wipe → 403', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/wipe`, {
+      const res = await ctx.admin.post(`/api/servers/${serverName}/wipe`, {
         payload: JSON.stringify({}),
       })
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot execute a wipe → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/wipe`, {
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/wipe`, {
         payload: JSON.stringify({}),
       })
       expect(res.statusCode).toBe(403)

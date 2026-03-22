@@ -1,54 +1,179 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
+import { paginationParams } from '../lib/pagination.js'
 
 const VALID_PERMISSION_LEVELS = ['server', 'admin', 'operator', 'client'] as const
 
 export async function listPlayers(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{
+    Params: { serverName: string }
+    Querystring: { filter?: string; page?: string; limit?: string; search?: string }
+  }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
-  try {
-    const adapter = await getAdapter(server)
-    const raw = await adapter.sendCommand('getplayers')
+  const filter = req.query.filter ?? 'all'
+  const search = req.query.search?.trim() ?? ''
+  const { skip, take, page, limit } = paginationParams(req.query)
 
-    // Update lastSeen for any known DB players when this command is called.
-    // Full parsing deferred until the game's response format is confirmed.
-    await prisma.playerRecord.updateMany({
-      where: { serverId: req.params.id },
-      data: { lastSeen: new Date() },
-    })
+  // Get all online player IDs for status lookup
+  const onlineSessions = await prisma.playerSession.findMany({
+    where: { serverId: server.id, leftAt: null },
+    select: { playerId: true, joinedAt: true },
+  })
+  const onlineMap = new Map(onlineSessions.map((s) => [s.playerId, s.joinedAt]))
 
-    return { raw }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return reply.status(503).send({ error: `Server unavailable: ${msg}` })
+  // Base query: PlayerServerStats for this server
+  const where: Record<string, unknown> = { serverId: server.id }
+
+  if (filter === 'online') {
+    where.playerId = { in: [...onlineMap.keys()] }
   }
+
+  if (search) {
+    where.player = {
+      OR: [
+        { displayName: { contains: search } },
+        { steamId: { contains: search } },
+      ],
+    }
+  }
+
+  const [statsRows, total] = await Promise.all([
+    prisma.playerServerStats.findMany({
+      where,
+      include: { player: true },
+      orderBy: { lastSeen: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.playerServerStats.count({ where }),
+  ])
+
+  // Kill/death counts for this page of players
+  const steamIds = statsRows.map((s) => s.player.steamId)
+  const playerIds = statsRows.map((s) => s.playerId)
+
+  const [killCounts, deathCounts] = await Promise.all([
+    prisma.combatLog.groupBy({
+      by: ['killerSteamId'],
+      where: { serverId: server.id, killerSteamId: { in: steamIds } },
+      _count: true,
+    }),
+    prisma.combatLog.groupBy({
+      by: ['playerId'],
+      where: { serverId: server.id, playerId: { in: playerIds } },
+      _count: true,
+    }),
+  ])
+
+  const killMap = new Map(killCounts.map((k) => [k.killerSteamId, k._count]))
+  const deathMap = new Map(deathCounts.map((d) => [d.playerId, d._count]))
+
+  const data = statsRows.map((s) => ({
+    steamId: s.player.steamId,
+    displayName: s.player.displayName,
+    online: onlineMap.has(s.playerId),
+    joinedAt: onlineMap.get(s.playerId) ?? null,
+    totalTime: s.totalTime,
+    firstSeen: s.firstSeen,
+    lastSeen: s.lastSeen,
+    notes: s.notes,
+    kills: killMap.get(s.player.steamId) ?? 0,
+    deaths: deathMap.get(s.playerId) ?? 0,
+  }))
+
+  return { data, page, limit, total }
 }
 
 export async function getPlayerHistory(req: FastifyRequest<{ Params: { steamId: string } }>) {
-  return prisma.playerRecord.findMany({
+  const player = await prisma.player.findUnique({
     where: { steamId: req.params.steamId },
-    include: { server: { select: { id: true, name: true } } },
-    orderBy: { lastSeen: 'desc' },
+    include: {
+      serverStats: {
+        include: { server: { select: { id: true, name: true, serverName: true } } },
+        orderBy: { lastSeen: 'desc' },
+      },
+    },
   })
+  if (!player) return null
+
+  // Compute kills/deaths from CombatLog
+  const [kills, deaths] = await Promise.all([
+    prisma.combatLog.count({ where: { killerSteamId: player.steamId } }),
+    prisma.combatLog.count({ where: { playerId: player.id } }),
+  ])
+
+  return { ...player, kills, deaths }
+}
+
+export async function getPlayerAudit(
+  req: FastifyRequest<{ Params: { steamId: string }; Querystring: { page?: string; limit?: string } }>,
+  reply: FastifyReply
+) {
+  const { skip, take, page, limit } = paginationParams(req.query)
+
+  const where = { targetSteamId: req.params.steamId }
+  const [rows, total] = await Promise.all([
+    prisma.actionLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+      include: { user: { select: { name: true } } },
+    }),
+    prisma.actionLog.count({ where }),
+  ])
+
+  const data = rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    performedBy: r.user?.name ?? r.performedBy,
+    reason: r.reason,
+    source: r.source,
+    details: r.details,
+    createdAt: r.createdAt,
+  }))
+
+  return { data, page, limit, total }
+}
+
+export async function getPlayerLists(
+  req: FastifyRequest<{ Params: { steamId: string } }>
+) {
+  const entries = await prisma.listEntry.findMany({
+    where: { steamId: req.params.steamId },
+    include: { list: { select: { id: true, name: true, slug: true, type: true, scope: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return entries.map((e) => ({
+    listId: e.list.id,
+    listName: e.list.name,
+    listSlug: e.list.slug,
+    type: e.list.type,
+    scope: e.list.scope,
+    reason: e.reason,
+    addedBy: e.addedBy,
+    createdAt: e.createdAt,
+  }))
 }
 
 // ── Player Action Helpers ─────────────────────────────────────────────────────
 
-type PlayerActionParams = { id: string; steamId: string }
+type PlayerActionParams = { serverName: string; steamId: string }
 
 async function dispatchPlayerAction(
-  req: FastifyRequest<{ Params: PlayerActionParams }>,
+  req: FastifyRequest<{ Params: PlayerActionParams; Body?: Record<string, unknown> }>,
   reply: FastifyReply,
   command: string,
   action: string,
   targetSteamId: string
 ): Promise<{ ok: boolean; raw: string } | FastifyReply> {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
@@ -57,9 +182,11 @@ async function dispatchPlayerAction(
       data: {
         serverId: server.id,
         performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
         action,
         targetSteamId,
         details: command,
+        reason: (req.body as any)?.reason ?? null,
       },
     })
     return { ok: true, raw }
@@ -70,7 +197,7 @@ async function dispatchPlayerAction(
 }
 
 export async function kickPlayer(
-  req: FastifyRequest<{ Params: PlayerActionParams }>,
+  req: FastifyRequest<{ Params: PlayerActionParams; Body?: { reason?: string } }>,
   reply: FastifyReply
 ) {
   const { steamId } = req.params
@@ -78,7 +205,7 @@ export async function kickPlayer(
 }
 
 export async function banPlayer(
-  req: FastifyRequest<{ Params: PlayerActionParams }>,
+  req: FastifyRequest<{ Params: PlayerActionParams; Body?: { reason?: string } }>,
   reply: FastifyReply
 ) {
   const { steamId } = req.params

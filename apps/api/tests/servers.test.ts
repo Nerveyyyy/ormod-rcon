@@ -17,7 +17,7 @@ const serverData = {
 }
 
 describe('Servers routes', () => {
-  let serverId: string
+  let serverName: string
 
   describe('POST /api/servers (create)', () => {
     it('OWNER can create a server', async () => {
@@ -28,7 +28,7 @@ describe('Servers routes', () => {
       const body = JSON.parse(res.body)
       expect(body.name).toBe(serverData.name)
       expect(body.serverName).toBe(serverData.serverName)
-      serverId = body.id
+      serverName = body.serverName
     })
 
     it('ADMIN cannot create a server → 403', async () => {
@@ -56,24 +56,24 @@ describe('Servers routes', () => {
     })
   })
 
-  describe('GET /api/servers/:id', () => {
+  describe('GET /api/servers/:serverName', () => {
     it('returns server details', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${serverId}`)
+      const res = await ctx.viewer.get(`/api/servers/${serverName}`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
-      expect(body.id).toBe(serverId)
+      expect(body.serverName).toBe(serverName)
       expect(body.name).toBe(serverData.name)
     })
 
     it('returns 404 for nonexistent server', async () => {
-      const res = await ctx.viewer.get('/api/servers/nonexistent-id')
+      const res = await ctx.viewer.get('/api/servers/nonexistent-server-name')
       expect(res.statusCode).toBe(404)
     })
   })
 
-  describe('PUT /api/servers/:id (update)', () => {
+  describe('PUT /api/servers/:serverName (update)', () => {
     it('ADMIN can update a server', async () => {
-      const res = await ctx.admin.put(`/api/servers/${serverId}`, {
+      const res = await ctx.admin.put(`/api/servers/${serverName}`, {
         payload: JSON.stringify({ name: 'Updated Server' }),
       })
       expect(res.statusCode).toBe(200)
@@ -82,77 +82,77 @@ describe('Servers routes', () => {
     })
 
     it('OWNER can update a server', async () => {
-      const res = await ctx.owner.put(`/api/servers/${serverId}`, {
+      const res = await ctx.owner.put(`/api/servers/${serverName}`, {
         payload: JSON.stringify({ name: 'Owner Updated' }),
       })
       expect(res.statusCode).toBe(200)
     })
 
     it('VIEWER cannot update a server → 403', async () => {
-      const res = await ctx.viewer.put(`/api/servers/${serverId}`, {
+      const res = await ctx.viewer.put(`/api/servers/${serverName}`, {
         payload: JSON.stringify({ name: 'Viewer Updated' }),
       })
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('POST /api/servers/:id/start|stop|restart (RBAC)', () => {
+  describe('POST /api/servers/:serverName/start|stop|restart (RBAC)', () => {
     // Docker socket is not available in tests. These tests verify the RBAC
     // layer only: ADMIN+ passes the auth guard (not 403), VIEWER is rejected.
     // The actual Docker call may fail with 500 — that's expected without Docker.
 
     it('ADMIN passes RBAC for start (not 403)', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/start`)
+      const res = await ctx.admin.post(`/api/servers/${serverName}/start`)
       expect(res.statusCode).not.toBe(403)
     })
 
     it('ADMIN passes RBAC for stop (not 403)', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/stop`)
+      const res = await ctx.admin.post(`/api/servers/${serverName}/stop`)
       expect(res.statusCode).not.toBe(403)
     })
 
     it('ADMIN passes RBAC for restart (not 403)', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/restart`)
+      const res = await ctx.admin.post(`/api/servers/${serverName}/restart`)
       expect(res.statusCode).not.toBe(403)
     })
 
     it('VIEWER cannot start a server → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/start`)
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/start`)
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot stop a server → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/stop`)
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/stop`)
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot restart a server → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/restart`)
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/restart`)
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('DELETE /api/servers/:id', () => {
+  describe('DELETE /api/servers/:serverName', () => {
     it('ADMIN cannot delete a server → 403', async () => {
-      const res = await ctx.admin.delete(`/api/servers/${serverId}`)
+      const res = await ctx.admin.delete(`/api/servers/${serverName}`)
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot delete a server → 403', async () => {
-      const res = await ctx.viewer.delete(`/api/servers/${serverId}`)
+      const res = await ctx.viewer.delete(`/api/servers/${serverName}`)
       expect(res.statusCode).toBe(403)
     })
 
     it('OWNER can delete a server', async () => {
-      const res = await ctx.owner.delete(`/api/servers/${serverId}`)
+      const res = await ctx.owner.delete(`/api/servers/${serverName}`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body.ok).toBe(true)
     })
   })
 
-  describe('DELETE /api/servers/:id (cascade)', () => {
-    let cascadeServerId: string
+  describe('DELETE /api/servers/:serverName (cascade)', () => {
+    let cascadeServerName: string
 
     it('setup: create server and a schedule for it', async () => {
       // Create server
@@ -163,10 +163,10 @@ describe('Servers routes', () => {
         }),
       })
       expect(serverRes.statusCode).toBe(201)
-      cascadeServerId = JSON.parse(serverRes.body).id
+      cascadeServerName = JSON.parse(serverRes.body).serverName
 
       // Create a scheduled task for this server
-      const schedRes = await ctx.owner.post(`/api/servers/${cascadeServerId}/schedules`, {
+      const schedRes = await ctx.owner.post(`/api/servers/${cascadeServerName}/schedules`, {
         payload: JSON.stringify({
           type: 'COMMAND',
           cronExpr: '0 * * * *',
@@ -178,13 +178,13 @@ describe('Servers routes', () => {
       expect(schedRes.statusCode).toBe(201)
     })
 
-    it('DELETE /api/servers/:id cascades — no FK error', async () => {
-      const res = await ctx.owner.delete(`/api/servers/${cascadeServerId}`)
+    it('DELETE /api/servers/:serverName cascades — no FK error', async () => {
+      const res = await ctx.owner.delete(`/api/servers/${cascadeServerName}`)
       expect(res.statusCode).toBe(200)
     })
 
-    it('GET /api/servers/:id returns 404 after delete', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${cascadeServerId}`)
+    it('GET /api/servers/:serverName returns 404 after delete', async () => {
+      const res = await ctx.viewer.get(`/api/servers/${cascadeServerName}`)
       expect(res.statusCode).toBe(404)
     })
   })

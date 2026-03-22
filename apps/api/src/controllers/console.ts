@@ -4,10 +4,10 @@ import { getAdapter } from '../services/rcon-adapter.js'
 import { dockerManager } from '../services/docker-manager.js'
 
 export async function sendCommand(
-  req: FastifyRequest<{ Params: { id: string }; Body: { command: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string }; Body: { command: string } }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
   if (!dockerManager.isRunning(server.id)) {
@@ -24,13 +24,13 @@ export async function sendCommand(
 }
 
 export async function getConsoleLog(
-  req: FastifyRequest<{ Params: { id: string }; Querystring: { lines?: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string }; Querystring: { lines?: string } }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
   const n = Math.min(parseInt(req.query.lines ?? '200') || 200, 1000)
-  const lines = dockerManager.getOutputBuffer(req.params.id).slice(-n)
+  const lines = dockerManager.getOutputBuffer(server.id).slice(-n)
   return { lines }
 }

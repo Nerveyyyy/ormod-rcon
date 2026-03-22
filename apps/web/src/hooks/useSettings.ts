@@ -25,16 +25,16 @@ function tryParseSettings(raw: string): Record<string, unknown> | null {
   return Object.keys(result).length > 0 ? result : null
 }
 
-export function useSettings(serverId: string | null) {
+export function useSettings(serverName: string | null) {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [raw, setRaw] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(() => {
-    if (!serverId) return
+    if (!serverName) return
     setLoading(true)
     api
-      .get<{ raw?: string } | Record<string, unknown>>(`/servers/${serverId}/settings`)
+      .get<{ raw?: string } | Record<string, unknown>>(`/servers/${serverName}/settings`)
       .then((data) => {
         if (data && typeof data === 'object' && 'raw' in data && typeof data.raw === 'string') {
           setRaw(data.raw)
@@ -47,13 +47,13 @@ export function useSettings(serverId: string | null) {
       })
       .catch((err) => console.error('Failed to load settings:', err))
       .finally(() => setLoading(false))
-  }, [serverId])
+  }, [serverName])
 
   useEffect(() => {
     setSettings(null)
     setRaw(null)
-    if (serverId) load()
-  }, [serverId, load])
+    if (serverName) load()
+  }, [serverName, load])
 
   return { settings, raw, loading, refresh: load }
 }

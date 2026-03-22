@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router'
 import { useServerContext as useServer } from '../context/ServerContext.js'
-import { useLiveLog } from '../hooks/useLiveLog.js'
+import { useActivityFeed } from '../hooks/useActivityFeed.js'
 import { useSettings } from '../hooks/useSettings.js'
 import { api } from '../api/client.js'
 
@@ -13,54 +13,81 @@ type Schedule = {
   nextRun: string | null
 }
 
-const PLAYER_POLL_MS = 30_000
+type CombatEvent = {
+  id: string
+  displayName: string
+  cause: string
+  killerDisplayName: string | null
+  killerSteamId: string | null
+  weapon: string | null
+  createdAt: string
+}
 
-function extractPlayerCount(raw: string): number | null {
-  const m = raw.match(/(\d+)\s+player/i)
-  if (m && m[1] !== undefined) return parseInt(m[1], 10)
-  return null
+type ChatMessage = {
+  id: string
+  displayName: string
+  channel: string
+  message: string
+  createdAt: string
+}
+
+const EVENT_PILL: Record<string, { className: string; label: string }> = {
+  JOIN: { className: 'pill-green', label: 'Join' },
+  LEAVE: { className: 'pill-muted', label: 'Leave' },
+  BAN: { className: 'pill-red', label: 'Ban' },
+  UNBAN: { className: 'pill-green', label: 'Unban' },
+  KICK: { className: 'pill-orange', label: 'Kick' },
+  WHITELIST: { className: 'pill-green', label: 'Whitelist' },
+  REMOVEWHITELIST: { className: 'pill-muted', label: 'Unwhitelist' },
+  SETPERMISSION: { className: 'pill-muted', label: 'Permission' },
+  COMMAND: { className: 'pill-muted', label: 'Command' },
+  WIPE: { className: 'pill-red', label: 'Wipe' },
+  RESTART: { className: 'pill-orange', label: 'Restart' },
+  SETTINGS_SET: { className: 'pill-muted', label: 'Settings' },
 }
 
 export default function Dashboard() {
   const { activeServer } = useServer()
   const running = activeServer?.running ?? false
-  const { lines: liveLog } = useLiveLog(activeServer?.id ?? null)
-  const { settings } = useSettings(running ? (activeServer?.id ?? null) : null)
+  const { events: activityEvents, status: activityStatus } = useActivityFeed(
+    running ? (activeServer?.serverName ?? null) : null
+  )
+  const { settings } = useSettings(running ? (activeServer?.serverName ?? null) : null)
   const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [playerRaw, setPlayerRaw] = useState<string | null>(null)
+  const [playerCount, setPlayerCount] = useState<number>(0)
+  const [recentCombat, setRecentCombat] = useState<CombatEvent[]>([])
+  const [recentChat, setRecentChat] = useState<ChatMessage[]>([])
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     api
-      .get<Schedule[]>(`/servers/${activeServer.id}/schedules`)
+      .get<Schedule[]>(`/servers/${activeServer.serverName}/schedules`)
       .then(setSchedules)
       .catch(console.error)
-  }, [activeServer?.id])
+  }, [activeServer?.serverName])
 
-  // Poll getplayers every 30s (only when server is running)
-  const pollPlayers = useCallback(() => {
-    if (!activeServer?.id || !running) return
-    api
-      .get<{ raw?: string }>(`/servers/${activeServer.id}/players`)
-      .then((data) => setPlayerRaw(data?.raw ?? null))
-      .catch(() => {/* ignore — degraded mode */})
-  }, [activeServer?.id, running])
-
+  // Fetch player count, recent combat, and recent chat
   useEffect(() => {
-    if (!activeServer?.id || !running) { setPlayerRaw(null); return }
-    pollPlayers()
-    const id = setInterval(pollPlayers, PLAYER_POLL_MS)
-    return () => clearInterval(id)
-  }, [activeServer?.id, running, pollPlayers])
+    if (!activeServer?.serverName) return
+
+    api.get<{ data: unknown[]; total: number }>(`/servers/${activeServer.serverName}/players?filter=online`)
+      .then((res) => setPlayerCount(res.total))
+      .catch(() => setPlayerCount(0))
+
+    api.get<{ data: CombatEvent[] }>(`/servers/${activeServer.serverName}/combat-log?limit=10`)
+      .then((res) => setRecentCombat(res.data))
+      .catch(() => {})
+
+    api.get<{ data: ChatMessage[] }>(`/servers/${activeServer.serverName}/chat?limit=10`)
+      .then((res) => setRecentChat(res.data))
+      .catch(() => {})
+  }, [activeServer?.serverName])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [liveLog])
+  }, [activityEvents])
 
-  const maxPlayers = settings?.MaxPlayers ?? '—'
-  const worldName = settings?.WorldName ?? '—'
-  const playerCount = playerRaw !== null ? (extractPlayerCount(playerRaw) ?? '—') : '—'
   const enabledSchedules = schedules.filter((s) => s.enabled)
 
   return (
@@ -80,12 +107,12 @@ export default function Dashboard() {
         </div>
         <div className="stat-item">
           <div className="stat-label">Players</div>
-          <div className="stat-value">{String(playerCount)}</div>
+          <div className="stat-value">{playerCount}</div>
           <div className="stat-sub">Online now</div>
         </div>
         <div className="stat-item">
           <div className="stat-label">Max Players</div>
-          <div className="stat-value">{String(maxPlayers)}</div>
+          <div className="stat-value">{String(settings?.MaxPlayers ?? '—')}</div>
           <div className="stat-sub">Configured slots</div>
         </div>
         <div className="stat-item">
@@ -95,18 +122,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Activity log + Quick actions ─────────────────────────── */}
-      <div className="grid-3">
+      {/* ── Row 1: Activity Feed + Recent Combat ──────────────────── */}
+      <div className="grid-2">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Activity Log</span>
-            <span className="pill pill-green">
-              <span className="dot dot-green pulse" />
-              Live
+            <span className="card-title">Activity</span>
+            <span className={`pill ${activityStatus === 'connected' ? 'pill-green' : 'pill-muted'}`}>
+              {activityStatus === 'connected' && <span className="dot dot-green pulse" />}
+              {activityStatus === 'connected' ? 'Live' : activityStatus === 'connecting' ? 'Connecting' : 'Offline'}
             </span>
           </div>
-          <div style={{ background: 'var(--bg0)', overflowY: 'auto', maxHeight: '320px' }}>
-            {liveLog.length === 0 && (
+          <div style={{ background: 'var(--bg0)', overflowY: 'auto', maxHeight: '280px' }}>
+            {activityEvents.length === 0 && (
               <div
                 style={{
                   padding: '24px',
@@ -116,110 +143,91 @@ export default function Dashboard() {
                   fontSize: '11px',
                 }}
               >
-                {activeServer?.running ? 'Waiting for log lines…' : 'Server is not running.'}
+                {activeServer?.running ? 'Waiting for activity…' : 'Server is not running.'}
               </div>
             )}
-            {liveLog.map((l) => (
-              <div key={l.lineId} className="log-entry log-info">
-                <span className="log-time">{new Date(l.ts).toLocaleTimeString()}</span>
-                <span className="log-msg">{l.raw}</span>
-              </div>
-            ))}
+            {activityEvents.map((e) => {
+              const pill = EVENT_PILL[e.type] ?? { className: 'pill-muted', label: e.type }
+              return (
+                <div key={e.id} className="log-entry log-info">
+                  <span className="log-time">
+                    {new Date(e.timestamp).toLocaleTimeString()}
+                  </span>
+                  <span
+                    className={`pill ${pill.className}`}
+                    style={{ fontSize: '8px', marginRight: '6px', flexShrink: 0 }}
+                  >
+                    {pill.label}
+                  </span>
+                  <span className="log-msg">{e.detail}</span>
+                </div>
+              )
+            })}
             <div ref={endRef} />
           </div>
         </div>
 
-        <div className="col">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">Quick Actions</span>
-            </div>
-            <div className="card-body">
-              <div className="btn-group">
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() =>
-                    activeServer?.id &&
-                    api.post(`/servers/${activeServer.id}/actions/forcesave`).catch(console.error)
-                  }
-                >
-                  Force Save
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() =>
-                    activeServer?.id &&
-                    api
-                      .post(`/servers/${activeServer.id}/actions/announcement`, {
-                        message: 'Server maintenance in 5 minutes.',
-                      })
-                      .catch(console.error)
-                  }
-                >
-                  Announcement
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() =>
-                    activeServer?.id &&
-                    api
-                      .post(`/servers/${activeServer.id}/actions/weather`, { type: 'clear' })
-                      .catch(console.error)
-                  }
-                >
-                  Set Weather
-                </button>
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() =>
-                    activeServer?.id &&
-                    api.post(`/servers/${activeServer.id}/actions/killall`).catch(console.error)
-                  }
-                >
-                  Kill All
-                </button>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Recent Combat</span>
+            <Link to="/activity" style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--muted)', textDecoration: 'none' }}>
+              View all →
+            </Link>
+          </div>
+          <div style={{ overflowY: 'auto', maxHeight: '280px' }}>
+            {recentCombat.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                No combat events yet.
               </div>
-            </div>
+            )}
+            {recentCombat.map((e) => (
+              <div key={e.id} className={`log-entry ${e.killerSteamId ? 'combat-row-pvp' : 'combat-row-pve'}`}>
+                <span className="log-time">{new Date(e.createdAt).toLocaleTimeString()}</span>
+                <span className="log-msg">
+                  <span style={{ color: 'var(--text-bright)' }}>{e.displayName}</span>
+                  {e.killerDisplayName ? (
+                    <>
+                      <span style={{ color: 'var(--dim)', margin: '0 4px' }}>killed by</span>
+                      <span style={{ color: 'var(--orange)' }}>{e.killerDisplayName}</span>
+                      {e.weapon && <span style={{ color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '10px', marginLeft: '6px' }}>({e.weapon})</span>}
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--dim)', margin: '0 4px' }}>died to {e.cause}</span>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── Server info + Upcoming schedules ─────────────────────── */}
+      {/* ── Row 2: Recent Chat + Upcoming Schedules ───────────────── */}
       <div className="grid-2">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Server Info</span>
-            <span className={`pill ${activeServer?.running ? 'pill-green' : 'pill-muted'}`}>
-              {activeServer?.running && <span className="dot dot-green pulse" />}
-              {activeServer?.running ? 'Running' : 'Stopped'}
-            </span>
+            <span className="card-title">Recent Chat</span>
+            <Link to="/activity" style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--muted)', textDecoration: 'none' }}>
+              View all →
+            </Link>
           </div>
-          <div className="card-body-0">
-            {(
-              [
-                ['Display Name', activeServer?.name ?? '—'],
-                ['World Name', String(worldName)],
-                ['Game Port', activeServer ? `${activeServer.gamePort} (UDP)` : '—'],
-                ['Query Port', activeServer ? `${activeServer.queryPort} (UDP)` : '—'],
-                ['Container', activeServer?.containerName ?? '(env default)'],
-              ] as [string, string][]
-            ).map(([k, v]) => (
-              <div key={k} className="setting-row">
-                <span className="setting-key" style={{ minWidth: '110px' }}>
-                  {k}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: '12px',
-                    color: 'var(--text)',
-                    textAlign: 'right',
-                  }}
-                >
-                  {v}
-                </span>
+          <div style={{ overflowY: 'auto', maxHeight: '280px' }}>
+            {recentChat.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                No chat messages yet.
               </div>
-            ))}
+            )}
+            {recentChat.map((m) => {
+              const chColor = m.channel === 'global' ? 'pill-green' : m.channel === 'team' ? 'pill-orange' : 'pill-muted'
+              return (
+                <div key={m.id} className="log-entry log-info">
+                  <span className="log-time">{new Date(m.createdAt).toLocaleTimeString()}</span>
+                  <span className={`pill ${chColor}`} style={{ fontSize: '8px', marginRight: '6px', flexShrink: 0 }}>{m.channel}</span>
+                  <span className="log-msg">
+                    <span style={{ color: 'var(--text-bright)' }}>{m.displayName}</span>: {m.message}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
 

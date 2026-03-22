@@ -12,7 +12,7 @@ afterAll(async () => {
 })
 
 describe('Access Lists routes', () => {
-  let listId: string
+  let listSlug: string
 
   describe('POST /api/lists (create)', () => {
     it('ADMIN can create an access list', async () => {
@@ -23,7 +23,7 @@ describe('Access Lists routes', () => {
       const body = JSON.parse(res.body)
       expect(body.name).toBe('Test Ban List')
       expect(body.type).toBe('BAN')
-      listId = body.id
+      listSlug = body.slug
     })
 
     it('OWNER can create an access list', async () => {
@@ -51,19 +51,19 @@ describe('Access Lists routes', () => {
     })
   })
 
-  describe('GET /api/lists/:id', () => {
+  describe('GET /api/lists/:slug', () => {
     it('returns list details with entries', async () => {
-      const res = await ctx.viewer.get(`/api/lists/${listId}`)
+      const res = await ctx.viewer.get(`/api/lists/${listSlug}`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
-      expect(body.id).toBe(listId)
+      expect(body.slug).toBe(listSlug)
       expect(body).toHaveProperty('entries')
     })
   })
 
-  describe('POST /api/lists/:id/entries (add entry)', () => {
+  describe('POST /api/lists/:slug/entries (add entry)', () => {
     it('ADMIN can add an entry', async () => {
-      const res = await ctx.admin.post(`/api/lists/${listId}/entries`, {
+      const res = await ctx.admin.post(`/api/lists/${listSlug}/entries`, {
         payload: JSON.stringify({
           steamId: '76561198000000001',
           playerName: 'TestPlayer',
@@ -76,7 +76,7 @@ describe('Access Lists routes', () => {
     })
 
     it('VIEWER cannot add an entry → 403', async () => {
-      const res = await ctx.viewer.post(`/api/lists/${listId}/entries`, {
+      const res = await ctx.viewer.post(`/api/lists/${listSlug}/entries`, {
         payload: JSON.stringify({
           steamId: '76561198000000002',
           playerName: 'ViewerPlayer',
@@ -86,21 +86,21 @@ describe('Access Lists routes', () => {
     })
   })
 
-  describe('DELETE /api/lists/:id/entries/:steamId', () => {
+  describe('DELETE /api/lists/:slug/entries/:steamId', () => {
     it('ADMIN can remove an entry', async () => {
-      const res = await ctx.admin.delete(`/api/lists/${listId}/entries/76561198000000001`)
+      const res = await ctx.admin.delete(`/api/lists/${listSlug}/entries/76561198000000001`)
       expect(res.statusCode).toBe(200)
     })
 
     it('VIEWER cannot remove an entry → 403', async () => {
-      const res = await ctx.viewer.delete(`/api/lists/${listId}/entries/76561198000000001`)
+      const res = await ctx.viewer.delete(`/api/lists/${listSlug}/entries/76561198000000001`)
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('PUT /api/lists/:id (update)', () => {
+  describe('PUT /api/lists/:slug (update)', () => {
     it('ADMIN can update a list', async () => {
-      const res = await ctx.admin.put(`/api/lists/${listId}`, {
+      const res = await ctx.admin.put(`/api/lists/${listSlug}`, {
         payload: JSON.stringify({ name: 'Updated Ban List' }),
       })
       expect(res.statusCode).toBe(200)
@@ -109,21 +109,21 @@ describe('Access Lists routes', () => {
     })
 
     it('VIEWER cannot update a list → 403', async () => {
-      const res = await ctx.viewer.put(`/api/lists/${listId}`, {
+      const res = await ctx.viewer.put(`/api/lists/${listSlug}`, {
         payload: JSON.stringify({ name: 'Viewer Updated' }),
       })
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('DELETE /api/lists/:id', () => {
+  describe('DELETE /api/lists/:slug', () => {
     it('VIEWER cannot delete a list → 403', async () => {
-      const res = await ctx.viewer.delete(`/api/lists/${listId}`)
+      const res = await ctx.viewer.delete(`/api/lists/${listSlug}`)
       expect(res.statusCode).toBe(403)
     })
 
     it('ADMIN can delete a list', async () => {
-      const res = await ctx.admin.delete(`/api/lists/${listId}`)
+      const res = await ctx.admin.delete(`/api/lists/${listSlug}`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body.ok).toBe(true)

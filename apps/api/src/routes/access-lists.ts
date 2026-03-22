@@ -1,15 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWrite } from '../plugins/auth.js'
 import * as ctrl from '../controllers/access-lists.js'
-import { serverParams as sharedServerParams } from './_schemas.js'
+import { serverParams, listParams, entryParams } from './_schemas.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
-
-const listParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string' } },
-} as const
 
 const listBody = {
   type: 'object',
@@ -37,12 +31,6 @@ const listUpdateBody = {
   },
 } as const
 
-const entryParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string' } },
-} as const
-
 const entryBody = {
   type: 'object',
   required: ['steamId'],
@@ -60,18 +48,6 @@ const entryBody = {
     expiresAt: { type: 'string', format: 'date-time' },
   },
 } as const
-
-const entryDeleteParams = {
-  type: 'object',
-  required: ['id', 'steamId'],
-  properties: {
-    id: { type: 'string' },
-    steamId: { type: 'string' },
-  },
-} as const
-
-// AUDIT-96: use shared serverParams from _schemas.ts
-const serverParams = sharedServerParams
 
 const assignmentsBody = {
   type: 'object',
@@ -105,7 +81,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Read — any authenticated user
   app.route({
     method: 'GET',
-    url: '/lists/:id',
+    url: '/lists/:slug',
     schema: { params: listParams },
     handler: ctrl.getAccessList,
   })
@@ -113,7 +89,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Update — ADMIN+
   app.route({
     method: 'PUT',
-    url: '/lists/:id',
+    url: '/lists/:slug',
     schema: { params: listParams, body: listUpdateBody },
     preHandler: [requireWrite],
     handler: ctrl.updateAccessList,
@@ -122,7 +98,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Delete — ADMIN+
   app.route({
     method: 'DELETE',
-    url: '/lists/:id',
+    url: '/lists/:slug',
     schema: { params: listParams },
     preHandler: [requireWrite],
     handler: ctrl.deleteAccessList,
@@ -133,8 +109,8 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Add entry — ADMIN+
   app.route({
     method: 'POST',
-    url: '/lists/:id/entries',
-    schema: { params: entryParams, body: entryBody },
+    url: '/lists/:slug/entries',
+    schema: { params: listParams, body: entryBody },
     preHandler: [requireWrite],
     handler: ctrl.upsertEntry,
   })
@@ -142,8 +118,8 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Remove entry — ADMIN+
   app.route({
     method: 'DELETE',
-    url: '/lists/:id/entries/:steamId',
-    schema: { params: entryDeleteParams },
+    url: '/lists/:slug/entries/:steamId',
+    schema: { params: entryParams },
     preHandler: [requireWrite],
     handler: ctrl.deleteEntry,
   })
@@ -153,7 +129,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Refresh external feed — ADMIN+
   app.route({
     method: 'POST',
-    url: '/lists/:id/refresh',
+    url: '/lists/:slug/refresh',
     schema: { params: listParams },
     preHandler: [requireWrite],
     handler: ctrl.refreshExternal,
@@ -164,7 +140,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Read — any authenticated user
   app.route({
     method: 'GET',
-    url: '/servers/:id/list-assignments',
+    url: '/servers/:serverName/list-assignments',
     schema: { params: serverParams },
     handler: ctrl.getAssignments,
   })
@@ -172,7 +148,7 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
   // Set assignments — ADMIN+
   app.route({
     method: 'PUT',
-    url: '/servers/:id/list-assignments',
+    url: '/servers/:serverName/list-assignments',
     schema: { params: serverParams, body: assignmentsBody },
     preHandler: [requireWrite],
     handler: ctrl.setAssignments,

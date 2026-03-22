@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupTestContext, mockDockerManager, type TestContext } from './helpers/setup.js'
 
 let ctx: TestContext
-let serverId: string
+let serverName: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -14,7 +14,7 @@ beforeAll(async () => {
       serverName: 'settings-test-server',
     }),
   })
-  serverId = JSON.parse(res.body).id
+  serverName = JSON.parse(res.body).serverName
 })
 
 afterAll(async () => {
@@ -22,23 +22,23 @@ afterAll(async () => {
 })
 
 describe('Settings routes', () => {
-  describe('GET /api/servers/:id/settings', () => {
+  describe('GET /api/servers/:serverName/settings', () => {
     it('any authenticated user can read settings', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${serverId}/settings`)
+      const res = await ctx.viewer.get(`/api/servers/${serverName}/settings`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body).toHaveProperty('raw')
     })
 
     it('unauthenticated → 401', async () => {
-      const res = await ctx.unauthenticated.get(`/api/servers/${serverId}/settings`)
+      const res = await ctx.unauthenticated.get(`/api/servers/${serverName}/settings`)
       expect(res.statusCode).toBe(401)
     })
   })
 
-  describe('PUT /api/servers/:id/settings/:key', () => {
+  describe('PUT /api/servers/:serverName/settings/:key', () => {
     it('ADMIN can update a setting key', async () => {
-      const res = await ctx.admin.put(`/api/servers/${serverId}/settings/MaxPlayers`, {
+      const res = await ctx.admin.put(`/api/servers/${serverName}/settings/MaxPlayers`, {
         payload: JSON.stringify({ value: 50 }),
       })
       expect(res.statusCode).toBe(200)
@@ -49,7 +49,7 @@ describe('Settings routes', () => {
     })
 
     it('VIEWER cannot update a setting → 403', async () => {
-      const res = await ctx.viewer.put(`/api/servers/${serverId}/settings/MaxPlayers`, {
+      const res = await ctx.viewer.put(`/api/servers/${serverName}/settings/MaxPlayers`, {
         payload: JSON.stringify({ value: 99 }),
       })
       expect(res.statusCode).toBe(403)

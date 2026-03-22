@@ -45,6 +45,12 @@ export async function listServers() {
 
 export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, reply: FastifyReply) {
   const { name, serverName, containerName, gamePort, queryPort, notes } = req.body
+  if (containerName) {
+    const existing = await prisma.server.findFirst({ where: { containerName } })
+    if (existing) {
+      return reply.status(409).send({ error: `Container name "${containerName}" is already used by server "${existing.name}"` })
+    }
+  }
   const server = await prisma.server.create({
     data: { name, serverName, containerName, gamePort, queryPort, notes },
     select: SERVER_SELECT,
@@ -68,11 +74,11 @@ export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, re
 }
 
 export async function getServer(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
 ) {
   const server = await prisma.server.findUnique({
-    where: { id: req.params.id },
+    where: { serverName: req.params.serverName },
     include: { wipeLogs: { orderBy: { createdAt: 'desc' }, take: 1 } },
   })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
@@ -81,14 +87,22 @@ export async function getServer(
 }
 
 export async function updateServer(
-  req: FastifyRequest<{ Params: { id: string }; Body: Partial<ServerBody> }>,
+  req: FastifyRequest<{ Params: { serverName: string }; Body: Partial<ServerBody> }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   const { name, serverName, containerName, gamePort, queryPort, notes } = req.body
+  if (containerName) {
+    const existing = await prisma.server.findFirst({
+      where: { containerName, id: { not: server.id } },
+    })
+    if (existing) {
+      return reply.status(409).send({ error: `Container name "${containerName}" is already used by server "${existing.name}"` })
+    }
+  }
   const updated = await prisma.server.update({
-    where: { id: req.params.id },
+    where: { id: server.id },
     data: { name, serverName, containerName, gamePort, queryPort, notes },
     select: SERVER_SELECT,
   })
@@ -96,47 +110,59 @@ export async function updateServer(
 }
 
 export async function deleteServer(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
 ) {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
 
-  const tasks = await prisma.scheduledTask.findMany({ where: { serverId: req.params.id } })
+  const tasks = await prisma.scheduledTask.findMany({ where: { serverId: server.id } })
   for (const task of tasks) {
     unregisterCronJob(task.id)
   }
 
-  if (dockerManager.isRunning(req.params.id)) {
-    await dockerManager.stop(req.params.id)
+  if (dockerManager.isRunning(server.id)) {
+    await dockerManager.stop(server.id)
   }
-  await prisma.server.delete({ where: { id: req.params.id } })
+  await prisma.server.delete({ where: { id: server.id } })
   return { ok: true }
 }
 
 export async function startServer(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
 ) {
+  if (process.env.DEMO_MODE === 'true') return { status: 'started' }
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
-    await dockerManager.start(req.params.id)
+    await dockerManager.start(server.id)
     return { status: 'started' }
   } catch (err) {
     return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) })
   }
 }
 
-export async function stopServer(req: FastifyRequest<{ Params: { id: string } }>) {
-  await dockerManager.stop(req.params.id)
+export async function stopServer(
+  req: FastifyRequest<{ Params: { serverName: string } }>,
+  reply: FastifyReply
+) {
+  if (process.env.DEMO_MODE === 'true') return { status: 'stopped' }
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
+  await dockerManager.stop(server.id)
   return { status: 'stopped' }
 }
 
 export async function restartServer(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
 ) {
+  if (process.env.DEMO_MODE === 'true') return { status: 'restarted' }
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
-    await dockerManager.restart(req.params.id)
+    await dockerManager.restart(server.id)
     return { status: 'restarted' }
   } catch (err) {
     return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) })
@@ -145,7 +171,7 @@ export async function restartServer(
 
 // ── Dashboard Quick Actions ───────────────────────────────────────────────────
 
-type ActionParams = { id: string }
+type ActionParams = { serverName: string }
 
 async function dispatchServerAction(
   req: FastifyRequest<{ Params: ActionParams }>,
@@ -153,7 +179,7 @@ async function dispatchServerAction(
   command: string,
   action: string
 ): Promise<{ ok: boolean; raw: string } | FastifyReply> {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } })
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
@@ -162,6 +188,7 @@ async function dispatchServerAction(
       data: {
         serverId: server.id,
         performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
         action,
         details: command,
       },

@@ -16,7 +16,7 @@ export type Server = {
 type ServerContextValue = {
   servers: Server[]
   activeServer: Server | null
-  setActiveServerId: (id: string) => void
+  setActiveServerName: (serverName: string) => void
   refresh: () => void
   loading: boolean
 }
@@ -24,14 +24,14 @@ type ServerContextValue = {
 const ServerContext = createContext<ServerContextValue>({
   servers: [],
   activeServer: null,
-  setActiveServerId: () => {},
+  setActiveServerName: () => {},
   refresh: () => {},
   loading: false,
 })
 
 export function ServerProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<Server[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeName, setActiveName] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(() => {
@@ -41,7 +41,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
       .get<Server[]>('/servers')
       .then((data) => {
         setServers(data)
-        setActiveId((prev) => prev ?? data[0]?.id ?? null)
+        setActiveName((prev) => prev ?? data[0]?.serverName ?? null)
       })
       .catch((err) => console.error('Failed to load servers:', err))
       .finally(() => setLoading(false))
@@ -50,13 +50,13 @@ export function ServerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => load(), [load])
 
-  const activeServer = servers.find((s) => s.id === activeId) ?? null
+  const activeServer = servers.find((s) => s.serverName === activeName) ?? null
 
   const value = useMemo(
     () => ({
       servers,
       activeServer,
-      setActiveServerId: setActiveId,
+      setActiveServerName: setActiveName,
       refresh: load,
       loading,
     }),

@@ -1,9 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWrite, requireOwner } from '../plugins/auth.js'
 import * as ctrl from '../controllers/servers.js'
-import { serverParams as sharedServerParams } from './_schemas.js'
-
-const serverParams = sharedServerParams
+import { serverParams, errorResponse } from './_schemas.js'
 
 const serverBody = {
   type: 'object',
@@ -52,6 +50,8 @@ const serverItem = {
 } as const
 
 const listServersReply = { 200: { type: 'array', items: serverItem } } as const
+const actionReply = { 200: { type: 'object', properties: { ok: { type: 'boolean' }, raw: { type: 'string' } } } } as const
+const statusReply = { 200: { type: 'object', properties: { status: { type: 'string' } } } } as const
 
 const serversRoutes: FastifyPluginAsync = async (app) => {
   app.route({ method: 'GET',    url: '/servers',
@@ -63,43 +63,43 @@ const serversRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [requireOwner],
     handler: ctrl.createServer })
 
-  app.route({ method: 'GET',    url: '/servers/:id',
+  app.route({ method: 'GET',    url: '/servers/:serverName',
     schema: { params: serverParams },
     handler: ctrl.getServer })
 
-  app.route({ method: 'PUT',    url: '/servers/:id',
+  app.route({ method: 'PUT',    url: '/servers/:serverName',
     schema: { params: serverParams, body: serverUpdateBody },
     preHandler: [requireWrite],
     handler: ctrl.updateServer })
 
-  app.route({ method: 'DELETE', url: '/servers/:id',
+  app.route({ method: 'DELETE', url: '/servers/:serverName',
     schema: { params: serverParams },
     preHandler: [requireOwner],
     handler: ctrl.deleteServer })
 
-  app.route({ method: 'POST',   url: '/servers/:id/start',
-    schema: { params: serverParams },
+  app.route({ method: 'POST',   url: '/servers/:serverName/start',
+    schema: { params: serverParams, response: statusReply },
     preHandler: [requireWrite],
     handler: ctrl.startServer })
 
-  app.route({ method: 'POST',   url: '/servers/:id/stop',
-    schema: { params: serverParams },
+  app.route({ method: 'POST',   url: '/servers/:serverName/stop',
+    schema: { params: serverParams, response: statusReply },
     preHandler: [requireWrite],
     handler: ctrl.stopServer })
 
-  app.route({ method: 'POST',   url: '/servers/:id/restart',
-    schema: { params: serverParams },
+  app.route({ method: 'POST',   url: '/servers/:serverName/restart',
+    schema: { params: serverParams, response: statusReply },
     preHandler: [requireWrite],
     handler: ctrl.restartServer })
 
   // ── Dashboard Quick Actions ─────────────────────────────────────────────────
 
-  app.route({ method: 'POST',   url: '/servers/:id/actions/forcesave',
-    schema: { params: serverParams },
+  app.route({ method: 'POST',   url: '/servers/:serverName/actions/forcesave',
+    schema: { params: serverParams, response: actionReply },
     preHandler: [requireWrite],
     handler: ctrl.forceSave })
 
-  app.route({ method: 'POST',   url: '/servers/:id/actions/announcement',
+  app.route({ method: 'POST',   url: '/servers/:serverName/actions/announcement',
     schema: {
       params: serverParams,
       body: {
@@ -108,11 +108,12 @@ const serversRoutes: FastifyPluginAsync = async (app) => {
         additionalProperties: false,
         properties: { message: { type: 'string', minLength: 1 } },
       },
+      response: actionReply,
     },
     preHandler: [requireWrite],
     handler: ctrl.sendAnnouncement })
 
-  app.route({ method: 'POST',   url: '/servers/:id/actions/weather',
+  app.route({ method: 'POST',   url: '/servers/:serverName/actions/weather',
     schema: {
       params: serverParams,
       body: {
@@ -121,16 +122,17 @@ const serversRoutes: FastifyPluginAsync = async (app) => {
         additionalProperties: false,
         properties: { type: { type: 'string' } },
       },
+      response: actionReply,
     },
     preHandler: [requireWrite],
     handler: ctrl.setWeather })
 
-  app.route({ method: 'POST',   url: '/servers/:id/actions/killall',
-    schema: { params: serverParams },
+  app.route({ method: 'POST',   url: '/servers/:serverName/actions/killall',
+    schema: { params: serverParams, response: actionReply },
     preHandler: [requireWrite],
     handler: ctrl.killAll })
 
-  app.route({ method: 'POST',   url: '/servers/:id/actions/broadcast',
+  app.route({ method: 'POST',   url: '/servers/:serverName/actions/broadcast',
     schema: {
       params: serverParams,
       body: {
@@ -139,6 +141,7 @@ const serversRoutes: FastifyPluginAsync = async (app) => {
         additionalProperties: false,
         properties: { message: { type: 'string', minLength: 1 } },
       },
+      response: actionReply,
     },
     preHandler: [requireWrite],
     handler: ctrl.broadcastMessage })

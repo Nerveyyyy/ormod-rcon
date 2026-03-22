@@ -22,6 +22,7 @@ export const envSchema = {
     TLS_CERT_PATH: { type: 'string', default: '' },
     TLS_KEY_PATH: { type: 'string', default: '' },
     LOG_LEVEL: { type: 'string', default: 'info' },
+    DEMO_MODE: { type: 'boolean', default: false },
   },
 } as const
 
@@ -38,6 +39,7 @@ export type EnvConfig = {
   TLS_CERT_PATH: string
   TLS_KEY_PATH: string
   LOG_LEVEL: string
+  DEMO_MODE: boolean
 }
 
 /**
@@ -72,6 +74,7 @@ export type SessionData = {
 declare module 'fastify' {
   interface FastifyInstance {
     config: EnvConfig
+    rconManager: import('./services/rcon-connection-manager.js').RconConnectionManager
   }
   interface FastifyRequest {
     session?: SessionData

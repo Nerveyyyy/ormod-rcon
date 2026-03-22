@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupTestContext, mockDockerManager, type TestContext } from './helpers/setup.js'
 
 let ctx: TestContext
-let serverId: string
+let serverName: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -15,43 +15,43 @@ beforeAll(async () => {
       savePath: '/tmp/console-test',
     }),
   })
-  serverId = JSON.parse(res.body).id
+  serverName = JSON.parse(res.body).serverName
 })
 afterAll(async () => {
   await ctx.cleanup()
 })
 
 describe('Console routes', () => {
-  describe('POST /api/servers/:id/console/command', () => {
+  describe('POST /api/servers/:serverName/console/command', () => {
     // Docker socket is not available in tests. These tests verify the RBAC
     // layer only: ADMIN+ passes the auth guard (not 403), VIEWER is rejected.
     // The actual Docker call may fail with 400/500 — that's expected without Docker.
 
     it('ADMIN passes RBAC for send command (not 403)', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/console/command`, {
+      const res = await ctx.admin.post(`/api/servers/${serverName}/console/command`, {
         payload: JSON.stringify({ command: 'status' }),
       })
       expect(res.statusCode).not.toBe(403)
     })
 
     it('OWNER passes RBAC for send command (not 403)', async () => {
-      const res = await ctx.owner.post(`/api/servers/${serverId}/console/command`, {
+      const res = await ctx.owner.post(`/api/servers/${serverName}/console/command`, {
         payload: JSON.stringify({ command: 'help' }),
       })
       expect(res.statusCode).not.toBe(403)
     })
 
     it('VIEWER cannot send a command → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/console/command`, {
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/console/command`, {
         payload: JSON.stringify({ command: 'status' }),
       })
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('GET /api/servers/:id/console/log', () => {
+  describe('GET /api/servers/:serverName/console/log', () => {
     it('ADMIN can read console log', async () => {
-      const res = await ctx.admin.get(`/api/servers/${serverId}/console/log`)
+      const res = await ctx.admin.get(`/api/servers/${serverName}/console/log`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body).toHaveProperty('lines')
@@ -59,12 +59,12 @@ describe('Console routes', () => {
     })
 
     it('VIEWER cannot read console log → 403', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${serverId}/console/log`)
+      const res = await ctx.viewer.get(`/api/servers/${serverName}/console/log`)
       expect(res.statusCode).toBe(403)
     })
 
     it('unauthenticated → 401', async () => {
-      const res = await ctx.unauthenticated.get(`/api/servers/${serverId}/console/log`)
+      const res = await ctx.unauthenticated.get(`/api/servers/${serverName}/console/log`)
       expect(res.statusCode).toBe(401)
     })
   })

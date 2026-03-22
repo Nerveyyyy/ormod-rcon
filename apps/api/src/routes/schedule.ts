@@ -1,22 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireOwner } from '../plugins/auth.js'
 import * as ctrl from '../controllers/schedule.js'
-import { serverParams as sharedServerParams } from './_schemas.js'
+import { serverParams } from './_schemas.js'
 
 // Re-export for server.ts startup cron restoration
 export { registerCronJob } from '../controllers/schedule.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
-// AUDIT-96: use shared serverParams from _schemas.ts
-const serverParams = sharedServerParams
-
-const taskParams = {
+const scheduleSlugParams = {
   type: 'object',
-  required: ['id', 'taskId'],
+  required: ['serverName', 'slug'],
   properties: {
-    id: { type: 'string' },
-    taskId: { type: 'string' },
+    serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' },
+    slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*$' },
   },
 } as const
 
@@ -55,7 +52,7 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
   // Read — any authenticated user
   app.route({
     method: 'GET',
-    url: '/servers/:id/schedules',
+    url: '/servers/:serverName/schedules',
     schema: { params: serverParams },
     handler: ctrl.listSchedules,
   })
@@ -63,7 +60,7 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
   // Create — OWNER only
   app.route({
     method: 'POST',
-    url: '/servers/:id/schedules',
+    url: '/servers/:serverName/schedules',
     schema: { params: serverParams, body: scheduleBody },
     preHandler: [requireOwner],
     handler: ctrl.createSchedule,
@@ -72,8 +69,8 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
   // Update — OWNER only
   app.route({
     method: 'PUT',
-    url: '/servers/:id/schedules/:taskId',
-    schema: { params: taskParams, body: scheduleUpdateBody },
+    url: '/servers/:serverName/schedules/:slug',
+    schema: { params: scheduleSlugParams, body: scheduleUpdateBody },
     preHandler: [requireOwner],
     handler: ctrl.updateSchedule,
   })
@@ -81,8 +78,8 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
   // Delete — OWNER only
   app.route({
     method: 'DELETE',
-    url: '/servers/:id/schedules/:taskId',
-    schema: { params: taskParams },
+    url: '/servers/:serverName/schedules/:slug',
+    schema: { params: scheduleSlugParams },
     preHandler: [requireOwner],
     handler: ctrl.deleteSchedule,
   })
@@ -90,8 +87,8 @@ const scheduleRoutes: FastifyPluginAsync = async (app) => {
   // Manual trigger — OWNER only
   app.route({
     method: 'POST',
-    url: '/servers/:id/schedules/:taskId/run',
-    schema: { params: taskParams },
+    url: '/servers/:serverName/schedules/:slug/run',
+    schema: { params: scheduleSlugParams },
     preHandler: [requireOwner],
     handler: ctrl.runScheduleNow,
   })

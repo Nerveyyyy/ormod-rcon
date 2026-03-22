@@ -470,6 +470,17 @@ class DockerManager {
     return this.outputEmitters.get(serverId)
   }
 
+  /** Demo mode: inject a pre-populated buffer and emitter for a server. */
+  initDemoOutput(serverId: string): EventEmitter {
+    const buffer: string[] = []
+    const emitter = new EventEmitter()
+    emitter.setMaxListeners(50)
+    this.outputBuffers.set(serverId, buffer)
+    this.outputEmitters.set(serverId, emitter)
+    this.runningContainers.add(serverId)
+    return emitter
+  }
+
   // ── Startup reconciliation ────────────────────────────────────────────────
 
   /**

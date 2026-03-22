@@ -148,39 +148,39 @@ export default function Schedules() {
   }, [showAdd])
 
   const load = useCallback(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     setLoading(true)
     api
-      .get<ScheduledTask[]>(`/servers/${activeServer.id}/schedules`)
+      .get<ScheduledTask[]>(`/servers/${activeServer.serverName}/schedules`)
       .then(setTasks)
       .catch((e) => setError((e as Error).message || 'Failed to load schedules'))
       .finally(() => setLoading(false))
-  }, [activeServer?.id])
+  }, [activeServer?.serverName])
 
   useEffect(() => {
-    if (activeServer?.id) load()
-  }, [activeServer?.id, load])
+    if (activeServer?.serverName) load()
+  }, [activeServer?.serverName, load])
 
   const toggleEnabled = (task: ScheduledTask) => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     api
-      .put(`/servers/${activeServer.id}/schedules/${task.id}`, { enabled: !task.enabled })
+      .put(`/servers/${activeServer.serverName}/schedules/${task.id}`, { enabled: !task.enabled })
       .then(load)
       .catch((e) => setError((e as Error).message || 'Failed to update schedule'))
   }
 
   const deleteTask = (taskId: string) => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     api
-      .delete(`/servers/${activeServer.id}/schedules/${taskId}`)
+      .delete(`/servers/${activeServer.serverName}/schedules/${taskId}`)
       .then(load)
       .catch((e) => setError((e as Error).message || 'Failed to delete task'))
   }
 
   const runNow = (taskId: string) => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     api
-      .post(`/servers/${activeServer.id}/schedules/${taskId}/run`)
+      .post(`/servers/${activeServer.serverName}/schedules/${taskId}/run`)
       .catch((e) => setError(`Failed to trigger task: ${(e as Error).message}`))
   }
 
@@ -199,10 +199,10 @@ export default function Schedules() {
   }
 
   const createTask = () => {
-    if (!activeServer?.id || !newLabel.trim()) return
+    if (!activeServer?.serverName || !newLabel.trim()) return
     const cronExpr = buildCron(newFreq, newHour, newMinute, newWeekday, newMonthDay, newCustomCron)
     api
-      .post(`/servers/${activeServer.id}/schedules`, {
+      .post(`/servers/${activeServer.serverName}/schedules`, {
         label: newLabel.trim(),
         type: newType,
         cronExpr,

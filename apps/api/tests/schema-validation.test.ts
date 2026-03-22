@@ -7,10 +7,10 @@ import { setupTestContext, mockDockerManager, type TestContext } from './helpers
 
 let ctx: TestContext
 
-// IDs created during setup
-let serverId: string
-let listId: string
-let taskId: string
+// Slugs/names created during setup
+let serverName: string
+let listSlug: string
+let taskSlug: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -25,7 +25,7 @@ beforeAll(async () => {
     }),
   })
   expect(serverRes.statusCode).toBe(201)
-  serverId = JSON.parse(serverRes.body).id
+  serverName = JSON.parse(serverRes.body).serverName
 
   // Create an access list as ADMIN
   const listRes = await ctx.admin.post('/api/lists', {
@@ -36,10 +36,10 @@ beforeAll(async () => {
     }),
   })
   expect(listRes.statusCode).toBe(201)
-  listId = JSON.parse(listRes.body).id
+  listSlug = JSON.parse(listRes.body).slug
 
   // Create a schedule as OWNER
-  const schedRes = await ctx.owner.post(`/api/servers/${serverId}/schedules`, {
+  const schedRes = await ctx.owner.post(`/api/servers/${serverName}/schedules`, {
     payload: JSON.stringify({
       type: 'COMMAND',
       cronExpr: '0 * * * *',
@@ -49,18 +49,18 @@ beforeAll(async () => {
     }),
   })
   expect(schedRes.statusCode).toBe(201)
-  taskId = JSON.parse(schedRes.body).id
+  taskSlug = JSON.parse(schedRes.body).slug
 })
 
 afterAll(async () => {
   await ctx.cleanup()
 })
 
-// ── PUT /api/servers/:id ──────────────────────────────────────────────────────
+// ── PUT /api/servers/:serverName ─────────────────────────────────────────────
 
-describe('PUT /api/servers/:id schema validation', () => {
+describe('PUT /api/servers/:serverName schema validation', () => {
   it('valid body → 200', async () => {
-    const res = await ctx.admin.put(`/api/servers/${serverId}`, {
+    const res = await ctx.admin.put(`/api/servers/${serverName}`, {
       payload: JSON.stringify({ name: 'Updated Name' }),
     })
     expect(res.statusCode).toBe(200)
@@ -68,32 +68,32 @@ describe('PUT /api/servers/:id schema validation', () => {
   })
 
   it('null body → 400', async () => {
-    const res = await ctx.admin.put(`/api/servers/${serverId}`, {
+    const res = await ctx.admin.put(`/api/servers/${serverName}`, {
       payload: 'null',
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('array body → 400', async () => {
-    const res = await ctx.admin.put(`/api/servers/${serverId}`, {
+    const res = await ctx.admin.put(`/api/servers/${serverName}`, {
       payload: JSON.stringify(['not', 'an', 'object']),
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('partial body (one optional field) → 200', async () => {
-    const res = await ctx.admin.put(`/api/servers/${serverId}`, {
+    const res = await ctx.admin.put(`/api/servers/${serverName}`, {
       payload: JSON.stringify({ notes: 'just a note' }),
     })
     expect(res.statusCode).toBe(200)
   })
 })
 
-// ── PUT /api/lists/:id ────────────────────────────────────────────────────────
+// ── PUT /api/lists/:slug ──────────────────────────────────────────────────────
 
-describe('PUT /api/lists/:id schema validation', () => {
+describe('PUT /api/lists/:slug schema validation', () => {
   it('valid body → 200', async () => {
-    const res = await ctx.admin.put(`/api/lists/${listId}`, {
+    const res = await ctx.admin.put(`/api/lists/${listSlug}`, {
       payload: JSON.stringify({ name: 'Updated List Name' }),
     })
     expect(res.statusCode).toBe(200)
@@ -101,32 +101,32 @@ describe('PUT /api/lists/:id schema validation', () => {
   })
 
   it('null body → 400', async () => {
-    const res = await ctx.admin.put(`/api/lists/${listId}`, {
+    const res = await ctx.admin.put(`/api/lists/${listSlug}`, {
       payload: 'null',
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('array body → 400', async () => {
-    const res = await ctx.admin.put(`/api/lists/${listId}`, {
+    const res = await ctx.admin.put(`/api/lists/${listSlug}`, {
       payload: JSON.stringify([{ name: 'bad' }]),
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('partial body (one optional field) → 200', async () => {
-    const res = await ctx.admin.put(`/api/lists/${listId}`, {
+    const res = await ctx.admin.put(`/api/lists/${listSlug}`, {
       payload: JSON.stringify({ description: 'just a description' }),
     })
     expect(res.statusCode).toBe(200)
   })
 })
 
-// ── PUT /api/servers/:id/schedules/:taskId ────────────────────────────────────
+// ── PUT /api/servers/:serverName/schedules/:slug ──────────────────────────────
 
-describe('PUT /api/servers/:id/schedules/:taskId schema validation', () => {
+describe('PUT /api/servers/:serverName/schedules/:slug schema validation', () => {
   it('valid body → 200', async () => {
-    const res = await ctx.owner.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+    const res = await ctx.owner.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
       payload: JSON.stringify({ label: 'Updated Label' }),
     })
     expect(res.statusCode).toBe(200)
@@ -134,21 +134,21 @@ describe('PUT /api/servers/:id/schedules/:taskId schema validation', () => {
   })
 
   it('null body → 400', async () => {
-    const res = await ctx.owner.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+    const res = await ctx.owner.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
       payload: 'null',
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('array body → 400', async () => {
-    const res = await ctx.owner.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+    const res = await ctx.owner.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
       payload: JSON.stringify([{ label: 'bad' }]),
     })
     expect(res.statusCode).toBe(400)
   })
 
   it('partial body (one optional field) → 200', async () => {
-    const res = await ctx.owner.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+    const res = await ctx.owner.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
       payload: JSON.stringify({ enabled: false }),
     })
     expect(res.statusCode).toBe(200)

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext.js'
 const baseTabs = [
   { to: '/dashboard', label: 'Dashboard', icon: '◈' },
   { to: '/players', label: 'Players', icon: '⌬' },
+  { to: '/activity', label: 'Activity', icon: '⊛' },
   { to: '/settings', label: 'Server Settings', icon: '⚙' },
   { to: '/console', label: 'Console', icon: '>' },
   { to: '/access-control', label: 'Access Control', icon: '⊘' },

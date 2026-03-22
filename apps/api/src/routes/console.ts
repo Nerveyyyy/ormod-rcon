@@ -12,8 +12,8 @@ import prisma from '../db/prisma-client.js'
 
 const serverParams = {
   type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string' } },
+  required: ['serverName'],
+  properties: { serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' } },
 } as const
 
 const commandBody = {
@@ -33,7 +33,7 @@ const consoleRoutes: FastifyPluginAsync = async (app) => {
   // Send command — ADMIN+ (commands can have destructive effects)
   app.route({
     method: 'POST',
-    url: '/servers/:id/console/command',
+    url: '/servers/:serverName/console/command',
     schema: { params: serverParams, body: commandBody },
     preHandler: [requireWrite],
     handler: ctrl.sendCommand,
@@ -41,7 +41,7 @@ const consoleRoutes: FastifyPluginAsync = async (app) => {
 
   app.route({
     method: 'GET',
-    url: '/servers/:id/console/log',
+    url: '/servers/:serverName/console/log',
     schema: { params: serverParams, querystring: logQuerystring },
     preHandler: [requireWrite],
     handler: ctrl.getConsoleLog,
@@ -53,8 +53,8 @@ export default consoleRoutes
 // ── WebSocket route — registered manually in app.ts (no /api prefix) ─────────
 
 export const consoleWsRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Params: { serverId: string } }>(
-    '/ws/log/:serverId',
+  app.get<{ Params: { serverName: string } }>(
+    '/ws/log/:serverName',
     { websocket: true },
     async (socket: WebSocket, req) => {
       // AUDIT-37: Validate Origin header before any processing
@@ -93,10 +93,10 @@ export const consoleWsRoutes: FastifyPluginAsync = async (app) => {
         return
       }
 
-      const { serverId } = req.params
+      const { serverName } = req.params
 
-      // AUDIT-15: Validate serverId exists in database before accessing buffers
-      const server = await prisma.server.findUnique({ where: { id: serverId } })
+      // AUDIT-15: Validate server exists in database before accessing buffers
+      const server = await prisma.server.findUnique({ where: { serverName } })
       if (!server) {
         socket.close(1008, 'Server not found')
         return
@@ -123,11 +123,11 @@ export const consoleWsRoutes: FastifyPluginAsync = async (app) => {
       }, 60_000)
 
       // Replay buffered output so the client sees history instantly
-      const buffer = dockerManager.getOutputBuffer(serverId)
+      const buffer = dockerManager.getOutputBuffer(server.id)
       for (const line of buffer) send(line)
 
       // Subscribe to live output
-      const emitter = dockerManager.getOutputEmitter(serverId)
+      const emitter = dockerManager.getOutputEmitter(server.id)
       if (!emitter) {
         send('# Server is not running. Start it from the Servers page.')
         clearInterval(heartbeat)

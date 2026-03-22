@@ -8,16 +8,55 @@
 export const serverParams = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' },
   },
-  required: ['id'],
+  required: ['serverName'],
 } as const
+
+export const listParams = {
+  type: 'object',
+  properties: {
+    slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*$' },
+  },
+  required: ['slug'],
+} as const
+
+export const scheduleParams = {
+  type: 'object',
+  properties: {
+    slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*$' },
+  },
+  required: ['slug'],
+} as const
+
+export const paginationQuery = {
+  type: 'object',
+  properties: {
+    page:  { type: 'string', default: '1' },
+    limit: { type: 'string', default: '50' },
+  },
+} as const
+
+export const errorResponse = {
+  type: 'object',
+  properties: { error: { type: 'string' } },
+} as const
+
+export const paginatedResponse = (itemSchema: object) => ({
+  type: 'object',
+  properties: {
+    data: { type: 'array', items: itemSchema },
+    page: { type: 'number' },
+    limit: { type: 'number' },
+    total: { type: 'number' },
+  },
+}) as const
 
 export const entryParams = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    entryId: { type: 'string' },
+    slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*$' },
+    steamId: { type: 'string' },
   },
-  required: ['id', 'entryId'],
+  required: ['slug', 'steamId'],
 } as const

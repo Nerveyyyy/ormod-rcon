@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupTestContext, mockDockerManager, type TestContext } from './helpers/setup.js'
 
 let ctx: TestContext
-let serverId: string
+let serverName: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -15,7 +15,7 @@ beforeAll(async () => {
       savePath: '/tmp/schedule-test',
     }),
   })
-  serverId = JSON.parse(res.body).id
+  serverName = JSON.parse(res.body).serverName
 })
 afterAll(async () => {
   await ctx.cleanup()
@@ -29,38 +29,38 @@ const scheduleData = {
 }
 
 describe('Schedule routes', () => {
-  let taskId: string
+  let taskSlug: string
 
-  describe('POST /api/servers/:id/schedules (create)', () => {
+  describe('POST /api/servers/:serverName/schedules (create)', () => {
     it('OWNER can create a schedule', async () => {
-      const res = await ctx.owner.post(`/api/servers/${serverId}/schedules`, {
+      const res = await ctx.owner.post(`/api/servers/${serverName}/schedules`, {
         payload: JSON.stringify(scheduleData),
       })
       expect(res.statusCode).toBe(201)
       const body = JSON.parse(res.body)
       expect(body.label).toBe('Test Schedule')
       expect(body.type).toBe('COMMAND')
-      taskId = body.id
+      taskSlug = body.slug
     })
 
     it('ADMIN cannot create a schedule → 403', async () => {
-      const res = await ctx.admin.post(`/api/servers/${serverId}/schedules`, {
+      const res = await ctx.admin.post(`/api/servers/${serverName}/schedules`, {
         payload: JSON.stringify(scheduleData),
       })
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot create a schedule → 403', async () => {
-      const res = await ctx.viewer.post(`/api/servers/${serverId}/schedules`, {
+      const res = await ctx.viewer.post(`/api/servers/${serverName}/schedules`, {
         payload: JSON.stringify(scheduleData),
       })
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('GET /api/servers/:id/schedules', () => {
+  describe('GET /api/servers/:serverName/schedules', () => {
     it('any authenticated user can list schedules', async () => {
-      const res = await ctx.viewer.get(`/api/servers/${serverId}/schedules`)
+      const res = await ctx.viewer.get(`/api/servers/${serverName}/schedules`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(Array.isArray(body)).toBe(true)
@@ -68,9 +68,9 @@ describe('Schedule routes', () => {
     })
   })
 
-  describe('PUT /api/servers/:id/schedules/:taskId (update)', () => {
+  describe('PUT /api/servers/:serverName/schedules/:slug (update)', () => {
     it('OWNER can update a schedule', async () => {
-      const res = await ctx.owner.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+      const res = await ctx.owner.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
         payload: JSON.stringify({ label: 'Updated Schedule' }),
       })
       expect(res.statusCode).toBe(200)
@@ -79,33 +79,33 @@ describe('Schedule routes', () => {
     })
 
     it('ADMIN cannot update a schedule → 403', async () => {
-      const res = await ctx.admin.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+      const res = await ctx.admin.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
         payload: JSON.stringify({ label: 'Admin Updated' }),
       })
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot update a schedule → 403', async () => {
-      const res = await ctx.viewer.put(`/api/servers/${serverId}/schedules/${taskId}`, {
+      const res = await ctx.viewer.put(`/api/servers/${serverName}/schedules/${taskSlug}`, {
         payload: JSON.stringify({ label: 'Viewer Updated' }),
       })
       expect(res.statusCode).toBe(403)
     })
   })
 
-  describe('DELETE /api/servers/:id/schedules/:taskId', () => {
+  describe('DELETE /api/servers/:serverName/schedules/:slug', () => {
     it('ADMIN cannot delete a schedule → 403', async () => {
-      const res = await ctx.admin.delete(`/api/servers/${serverId}/schedules/${taskId}`)
+      const res = await ctx.admin.delete(`/api/servers/${serverName}/schedules/${taskSlug}`)
       expect(res.statusCode).toBe(403)
     })
 
     it('VIEWER cannot delete a schedule → 403', async () => {
-      const res = await ctx.viewer.delete(`/api/servers/${serverId}/schedules/${taskId}`)
+      const res = await ctx.viewer.delete(`/api/servers/${serverName}/schedules/${taskSlug}`)
       expect(res.statusCode).toBe(403)
     })
 
     it('OWNER can delete a schedule', async () => {
-      const res = await ctx.owner.delete(`/api/servers/${serverId}/schedules/${taskId}`)
+      const res = await ctx.owner.delete(`/api/servers/${serverName}/schedules/${taskSlug}`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body.ok).toBe(true)

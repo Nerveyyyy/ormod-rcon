@@ -31,9 +31,9 @@ vi.mock('node:dns/promises', () => ({
 
 let ctx: TestContext
 
-// List IDs created in beforeAll
-let externalListId: string
-let banListId: string
+// List slugs created in beforeAll
+let externalListSlug: string
+let banListSlug: string
 
 beforeAll(async () => {
   ctx = await setupTestContext()
@@ -48,7 +48,7 @@ beforeAll(async () => {
     }),
   })
   expect(externalRes.statusCode).toBe(201)
-  externalListId = JSON.parse(externalRes.body).id
+  externalListSlug = JSON.parse(externalRes.body).slug
 
   // Create a plain BAN list (non-EXTERNAL, used for wrong-type test)
   const banRes = await ctx.admin.post('/api/lists', {
@@ -59,7 +59,7 @@ beforeAll(async () => {
     }),
   })
   expect(banRes.statusCode).toBe(201)
-  banListId = JSON.parse(banRes.body).id
+  banListSlug = JSON.parse(banRes.body).slug
 })
 
 afterAll(async () => {
@@ -78,22 +78,22 @@ async function createExternalList(url: string): Promise<string> {
     }),
   })
   expect(res.statusCode).toBe(201)
-  return JSON.parse(res.body).id
+  return JSON.parse(res.body).slug
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
+describe('POST /api/lists/:slug/refresh (SSRF protection)', () => {
   it('non-EXTERNAL list (scope GLOBAL) → 400', async () => {
-    const res = await ctx.admin.post(`/api/lists/${banListId}/refresh`)
+    const res = await ctx.admin.post(`/api/lists/${banListSlug}/refresh`)
     expect(res.statusCode).toBe(400)
     const body = JSON.parse(res.body)
     expect(body.error).toMatch(/not an EXTERNAL/i)
   })
 
   it('ftp:// URL → 400 (invalid scheme)', async () => {
-    const id = await createExternalList('ftp://example.com/list.txt')
-    const res = await ctx.admin.post(`/api/lists/${id}/refresh`)
+    const slug = await createExternalList('ftp://example.com/list.txt')
+    const res = await ctx.admin.post(`/api/lists/${slug}/refresh`)
     expect(res.statusCode).toBe(400)
     const body = JSON.parse(res.body)
     expect(body.error).toMatch(/http or https/i)
@@ -101,8 +101,8 @@ describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
 
   it('http://127.0.0.1 → 400 (loopback rejected)', async () => {
     mockDnsLookup.mockResolvedValueOnce({ address: '127.0.0.1', family: 4 })
-    const id = await createExternalList('http://127.0.0.1/anything')
-    const res = await ctx.admin.post(`/api/lists/${id}/refresh`)
+    const slug = await createExternalList('http://127.0.0.1/anything')
+    const res = await ctx.admin.post(`/api/lists/${slug}/refresh`)
     expect(res.statusCode).toBe(400)
     const body = JSON.parse(res.body)
     expect(body.error).toMatch(/URL not allowed/i)
@@ -110,8 +110,8 @@ describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
 
   it('http://192.168.1.1 → 400 (private range rejected)', async () => {
     mockDnsLookup.mockResolvedValueOnce({ address: '192.168.1.1', family: 4 })
-    const id = await createExternalList('http://192.168.1.1/')
-    const res = await ctx.admin.post(`/api/lists/${id}/refresh`)
+    const slug = await createExternalList('http://192.168.1.1/')
+    const res = await ctx.admin.post(`/api/lists/${slug}/refresh`)
     expect(res.statusCode).toBe(400)
     const body = JSON.parse(res.body)
     expect(body.error).toMatch(/URL not allowed/i)
@@ -140,7 +140,7 @@ describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
       >
     })
 
-    const res = await ctx.admin.post(`/api/lists/${externalListId}/refresh`)
+    const res = await ctx.admin.post(`/api/lists/${externalListSlug}/refresh`)
     spy.mockRestore()
 
     expect(res.statusCode).toBe(200)
@@ -150,7 +150,7 @@ describe('POST /api/lists/:id/refresh (SSRF protection)', () => {
   })
 
   it('VIEWER cannot refresh → 403', async () => {
-    const res = await ctx.viewer.post(`/api/lists/${externalListId}/refresh`)
+    const res = await ctx.viewer.post(`/api/lists/${externalListSlug}/refresh`)
     expect(res.statusCode).toBe(403)
   })
 })

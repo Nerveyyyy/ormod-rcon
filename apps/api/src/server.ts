@@ -10,6 +10,7 @@ import cron from 'node-cron'
 import type { FastifyServerOptions } from 'fastify'
 import buildApp from './app.js'
 import { dockerManager } from './services/docker-manager.js'
+import { rconConnectionManager } from './services/rcon-connection-manager.js'
 import prisma, { scheduleSqliteMaintenance } from './db/prisma-client.js'
 import { registerCronJob } from './routes/schedule.js'
 
@@ -62,14 +63,37 @@ if (app.config.STATIC_PATH && !app.config.PUBLIC_URL) {
   )
 }
 
-dockerManager.setLogger(app.log)
+const isDemo = process.env.DEMO_MODE === 'true'
 
-// Start in degraded mode (no live log streams) if Docker is unavailable.
-try {
-  await dockerManager.reconnect()
-  app.log.info('Docker manager reconnected to running containers')
-} catch (err) {
-  app.log.warn({ err }, 'Docker manager reconnect failed — API starting in degraded mode (Docker unavailable)')
+if (isDemo) {
+  app.log.info('DEMO_MODE enabled — skipping Docker/RCON, seeding demo data')
+  let server = await prisma.server.findUnique({ where: { serverName: 'demo-server' } })
+  if (!server) {
+    server = await prisma.server.create({
+      data: { name: 'Demo Server', serverName: 'demo-server', gamePort: 27015, queryPort: 27016 },
+    })
+  }
+  const { initDemoMode } = await import('./services/demo/index.js')
+  await initDemoMode(server.id)
+} else {
+  dockerManager.setLogger(app.log)
+
+  // Start in degraded mode (no live log streams) if Docker is unavailable.
+  try {
+    await dockerManager.reconnect()
+    app.log.info('Docker manager reconnected to running containers')
+  } catch (err) {
+    app.log.warn({ err }, 'Docker manager reconnect failed — API starting in degraded mode (Docker unavailable)')
+  }
+
+  // Connect all RCON-enabled servers. Errors per-server are caught inside
+  // reconnectAll() so a single bad server cannot block startup.
+  try {
+    await rconConnectionManager.reconnectAll()
+    app.log.info('RCON connection manager reconnected to RCON-enabled servers')
+  } catch (err) {
+    app.log.warn({ err }, 'RCON connection manager reconnect failed — API starting without RCON connections')
+  }
 }
 
 const tasks = await prisma.scheduledTask.findMany({ where: { enabled: true } })

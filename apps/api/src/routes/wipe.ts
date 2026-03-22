@@ -1,16 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireOwner } from '../plugins/auth.js'
 import * as ctrl from '../controllers/wipe.js'
-import { serverParams as sharedServerParams } from './_schemas.js'
-
-const serverParams = sharedServerParams
+import { serverParams } from './_schemas.js'
 
 const wipeLogParams = {
   type: 'object',
-  required: ['id', 'wipeId'],
+  required: ['serverName', 'wipeId'],
   properties: {
-    id:     { type: 'string' },
-    wipeId: { type: 'string' },
+    serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' },
+    wipeId:     { type: 'string' },
   },
 } as const
 
@@ -19,20 +17,22 @@ const wipeBody = {
   additionalProperties: false,
   properties: {
     notes: { type: 'string', maxLength: 255 },
+    type: { type: 'string', enum: ['full', 'map', 'playerdata'] },
+    targetSteamId: { type: 'string' },
   },
 } as const
 
 const wipeRoutes: FastifyPluginAsync = async (app) => {
   app.route({
     method: 'GET',
-    url: '/servers/:id/wipes',
+    url: '/servers/:serverName/wipes',
     schema: { params: serverParams },
     handler: ctrl.listWipes,
   })
 
   app.route({
     method: 'POST',
-    url: '/servers/:id/wipe',
+    url: '/servers/:serverName/wipe',
     schema: { params: serverParams, body: wipeBody },
     preHandler: [requireOwner],
     handler: ctrl.executeWipe,
@@ -40,7 +40,7 @@ const wipeRoutes: FastifyPluginAsync = async (app) => {
 
   app.route({
     method: 'GET',
-    url: '/servers/:id/wipes/:wipeId',
+    url: '/servers/:serverName/wipes/:wipeId',
     schema: { params: wipeLogParams },
     handler: ctrl.getWipeLog,
   })

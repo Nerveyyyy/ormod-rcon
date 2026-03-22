@@ -4,6 +4,7 @@ import dns from 'node:dns/promises'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
+import { generateSlug, uniqueSlug } from '../lib/slug.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,48 +58,71 @@ export async function createAccessList(
   reply: FastifyReply
 ) {
   const { name, type, scope, description, externalUrl } = req.body
-  const list = await prisma.accessList.create({ data: { name, type, scope, description, externalUrl } })
+
+  const slug = await uniqueSlug(name, async (s) => {
+    const existing = await prisma.accessList.findUnique({ where: { slug: s } })
+    return !!existing
+  })
+
+  const list = await prisma.accessList.create({ data: { name, slug, type, scope, description, externalUrl } })
   reply.status(201)
   return list
 }
 
 export async function getAccessList(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { slug: string } }>,
   reply: FastifyReply
 ) {
   const list = await prisma.accessList.findUnique({
-    where: { id: req.params.id },
+    where: { slug: req.params.slug },
     include: { entries: { orderBy: { createdAt: 'desc' } } },
   })
   if (!list) return reply.status(404).send({ error: 'List not found' })
-  return list
+
+  // Enrich entries with player display names
+  const steamIds = list.entries.map((e) => e.steamId)
+  const players = steamIds.length > 0
+    ? await prisma.player.findMany({
+        where: { steamId: { in: steamIds } },
+        select: { steamId: true, displayName: true },
+      })
+    : []
+  const nameMap = new Map(players.map((p) => [p.steamId, p.displayName]))
+
+  return {
+    ...list,
+    entries: list.entries.map((e) => ({
+      ...e,
+      displayName: nameMap.get(e.steamId) ?? null,
+    })),
+  }
 }
 
 export async function updateAccessList(
   req: FastifyRequest<{
-    Params: { id: string }
+    Params: { slug: string }
     Body: Partial<{ name: string; type: string; scope: string; description: string; externalUrl: string }>
   }>,
   reply: FastifyReply
 ) {
-  const list = await prisma.accessList.findUnique({ where: { id: req.params.id } })
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return reply.status(404).send({ error: 'List not found' })
   const { name, type, scope, description, externalUrl } = req.body
   return prisma.accessList.update({
-    where: { id: req.params.id },
+    where: { id: list.id },
     data: { name, type, scope, description, externalUrl },
   })
 }
 
 export async function deleteAccessList(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { slug: string } }>,
   reply: FastifyReply
 ) {
-  const list = await prisma.accessList.findUnique({ where: { id: req.params.id } })
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return reply.status(404).send({ error: 'List not found' })
-  await prisma.serverListLink.deleteMany({ where: { listId: req.params.id } })
-  await prisma.listEntry.deleteMany({ where: { listId: req.params.id } })
-  await prisma.accessList.delete({ where: { id: req.params.id } })
+  await prisma.serverListLink.deleteMany({ where: { listId: list.id } })
+  await prisma.listEntry.deleteMany({ where: { listId: list.id } })
+  await prisma.accessList.delete({ where: { id: list.id } })
   return { ok: true }
 }
 
@@ -106,7 +130,7 @@ export async function deleteAccessList(
 
 export async function upsertEntry(
   req: FastifyRequest<{
-    Params: { id: string }
+    Params: { slug: string }
     Body: {
       steamId: string
       playerName?: string
@@ -117,13 +141,13 @@ export async function upsertEntry(
     }
   }>
 ) {
-  const list = await prisma.accessList.findUnique({ where: { id: req.params.id } })
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return
 
   const { steamId, expiresAt, ...rest } = req.body
   const entry = await prisma.listEntry.upsert({
-    where: { steamId_listId: { steamId, listId: req.params.id } },
-    create: { steamId, listId: req.params.id, expiresAt: expiresAt ? new Date(expiresAt) : undefined, ...rest },
+    where: { steamId_listId: { steamId, listId: list.id } },
+    create: { steamId, listId: list.id, expiresAt: expiresAt ? new Date(expiresAt) : undefined, ...rest },
     update: { expiresAt: expiresAt ? new Date(expiresAt) : undefined, ...rest },
   })
 
@@ -134,13 +158,14 @@ export async function upsertEntry(
   if (list.type === 'ADMIN')     cmd = `setpermissions ${steamId} ${rest.permission ?? 'client'}`
 
   if (cmd) {
-    await dispatchToList(req.params.id, list.scope, cmd, req.log)
+    await dispatchToList(list.id, list.scope, cmd, req.log)
     await prisma.actionLog.create({
       data: {
         performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
         action: list.type === 'BAN' ? 'BAN' : list.type === 'WHITELIST' ? 'WHITELIST' : 'SETPERMISSION',
         targetSteamId: steamId,
-        details: JSON.stringify({ listId: req.params.id, permission: rest.permission }),
+        details: JSON.stringify({ listId: list.id, permission: rest.permission }),
       },
     })
   }
@@ -149,15 +174,15 @@ export async function upsertEntry(
 }
 
 export async function deleteEntry(
-  req: FastifyRequest<{ Params: { id: string; steamId: string } }>,
+  req: FastifyRequest<{ Params: { slug: string; steamId: string } }>,
   reply: FastifyReply
 ) {
-  const list = await prisma.accessList.findUnique({ where: { id: req.params.id } })
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return reply.status(404).send({ error: 'List not found' })
 
   try {
     await prisma.listEntry.delete({
-      where: { steamId_listId: { steamId: req.params.steamId, listId: req.params.id } },
+      where: { steamId_listId: { steamId: req.params.steamId, listId: list.id } },
     })
   } catch (err: any) {
     if (err.code === 'P2025') return reply.status(404).send({ error: 'Entry not found' })
@@ -171,13 +196,14 @@ export async function deleteEntry(
   if (list.type === 'ADMIN')     cmd = `removepermissions ${req.params.steamId}`
 
   if (cmd) {
-    await dispatchToList(req.params.id, list.scope, cmd, req.log)
+    await dispatchToList(list.id, list.scope, cmd, req.log)
     await prisma.actionLog.create({
       data: {
         performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
         action: list.type === 'BAN' ? 'UNBAN' : list.type === 'WHITELIST' ? 'REMOVEWHITELIST' : 'REMOVEPERMISSION',
         targetSteamId: req.params.steamId,
-        details: JSON.stringify({ listId: req.params.id }),
+        details: JSON.stringify({ listId: list.id }),
       },
     })
   }
@@ -188,10 +214,10 @@ export async function deleteEntry(
 // ── External URL refresh (diff-based) ────────────────────────────────────────
 
 export async function refreshExternal(
-  req: FastifyRequest<{ Params: { id: string } }>,
+  req: FastifyRequest<{ Params: { slug: string } }>,
   reply: FastifyReply
 ) {
-  const list = await prisma.accessList.findUnique({ where: { id: req.params.id } })
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return reply.status(404).send({ error: 'List not found' })
   if (list.scope !== 'EXTERNAL' || !list.externalUrl) {
     return reply.status(400).send({ error: 'List is not an EXTERNAL scope list with a URL' })
@@ -319,21 +345,28 @@ export async function refreshExternal(
 
 // ── Server-list assignments ──────────────────────────────────────────────────
 
-export async function getAssignments(req: FastifyRequest<{ Params: { id: string } }>) {
+export async function getAssignments(
+  req: FastifyRequest<{ Params: { serverName: string } }>,
+  reply: FastifyReply
+) {
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
   return prisma.serverListLink.findMany({
-    where: { serverId: req.params.id },
+    where: { serverId: server.id },
     include: { list: true },
   })
 }
 
 export async function setAssignments(
-  req: FastifyRequest<{ Params: { id: string }; Body: { listIds: string[] } }>
+  req: FastifyRequest<{ Params: { serverName: string }; Body: { listIds: string[] } }>,
+  reply: FastifyReply
 ) {
-  const { id: serverId } = req.params
+  const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
+  if (!server) return reply.status(404).send({ error: 'Server not found' })
   const { listIds } = req.body
   await prisma.$transaction([
-    prisma.serverListLink.deleteMany({ where: { serverId } }),
-    prisma.serverListLink.createMany({ data: listIds.map((listId) => ({ serverId, listId })) }),
+    prisma.serverListLink.deleteMany({ where: { serverId: server.id } }),
+    prisma.serverListLink.createMany({ data: listIds.map((listId) => ({ serverId: server.id, listId })) }),
   ])
   return { ok: true }
 }

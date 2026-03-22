@@ -16,6 +16,7 @@ type WipeLog = {
 const wipeTypes = [
   {
     id: 'MAP_ONLY',
+    backendType: 'map',
     label: 'Map Wipe',
     color: 'btn-primary',
     icon: '◫',
@@ -35,6 +36,7 @@ const wipeTypes = [
   },
   {
     id: 'MAP_PLAYERS',
+    backendType: 'full',
     label: 'Map + Players',
     color: 'btn-ghost',
     icon: '◫',
@@ -50,11 +52,21 @@ const wipeTypes = [
   },
   {
     id: 'FULL',
+    backendType: 'full',
     label: 'Full Wipe',
     color: 'btn-danger',
     icon: '⊠',
     desc: 'Deletes everything except access lists and server settings. Complete fresh start — use sparingly.',
     deletes: ['ChunkData/', 'RegionData/', 'PlayerData/', 'All world files', 'log.txt'],
+  },
+  {
+    id: 'PLAYER_DATA',
+    backendType: 'playerdata',
+    label: 'Player Data',
+    color: 'btn-ghost',
+    icon: '⌬',
+    desc: "Wipe a specific player's data by Steam ID, or all player data if no ID is provided.",
+    deletes: ['PlayerData/ (targeted or all)'],
   },
 ]
 
@@ -64,20 +76,21 @@ export default function WipeManager() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [pendingType, setPendingType] = useState<string | null>(null)
   const [wiping, setWiping] = useState(false)
+  const [targetSteamId, setTargetSteamId] = useState('')
   const [history, setHistory] = useState<WipeLog[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const loadHistory = useCallback(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     api
-      .get<WipeLog[]>(`/servers/${activeServer.id}/wipes`)
+      .get<WipeLog[]>(`/servers/${activeServer.serverName}/wipes`)
       .then(setHistory)
       .catch((e) => setError((e as Error).message || 'Failed to load wipe history'))
-  }, [activeServer?.id])
+  }, [activeServer?.serverName])
 
   useEffect(() => {
-    if (activeServer?.id) loadHistory()
-  }, [activeServer?.id, loadHistory])
+    if (activeServer?.serverName) loadHistory()
+  }, [activeServer?.serverName, loadHistory])
 
   const chosen = wipeTypes.find((w) => w.id === pendingType)
 
@@ -91,12 +104,19 @@ export default function WipeManager() {
   }
 
   const executeWipe = async () => {
-    if (!activeServer?.id || !pendingType) return
+    if (!activeServer?.serverName || !pendingType) return
+    const chosen = wipeTypes.find((w) => w.id === pendingType)
+    if (!chosen) return
     closeConfirm()
     setWiping(true)
     setError(null)
     try {
-      await api.post(`/servers/${activeServer.id}/wipe`, {})
+      const body: Record<string, string> = { type: chosen.backendType }
+      if (chosen.id === 'PLAYER_DATA' && targetSteamId.trim()) {
+        body.targetSteamId = targetSteamId.trim()
+      }
+      await api.post(`/servers/${activeServer.serverName}/wipe`, body)
+      setTargetSteamId('')
       loadHistory()
     } catch (e) {
       setError(`Wipe failed: ${(e as Error).message}`)
@@ -206,11 +226,26 @@ export default function WipeManager() {
                     </div>
                   )}
                 </div>
+                {w.id === 'PLAYER_DATA' && (
+                  <div className="setting-row" style={{ padding: 0 }}>
+                    <div className="setting-info">
+                      <div className="setting-name">Steam ID</div>
+                      <div className="setting-desc">Leave blank to wipe all player data</div>
+                    </div>
+                    <input
+                      className="text-input"
+                      value={targetSteamId}
+                      onChange={(e) => setTargetSteamId(e.target.value)}
+                      placeholder="76561198..."
+                      style={{ width: '180px' }}
+                    />
+                  </div>
+                )}
                 <button
                   className={`btn ${w.color} btn-sm`}
                   style={{ marginTop: 'auto' }}
                   onClick={() => openConfirm(w.id)}
-                  disabled={wiping || !activeServer?.id || !activeServer?.running}
+                  disabled={wiping || !activeServer?.serverName || !activeServer?.running}
                 >
                   Execute {w.label}
                 </button>
@@ -275,11 +310,13 @@ export default function WipeManager() {
         >
           <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
             You are about to execute a{' '}
-            <strong style={{ color: 'var(--text-bright)' }}>{pendingType}</strong> wipe on
+            <strong style={{ color: 'var(--text-bright)' }}>{chosen.label}</strong> on
             <strong style={{ color: 'var(--orange)' }}>
-              {' '}
-              {activeServer?.name ?? 'this server'}
+              {' '}{activeServer?.name ?? 'this server'}
             </strong>
+            {pendingType === 'PLAYER_DATA' && targetSteamId.trim() && (
+              <> targeting player <strong style={{ color: 'var(--text-bright)' }}>{targetSteamId.trim()}</strong></>
+            )}
             .
           </div>
           <div

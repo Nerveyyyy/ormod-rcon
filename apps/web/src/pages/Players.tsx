@@ -1,243 +1,115 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
+import ConfirmDialog from '../components/ui/ConfirmDialog.js'
+import PlayerPanel from '../components/ui/PlayerPanel.js'
 import { useServerContext as useServer } from '../context/ServerContext.js'
 import { api } from '../api/client.js'
 
-const POLL_INTERVAL_MS = 30_000
-
-const PERMISSION_LEVELS = ['client', 'operator', 'admin', 'server'] as const
-type PermissionLevel = (typeof PERMISSION_LEVELS)[number]
-
 interface Player {
   steamId: string
-  name: string
-  raw: string
+  displayName: string
+  online: boolean
+  joinedAt: string | null
+  totalTime: number
+  firstSeen: string
+  lastSeen: string
+  notes: string | null
+  kills: number
+  deaths: number
 }
-
-/** Try to extract a 17-digit Steam ID starting with 7656 from a line. */
-function extractSteamId(line: string): string | null {
-  const match = line.match(/\b(7656\d{13})\b/)
-  return match?.[1] ?? null
-}
-
-/**
- * Try to extract a player name from the same line as the Steam ID.
- * Handles patterns like:
- *   "Name: PlayerName  SteamID: 76561198..."
- *   "PlayerName (76561198...)"
- *   "76561198... PlayerName"
- */
-function extractName(line: string, steamId: string): string {
-  // Strip the steam ID itself to reduce noise
-  const stripped = line.replace(steamId, '').trim()
-
-  // "Name: Foo" or "name: Foo"
-  const nameLabel = stripped.match(/[Nn]ame\s*:\s*([^\s|,]+(?:\s[^\s|,]+)*?)(?:\s{2,}|$|\|)/i)
-  if (nameLabel?.[1]) return nameLabel[1].trim()
-
-  // "Foo (76561...)" — parenthesised steam ID already removed, so just grab the part before '('
-  const beforeParen = stripped.match(/^([^(]+)\s*\(/)
-  if (beforeParen?.[1]?.trim()) return beforeParen[1].trim()
-
-  // Anything that looks like a word sequence left over
-  const words = stripped.replace(/[^a-zA-Z0-9_ \-]/g, ' ').trim()
-  if (words.length > 0 && words.length < 64) return words
-
-  return steamId
-}
-
-/**
- * Parse the raw getplayers response into a list of players.
- * Returns an empty array if no Steam IDs can be found.
- */
-function parsePlayers(raw: string): Player[] {
-  const players: Player[] = []
-  const seen = new Set<string>()
-
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const steamId = extractSteamId(trimmed)
-    if (!steamId || seen.has(steamId)) continue
-    seen.add(steamId)
-    players.push({ steamId, name: extractName(trimmed, steamId), raw: trimmed })
-  }
-
-  return players
-}
-
-function extractPlayerCount(raw: string): number | null {
-  const match = raw.match(/(\d+)\s+player/i)
-  if (match && match[1] !== undefined) return parseInt(match[1], 10)
-  return null
-}
-
-type ActionStatus = { type: 'ok' | 'err'; message: string }
 
 export default function Players() {
   const { activeServer } = useServer()
 
-  const [raw, setRaw] = useState<string | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
-  const [showRawFallback, setShowRawFallback] = useState(false)
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [secondsAgo, setSecondsAgo] = useState(0)
-
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [permLevel, setPermLevel] = useState<Record<string, PermissionLevel>>({})
-  const [actionStatus, setActionStatus] = useState<Record<string, ActionStatus>>({})
+  const [filter, setFilter] = useState<'all' | 'online'>('all')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [selectedSteamId, setSelectedSteamId] = useState<string | null>(null)
+  const [actionStatus, setActionStatus] = useState<Record<string, { type: 'ok' | 'err'; message: string }>>({})
   const [pendingAction, setPendingAction] = useState<string | null>(null)
-
-  const [showBroadcast, setShowBroadcast] = useState(false)
-  const [broadcastMsg, setBroadcastMsg] = useState('')
-  const broadcastModalRef = useRef<HTMLDivElement>(null)
-
-  // Focus trap for broadcast modal
-  useEffect(() => {
-    if (!showBroadcast) return
-    const modal = broadcastModalRef.current
-    if (!modal) return
-    const focusable = modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    first?.focus()
-
-    function handleTab(e: KeyboardEvent) {
-      if (e.key !== 'Tab') return
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
-      }
-    }
-    document.addEventListener('keydown', handleTab)
-    return () => document.removeEventListener('keydown', handleTab)
-  }, [showBroadcast])
+  const [confirmAction, setConfirmAction] = useState<{ steamId: string; displayName: string; action: string; label: string } | null>(null)
 
   const load = useCallback(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     setLoading(true)
-    api
-      .get<{ raw: string }>(`/servers/${activeServer.id}/players`)
-      .then(({ raw: rawData }) => {
-        setRaw(rawData)
-        const parsed = parsePlayers(rawData)
-        setPlayers(parsed)
-        setShowRawFallback(parsed.length === 0)
-        setLastUpdated(new Date())
-        setSecondsAgo(0)
-      })
-      .catch((e) => setError((e as Error).message || 'Failed to load players'))
-      .finally(() => setLoading(false))
-  }, [activeServer?.id])
-
-  // Initial load + poll every 30 s
-  useEffect(() => {
-    if (!activeServer?.id) return
-    if (!activeServer.running) {
-      setPlayers([])
-      setRaw(null)
-      setError(null)
-      return
-    }
-    load()
-    const pollTimer = setInterval(load, POLL_INTERVAL_MS)
-    return () => clearInterval(pollTimer)
-  }, [activeServer?.id, activeServer?.running, load])
-
-  // Seconds-ago counter
-  useEffect(() => {
-    if (!lastUpdated) return
-    const ticker = setInterval(() => {
-      setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
-    }, 1000)
-    return () => clearInterval(ticker)
-  }, [lastUpdated])
-
-  function toggleExpand(steamId: string) {
-    setExpandedId((prev) => (prev === steamId ? null : steamId))
-    // Clear any lingering status for the row being opened
-    setActionStatus((prev) => {
-      const next = { ...prev }
-      delete next[steamId]
-      return next
+    const params = new URLSearchParams({
+      filter,
+      page: String(page),
+      limit: '50',
     })
-  }
-
-  function showStatus(steamId: string, type: 'ok' | 'err', message: string) {
-    setActionStatus((prev) => ({ ...prev, [steamId]: { type, message } }))
-    setTimeout(() => {
-      setActionStatus((prev) => {
-        const next = { ...prev }
-        delete next[steamId]
-        return next
+    if (search.trim()) params.set('search', search.trim())
+    api
+      .get<{ data: Player[]; page: number; limit: number; total: number }>(
+        `/servers/${activeServer.serverName}/players?${params}`
+      )
+      .then((res) => {
+        setPlayers(res.data)
+        setTotal(res.total)
       })
-    }, 3000)
-  }
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false))
+  }, [activeServer?.serverName, filter, page, search])
 
-  async function runAction(
-    steamId: string,
-    label: string,
-    endpoint: string,
-    body?: Record<string, unknown>
-  ) {
-    if (!activeServer?.id) return
-    const key = `${steamId}:${label}`
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // Close panel and reset page on server switch
+  useEffect(() => {
+    setSelectedSteamId(null)
+    setPage(1)
+  }, [activeServer?.serverName])
+
+  async function executeAction(reason?: string) {
+    if (!confirmAction || !activeServer?.serverName) return
+    const { steamId, action, label } = confirmAction
+    const key = `${steamId}:${action}`
     setPendingAction(key)
+    setConfirmAction(null)
     try {
-      await api.post(endpoint, body)
-      showStatus(steamId, 'ok', `${label} succeeded`)
+      const body: Record<string, string> = {}
+      if (action === 'kick' && reason) body.reason = reason
+      await api.post(`/servers/${activeServer.serverName}/players/${steamId}/${action}`, body)
+      setActionStatus((prev) => ({ ...prev, [steamId]: { type: 'ok', message: `${label} succeeded` } }))
+      setTimeout(
+        () => setActionStatus((prev) => { const n = { ...prev }; delete n[steamId]; return n }),
+        3000
+      )
     } catch (e) {
-      showStatus(steamId, 'err', (e as Error).message || `${label} failed`)
+      setActionStatus((prev) => ({ ...prev, [steamId]: { type: 'err', message: (e as Error).message } }))
+      setTimeout(
+        () => setActionStatus((prev) => { const n = { ...prev }; delete n[steamId]; return n }),
+        3000
+      )
     } finally {
       setPendingAction(null)
     }
   }
 
-  function getPermLevel(steamId: string): PermissionLevel {
-    return permLevel[steamId] ?? 'client'
-  }
-
-  const sendBroadcast = async () => {
-    if (!broadcastMsg.trim() || !activeServer?.id) return
-    try {
-      await api.post(`/servers/${activeServer.id}/actions/broadcast`, { message: broadcastMsg.trim() })
-    } catch {
-      // non-blocking — broadcast failure doesn't warrant a full error state
-    }
-    setShowBroadcast(false)
-    setBroadcastMsg('')
-  }
-
-  const playerCount = raw !== null ? (players.length > 0 ? players.length : extractPlayerCount(raw)) : null
-
-  const updatedLabel = lastUpdated
-    ? secondsAgo < 5 ? 'just now' : `${secondsAgo}s ago`
-    : 'not loaded'
+  const totalPages = Math.ceil(total / 50)
 
   return (
     <div className="main fadein">
       <PageHeader
         title="Player Management"
-        subtitle="getplayers · kick · ban · unban · heal · whitelist · setpermissions"
+        subtitle="View players, manage permissions, moderate"
         actions={
-          <>
-            <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading || !activeServer?.running}>
-              {loading ? 'Refreshing…' : 'Refresh'}
+          <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
+            <input
+              className="text-input"
+              style={{ width: '200px', fontSize: '11px' }}
+              placeholder="Search name or Steam ID..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            />
+            <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+              {loading ? 'Loading...' : 'Refresh'}
             </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => setShowBroadcast(true)}
-              disabled={!activeServer?.running}
-            >
-              Broadcast
-            </button>
-          </>
+          </div>
         }
       />
 
@@ -254,136 +126,56 @@ export default function Players() {
         </div>
       )}
 
-      {activeServer && !activeServer.running && (
-        <div className="info-banner">
-          Server is offline — player data is unavailable. Start the server from Server Management to see live player data.
-        </div>
-      )}
+      {/* Filter tabs */}
+      <div className="filter-tabs">
+        <button
+          className={`filter-tab${filter === 'all' ? ' active' : ''}`}
+          onClick={() => { setFilter('all'); setPage(1) }}
+        >
+          All Players
+        </button>
+        <button
+          className={`filter-tab${filter === 'online' ? ' active' : ''}`}
+          onClick={() => { setFilter('online'); setPage(1) }}
+        >
+          Online
+        </button>
+      </div>
 
-      {/* ── Broadcast Modal ─────────────────────────────────── */}
-      {showBroadcast && (
-        <div className="overlay" onClick={() => setShowBroadcast(false)}>
-          <div
-            ref={broadcastModalRef}
-            className="modal fadein"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="broadcast-modal-title"
-          >
-            <div className="card-header">
-              <span className="card-title" id="broadcast-modal-title">Broadcast Message</span>
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => setShowBroadcast(false)}
-                aria-label="Close dialog"
-              >
-                ✕
-              </button>
-            </div>
-            <div
-              className="card-body"
-              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-            >
-              <div className="setting-row" style={{ padding: 0 }}>
-                <label htmlFor="broadcast-msg" className="setting-info">
-                  <div className="setting-name">Message</div>
-                  <div className="setting-desc">Sent to all online players</div>
-                </label>
-                <input
-                  id="broadcast-msg"
-                  className="text-input"
-                  value={broadcastMsg}
-                  onChange={(e) => setBroadcastMsg(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') sendBroadcast() }}
-                  placeholder="Server message..."
-                  autoFocus
-                />
-              </div>
-              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setShowBroadcast(false)}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={sendBroadcast}
-                  disabled={!broadcastMsg.trim()}
-                >
-                  Send
-                </button>
-              </div>
-            </div>
+      {confirmAction && (
+        <ConfirmDialog
+          title={`${confirmAction.label} Player`}
+          reasonField={confirmAction.action === 'kick'}
+          reasonPlaceholder="Kick reason (required)"
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={executeAction}
+        >
+          <div style={{ fontSize: '13px', color: 'var(--muted)' }}>
+            Are you sure you want to {confirmAction.label.toLowerCase()}{' '}
+            <strong style={{ color: 'var(--text-bright)' }}>{confirmAction.displayName}</strong>
+            <span style={{ fontFamily: 'var(--mono)', color: 'var(--dim)', marginLeft: '4px' }}>
+              ({confirmAction.steamId})
+            </span>
+            ?
           </div>
-        </div>
+        </ConfirmDialog>
       )}
 
-      {/* ── Player Table ─────────────────────────────────────── */}
       <div className="card">
-        <div className="card-header">
-          <span className="card-title">
-            Online Players
-            {playerCount !== null && (
-              <span
-                className="pill pill-green"
-                style={{ marginLeft: '10px', fontSize: '10px' }}
-              >
-                <span className="dot dot-green pulse" />
-                {playerCount} player{playerCount !== 1 ? 's' : ''}
-              </span>
-            )}
-          </span>
-          <span
-            className="card-meta"
-            style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}
-          >
-            {updatedLabel}
-          </span>
-        </div>
-
         <div className="card-body-0">
-          {loading && !raw ? (
+          {loading && players.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-title">Loading…</div>
+              <div className="empty-state-title">Loading...</div>
             </div>
-          ) : showRawFallback || (raw !== null && players.length === 0) ? (
-            /* Fallback: couldn't parse any players — show raw output */
-            <>
-              {raw !== null && players.length === 0 && !showRawFallback && null}
-              <div
-                style={{
-                  padding: '10px 16px 6px',
-                  fontFamily: 'var(--mono)',
-                  fontSize: '10px',
-                  color: 'var(--dim)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                Raw output (no players parsed)
-              </div>
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '12px 16px',
-                  fontFamily: 'var(--mono)',
-                  fontSize: '11px',
-                  color: 'var(--dim)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  minHeight: '80px',
-                  maxHeight: '320px',
-                  overflowY: 'auto',
-                }}
-              >
-                {raw ?? 'No data. Click Refresh or wait for the next poll.'}
-              </pre>
-            </>
           ) : players.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-title">No players online</div>
+              <div className="empty-state-title">No players found</div>
               <div className="empty-state-desc">
-                {raw === null ? 'Click Refresh or wait for the next poll.' : 'Server returned no player data.'}
+                {filter === 'online'
+                  ? 'No players are currently online.'
+                  : search.trim()
+                  ? 'No players match your search.'
+                  : 'No player records yet.'}
               </div>
             </div>
           ) : (
@@ -392,183 +184,83 @@ export default function Players() {
                 <tr>
                   <th>Name</th>
                   <th>Steam ID</th>
-                  <th style={{ width: '28px' }} />
+                  <th>Status</th>
+                  <th>Playtime</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {players.map((p) => {
-                  const isExpanded = expandedId === p.steamId
                   const status = actionStatus[p.steamId]
-                  const sid = activeServer!.id
-
                   return (
                     <Fragment key={p.steamId}>
                       <tr
-                        onClick={() => toggleExpand(p.steamId)}
+                        onClick={() => setSelectedSteamId(p.steamId)}
                         style={{ cursor: 'pointer' }}
-                        aria-expanded={isExpanded}
                       >
-                        <td className="bright">{p.name !== p.steamId ? p.name : '—'}</td>
+                        <td className="bright">{p.displayName}</td>
                         <td className="mono">{p.steamId}</td>
-                        <td
-                          style={{
-                            color: 'var(--dim)',
-                            fontFamily: 'var(--mono)',
-                            fontSize: '10px',
-                            textAlign: 'right',
-                            paddingRight: '16px',
-                          }}
-                        >
-                          {isExpanded ? '▲' : '▼'}
+                        <td>
+                          <span
+                            className={`pill ${p.online ? 'pill-green' : 'pill-muted'}`}
+                            style={{ fontSize: '9px' }}
+                          >
+                            {p.online ? 'Online' : 'Offline'}
+                          </span>
+                        </td>
+                        <td className="mono" style={{ fontSize: '11px', color: 'var(--dim)' }}>
+                          {Math.floor(p.totalTime / 3600)}h {Math.floor((p.totalTime % 3600) / 60)}m
+                        </td>
+                        <td>
+                          <div className="btn-group" style={{ gap: '4px', flexWrap: 'nowrap' }}>
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              disabled={pendingAction !== null}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setConfirmAction({ steamId: p.steamId, displayName: p.displayName, action: 'heal', label: 'Heal' })
+                              }}
+                            >
+                              Heal
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              disabled={pendingAction !== null}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setConfirmAction({ steamId: p.steamId, displayName: p.displayName, action: 'kill', label: 'Kill' })
+                              }}
+                              style={{ color: 'var(--red)' }}
+                            >
+                              Kill
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              disabled={pendingAction !== null}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setConfirmAction({ steamId: p.steamId, displayName: p.displayName, action: 'kick', label: 'Kick' })
+                              }}
+                              style={{ color: 'var(--orange)' }}
+                            >
+                              Kick
+                            </button>
+                          </div>
                         </td>
                       </tr>
-
-                      {isExpanded && (
-                        <tr key={`detail-${p.steamId}`}>
+                      {status && (
+                        <tr key={`status-${p.steamId}`}>
                           <td
-                            colSpan={3}
-                            style={{ padding: 0, background: 'var(--bg2)' }}
+                            colSpan={5}
+                            style={{ padding: '4px 16px', background: 'var(--bg2)' }}
                           >
-                            <div style={{ padding: '16px 20px' }}>
-
-                              {/* Player identity summary */}
-                              <div
-                                className="row"
-                                style={{ marginBottom: '14px', gap: '10px', flexWrap: 'wrap' }}
-                              >
-                                <span
-                                  style={{
-                                    fontWeight: 600,
-                                    color: 'var(--text-bright)',
-                                    fontSize: '13px',
-                                  }}
-                                >
-                                  {p.name !== p.steamId ? p.name : 'Unknown'}
-                                </span>
-                                <span
-                                  style={{
-                                    fontFamily: 'var(--mono)',
-                                    fontSize: '11px',
-                                    color: 'var(--muted)',
-                                  }}
-                                >
-                                  {p.steamId}
-                                </span>
-                              </div>
-
-                              {/* Action status feedback */}
-                              {status && (
-                                <div
-                                  className={status.type === 'ok' ? 'info-banner' : 'error-banner'}
-                                  style={{ marginBottom: '12px', fontSize: '11px' }}
-                                  role="status"
-                                >
-                                  {status.message}
-                                </div>
-                              )}
-
-                              {/* Action buttons */}
-                              <div className="btn-group" style={{ flexWrap: 'wrap', gap: '6px' }}>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(p.steamId, 'Heal', `/servers/${sid}/players/${p.steamId}/heal`)
-                                  }
-                                >
-                                  Heal
-                                </button>
-
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(p.steamId, 'Unban', `/servers/${sid}/players/${p.steamId}/unban`)
-                                  }
-                                >
-                                  Unban
-                                </button>
-
-                                <button
-                                  className="btn btn-primary btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(p.steamId, 'Whitelist', `/servers/${sid}/players/${p.steamId}/whitelist`)
-                                  }
-                                >
-                                  Whitelist
-                                </button>
-
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(p.steamId, 'Kick', `/servers/${sid}/players/${p.steamId}/kick`)
-                                  }
-                                >
-                                  Kick
-                                </button>
-
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(p.steamId, 'Ban', `/servers/${sid}/players/${p.steamId}/ban`)
-                                  }
-                                >
-                                  Ban
-                                </button>
-                              </div>
-
-                              {/* Set Permissions row */}
-                              <div
-                                className="row"
-                                style={{ marginTop: '12px', gap: '8px', flexWrap: 'wrap' }}
-                              >
-                                <span
-                                  style={{
-                                    fontFamily: 'var(--mono)',
-                                    fontSize: '11px',
-                                    color: 'var(--muted)',
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  Set permission:
-                                </span>
-                                <select
-                                  className="sel-input"
-                                  value={getPermLevel(p.steamId)}
-                                  onChange={(e) =>
-                                    setPermLevel((prev) => ({
-                                      ...prev,
-                                      [p.steamId]: e.target.value as PermissionLevel,
-                                    }))
-                                  }
-                                  aria-label="Permission level"
-                                >
-                                  {PERMISSION_LEVELS.map((lvl) => (
-                                    <option key={lvl} value={lvl}>
-                                      [{lvl}]
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  disabled={pendingAction !== null}
-                                  onClick={() =>
-                                    runAction(
-                                      p.steamId,
-                                      'Set Permissions',
-                                      `/servers/${sid}/players/${p.steamId}/permissions`,
-                                      { level: getPermLevel(p.steamId) }
-                                    )
-                                  }
-                                >
-                                  Apply
-                                </button>
-                              </div>
-
-                            </div>
+                            <span
+                              className={status.type === 'ok' ? 'info-banner' : 'error-banner'}
+                              style={{ fontSize: '11px', display: 'inline-block', padding: '4px 10px' }}
+                              role="status"
+                            >
+                              {status.message}
+                            </span>
                           </td>
                         </tr>
                       )}
@@ -578,8 +270,46 @@ export default function Players() {
               </tbody>
             </table>
           )}
+
+          {total > 50 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '12px' }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Prev
+              </button>
+              <span
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '11px',
+                  color: 'var(--muted)',
+                  alignSelf: 'center',
+                }}
+              >
+                {page} / {totalPages}
+              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {selectedSteamId && activeServer?.serverName && (
+        <PlayerPanel
+          steamId={selectedSteamId}
+          serverName={activeServer.serverName}
+          online={players.find((p) => p.steamId === selectedSteamId)?.online}
+          onClose={() => setSelectedSteamId(null)}
+        />
+      )}
     </div>
   )
 }

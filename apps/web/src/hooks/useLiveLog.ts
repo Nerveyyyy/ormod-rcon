@@ -8,12 +8,12 @@ let _lineId = 0
 
 // Subscribes to the live log WebSocket for a given server.
 // Reconnects with exponential backoff on server-side close.
-export function useLiveLog(serverId: string | null): { lines: LogLine[]; status: WsStatus } {
+export function useLiveLog(serverName: string | null): { lines: LogLine[]; status: WsStatus } {
   const [lines, setLines] = useState<LogLine[]>([])
   const [status, setStatus] = useState<WsStatus>('disconnected')
 
   useEffect(() => {
-    if (!serverId) return
+    if (!serverName) return
     setLines([]) // CRITICAL: reset on server switch
     setStatus('connecting')
 
@@ -26,7 +26,7 @@ export function useLiveLog(serverId: string | null): { lines: LogLine[]; status:
       if (cancelled) return
       setStatus('connecting')
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      ws = new WebSocket(`${proto}://${window.location.host}/ws/log/${serverId}`)
+      ws = new WebSocket(`${proto}://${window.location.host}/ws/log/${serverName}`)
 
       ws.onopen = () => {
         reconnectDelay = 1000
@@ -64,7 +64,7 @@ export function useLiveLog(serverId: string | null): { lines: LogLine[]; status:
       if (reconnectTimer !== null) clearTimeout(reconnectTimer)
       ws?.close()
     }
-  }, [serverId])
+  }, [serverName])
 
   return { lines, status }
 }

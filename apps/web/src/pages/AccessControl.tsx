@@ -7,6 +7,7 @@ import { api } from '../api/client.js'
 
 type AccessList = {
   id: string
+  slug: string
   name: string
   type: string
   scope: string
@@ -18,6 +19,7 @@ type AccessList = {
 
 type ListEntry = {
   steamId: string
+  displayName: string | null
   reason: string | null
   addedBy: string | null
   createdAt: string
@@ -63,7 +65,7 @@ export default function AccessControl() {
   const { activeServer } = useServer()
   const [lists, setLists] = useState<AccessList[]>([])
   const [entries, setEntries] = useState<ListEntry[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,6 +83,7 @@ export default function AccessControl() {
   const [newPerm, setNewPerm] = useState('admin')
 
   const [deleteTarget, setDeleteTarget] = useState<AccessList | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<ListEntry | null>(null)
 
   // Modal refs for focus traps
   const addListModalRef = useRef<HTMLDivElement>(null)
@@ -95,15 +98,15 @@ export default function AccessControl() {
       .get<AccessList[]>('/lists')
       .then((data) => {
         setLists(data)
-        if (!selectedId && data.length > 0) setSelectedId(data[0]!.id)
+        if (!selectedSlug && data.length > 0) setSelectedSlug(data[0]!.slug)
       })
       .catch((e) => setError((e as Error).message || 'Failed to load lists'))
       .finally(() => setLoading(false))
   }
 
-  const loadEntries = (listId: string) => {
+  const loadEntries = (slug: string) => {
     api
-      .get<{ id: string; entries: ListEntry[] }>(`/lists/${listId}`)
+      .get<{ slug: string; entries: ListEntry[] }>(`/lists/${slug}`)
       .then((data) => setEntries(data.entries ?? []))
       .catch((e) => setError((e as Error).message || 'Failed to load entries'))
   }
@@ -112,23 +115,25 @@ export default function AccessControl() {
     loadLists()
   }, [])
   useEffect(() => {
-    if (selectedId) loadEntries(selectedId)
-  }, [selectedId])
+    if (selectedSlug) loadEntries(selectedSlug)
+  }, [selectedSlug])
 
-  const selected = lists.find((l) => l.id === selectedId) ?? null
+  const selected = lists.find((l) => l.slug === selectedSlug) ?? null
 
-  const deleteEntry = (steamId: string) => {
-    if (!selectedId) return
+  const deleteEntry = () => {
+    if (!selectedSlug || !removeTarget) return
+    const steamId = removeTarget.steamId
+    setRemoveTarget(null)
     api
-      .delete(`/lists/${selectedId}/entries/${steamId}`)
+      .delete(`/lists/${selectedSlug}/entries/${steamId}`)
       .then(() => setEntries((e) => e.filter((x) => x.steamId !== steamId)))
       .catch((e) => setError((e as Error).message || 'Failed to remove entry'))
   }
 
   const syncList = () => {
-    if (!selectedId || !activeServer?.id) return
+    if (!selectedSlug || !activeServer?.serverName) return
     api
-      .post(`/lists/${selectedId}/sync/${activeServer.id}`)
+      .post(`/lists/${selectedSlug}/sync/${activeServer.serverName}`)
       .then(() => setError(null))
       .catch((e) => setError(`Sync failed: ${(e as Error).message}`))
   }
@@ -136,11 +141,11 @@ export default function AccessControl() {
   const deleteList = () => {
     if (!deleteTarget) return
     api
-      .delete(`/lists/${deleteTarget.id}`)
+      .delete(`/lists/${deleteTarget.slug}`)
       .then(() => {
         setDeleteTarget(null)
-        if (selectedId === deleteTarget.id) {
-          setSelectedId(null)
+        if (selectedSlug === deleteTarget.slug) {
+          setSelectedSlug(null)
           setEntries([])
         }
         loadLists()
@@ -149,11 +154,11 @@ export default function AccessControl() {
   }
 
   const refreshFeed = () => {
-    if (!selectedId) return
+    if (!selectedSlug) return
     api
-      .post<{ imported: number }>(`/lists/${selectedId}/refresh`)
+      .post<{ imported: number }>(`/lists/${selectedSlug}/refresh`)
       .then((r) => {
-        if (selectedId) loadEntries(selectedId)
+        if (selectedSlug) loadEntries(selectedSlug)
         loadLists()
         setError(null)
         // Show success inline rather than alert
@@ -176,24 +181,24 @@ export default function AccessControl() {
         setNewListName('')
         setNewListUrl('')
         loadLists()
-        setSelectedId(created.id)
+        setSelectedSlug(created.slug)
       })
       .catch((e) => setError(`Failed to create list: ${(e as Error).message}`))
   }
 
   const addEntry = () => {
-    if (!selectedId || !newSteamId.trim()) return
+    if (!selectedSlug || !newSteamId.trim()) return
     const body =
       selected?.type === 'ADMIN'
         ? { steamId: newSteamId, reason: newNote || null, permission: newPerm }
         : { steamId: newSteamId, reason: newNote || null }
     api
-      .post(`/lists/${selectedId}/entries`, body)
+      .post(`/lists/${selectedSlug}/entries`, body)
       .then(() => {
         setShowAddEntry(false)
         setNewSteamId('')
         setNewNote('')
-        if (selectedId) loadEntries(selectedId)
+        if (selectedSlug) loadEntries(selectedSlug)
         loadLists()
       })
       .catch((e) => setError(`Failed to add entry: ${(e as Error).message}`))
@@ -444,6 +449,27 @@ export default function AccessControl() {
         </ConfirmDialog>
       )}
 
+      {removeTarget && (
+        <ConfirmDialog
+          title="Remove Entry"
+          onCancel={() => setRemoveTarget(null)}
+          onConfirm={deleteEntry}
+        >
+          <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
+            Are you sure you want to remove{' '}
+            <strong style={{ color: 'var(--text-bright)' }}>
+              {removeTarget.displayName ?? removeTarget.steamId}
+            </strong>
+            {removeTarget.displayName && (
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--dim)', marginLeft: '4px' }}>
+                ({removeTarget.steamId})
+              </span>
+            )}
+            {' '}from <strong style={{ color: 'var(--orange)' }}>{selected?.name}</strong>?
+          </div>
+        </ConfirmDialog>
+      )}
+
       <div className="split-panel">
         {/* ── Left sidebar: list selector ────────────────────── */}
         <div className="sidebar">
@@ -478,18 +504,18 @@ export default function AccessControl() {
                 )}
                 {listsOfType.map((l) => (
                   <div
-                    key={l.id}
-                    className={`sidebar-item${l.id === selectedId ? ' active' : ''}`}
+                    key={l.slug}
+                    className={`sidebar-item${l.slug === selectedSlug ? ' active' : ''}`}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedId(l.id)}
+                    onClick={() => setSelectedSlug(l.slug)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        setSelectedId(l.id)
+                        setSelectedSlug(l.slug)
                       }
                     }}
-                    aria-pressed={l.id === selectedId}
+                    aria-pressed={l.slug === selectedSlug}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="sidebar-item-name">{l.name}</div>
@@ -512,7 +538,7 @@ export default function AccessControl() {
               desc="Choose a list from the sidebar, or create a new one."
             />
           ) : (
-            <div className="card fadein" key={selectedId ?? ''}>
+            <div className="card fadein" key={selectedSlug ?? ''}>
               <div className="card-header">
                 <div className="row">
                   <span className="card-title">{selected.name}</span>
@@ -593,24 +619,21 @@ export default function AccessControl() {
 
               {selected.type === 'WHITELIST' && (
                 <div
-                  className="warn-banner"
+                  className="info-banner"
                   style={{
                     borderRadius: 0,
                     borderLeft: 'none',
                     borderRight: 'none',
                     borderTop: 'none',
+                    color: 'var(--orange)',
+                    background: 'var(--orange-bg)',
+                    borderColor: 'var(--orange-dim)',
                   }}
                 >
-                  Whitelist is currently <strong style={{ margin: '0 4px' }}>disabled</strong>.
-                  Enable via
-                  <span
-                    style={{ fontFamily: 'var(--mono)', margin: '0 5px', color: 'var(--text)' }}
-                  >
-                    setserversetting IsWhitelisted true
-                  </span>
-                  or in Server Settings.
+                  Whitelists must be enabled in server settings for this list to take effect.
                 </div>
               )}
+
 
               {entries.length === 0 ? (
                 <EmptyState icon="⊘" title="No entries" desc="This list is empty." />
@@ -618,6 +641,7 @@ export default function AccessControl() {
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th scope="col">Player</th>
                       <th scope="col">Steam ID</th>
                       {selected.type === 'ADMIN' && <th scope="col">Permission</th>}
                       <th scope="col">Note</th>
@@ -628,6 +652,7 @@ export default function AccessControl() {
                   <tbody>
                     {entries.map((e) => (
                       <tr key={e.steamId}>
+                        <td className="bright">{e.displayName ?? '—'}</td>
                         <td className="mono bright">{e.steamId}</td>
                         {selected.type === 'ADMIN' && (
                           <td>
@@ -644,7 +669,7 @@ export default function AccessControl() {
                           <td>
                             <button
                               className="btn btn-danger btn-xs"
-                              onClick={() => deleteEntry(e.steamId)}
+                              onClick={() => setRemoveTarget(e)}
                             >
                               Remove
                             </button>

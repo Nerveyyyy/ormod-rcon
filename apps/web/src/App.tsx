@@ -14,6 +14,7 @@ import WipeManager from './pages/WipeManager.js'
 import Schedules from './pages/Schedules.js'
 import ServerManagement from './pages/ServerManagement.js'
 import UserManagement from './pages/UserManagement.js'
+import Activity from './pages/Activity.js'
 import NotFound from './pages/NotFound.js'
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -56,6 +57,7 @@ export default function App() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="players" element={<Players />} />
+                <Route path="activity" element={<Activity />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="console" element={<Console />} />
                 <Route path="access-control" element={<AccessControl />} />

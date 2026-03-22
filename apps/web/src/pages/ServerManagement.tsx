@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+
+function toServerName(displayName: string): string {
+  return displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
 import PageHeader from '../components/ui/PageHeader.js'
 import ConfirmDialog from '../components/ui/ConfirmDialog.js'
 import { useServerContext as useServer } from '../context/ServerContext.js'
@@ -21,15 +25,26 @@ export default function ServerManagement() {
 
   // Add form state
   const [name, setName] = useState('')
+  const [serverName, setServerName] = useState('')
   const [containerName, setContainerName] = useState('')
   const [gamePort, setGamePort] = useState('27015')
   const [queryPort, setQueryPort] = useState('27016')
   const [notes, setNotes] = useState('')
 
-  const doAction = async (serverId: string, action: 'start' | 'stop' | 'restart') => {
-    setActionLoading(`${serverId}-${action}`)
+  const closeAddModal = () => {
+    setShowAdd(false)
+    setName('')
+    setServerName('')
+    setContainerName('')
+    setGamePort('27015')
+    setQueryPort('27016')
+    setNotes('')
+  }
+
+  const doAction = async (sn: string, action: 'start' | 'stop' | 'restart') => {
+    setActionLoading(`${sn}-${action}`)
     try {
-      await api.post(`/servers/${serverId}/${action}`)
+      await api.post(`/servers/${sn}/${action}`)
       // Brief delay — let Docker update container state before refreshing
       timerRef.current = setTimeout(() => {
         timerRef.current = null
@@ -47,18 +62,13 @@ export default function ServerManagement() {
     try {
       await api.post('/servers', {
         name,
-        serverName: name, // derive from display name
+        serverName: serverName,
         containerName: containerName || null, // null = use GAME_CONTAINER_NAME env default
         gamePort: parseInt(gamePort, 10),
         queryPort: parseInt(queryPort, 10),
         notes: notes || null,
       })
-      setShowAdd(false)
-      setName('')
-      setContainerName('')
-      setGamePort('27015')
-      setQueryPort('27016')
-      setNotes('')
+      closeAddModal()
       refresh()
     } catch (e) {
       alert(`Failed to add server: ${(e as Error).message}`)
@@ -68,7 +78,7 @@ export default function ServerManagement() {
   const deleteServer = async () => {
     if (!deleteTarget) return
     try {
-      await api.delete(`/servers/${deleteTarget.id}`)
+      await api.delete(`/servers/${deleteTarget.serverName}`)
       setDeleteTarget(null)
       refresh()
     } catch (e) {
@@ -90,7 +100,7 @@ export default function ServerManagement() {
 
       {/* ── Add Server Modal ─────────────────────────────────── */}
       {showAdd && (
-        <div className="overlay" onClick={() => setShowAdd(false)}>
+        <div className="overlay" onClick={closeAddModal}>
           <div
             className="modal fadein"
             onClick={(e) => e.stopPropagation()}
@@ -98,7 +108,7 @@ export default function ServerManagement() {
           >
             <div className="card-header">
               <span className="card-title">Add Server</span>
-              <button className="btn btn-ghost btn-xs" onClick={() => setShowAdd(false)}>
+              <button className="btn btn-ghost btn-xs" onClick={closeAddModal}>
                 ✕
               </button>
             </div>
@@ -114,8 +124,23 @@ export default function ServerManagement() {
                 <input
                   className="text-input"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setServerName(toServerName(e.target.value))
+                  }}
                   placeholder="My PvE Server"
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Server Name</div>
+                  <div className="setting-desc">URL-safe identifier used in API routes (auto-derived)</div>
+                </div>
+                <input
+                  className="text-input"
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  placeholder="my-pve-server"
                 />
               </div>
               <div className="setting-row" style={{ padding: 0 }}>
@@ -168,7 +193,7 @@ export default function ServerManagement() {
                 />
               </div>
               <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>
+                <button className="btn btn-ghost" onClick={closeAddModal}>
                   Cancel
                 </button>
                 <button className="btn btn-primary" onClick={addServer} disabled={!name.trim()}>
@@ -213,7 +238,7 @@ export default function ServerManagement() {
       ) : (
         <div className="col" style={{ gap: '12px' }}>
           {servers.map((server) => {
-            const isActing = actionLoading?.startsWith(server.id) ?? false
+            const isActing = actionLoading?.startsWith(server.serverName) ?? false
             return (
               <div key={server.id} className="card">
                 <div className="card-header">
@@ -227,23 +252,23 @@ export default function ServerManagement() {
                     <button
                       className="btn btn-green btn-sm"
                       disabled={isActing || server.running}
-                      onClick={() => doAction(server.id, 'start')}
+                      onClick={() => doAction(server.serverName, 'start')}
                     >
-                      {actionLoading === `${server.id}-start` ? 'Starting…' : 'Start'}
+                      {actionLoading === `${server.serverName}-start` ? 'Starting…' : 'Start'}
                     </button>
                     <button
                       className="btn btn-ghost btn-sm"
                       disabled={isActing || !server.running}
-                      onClick={() => doAction(server.id, 'stop')}
+                      onClick={() => doAction(server.serverName, 'stop')}
                     >
-                      {actionLoading === `${server.id}-stop` ? 'Stopping…' : 'Stop'}
+                      {actionLoading === `${server.serverName}-stop` ? 'Stopping…' : 'Stop'}
                     </button>
                     <button
                       className="btn btn-ghost btn-sm"
                       disabled={isActing}
-                      onClick={() => doAction(server.id, 'restart')}
+                      onClick={() => doAction(server.serverName, 'restart')}
                     >
-                      {actionLoading === `${server.id}-restart` ? 'Restarting…' : 'Restart'}
+                      {actionLoading === `${server.serverName}-restart` ? 'Restarting…' : 'Restart'}
                     </button>
                     <button
                       className="btn btn-danger btn-sm"

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useServerContext as useServer } from '../../context/ServerContext.js'
 
 export default function ServerSwitcher() {
-  const { servers, activeServer, setActiveServerId } = useServer()
+  const { servers, activeServer, setActiveServerName } = useServer()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -34,9 +34,9 @@ export default function ServerSwitcher() {
           {servers.map((s) => (
             <div
               key={s.id}
-              className={`server-dropdown-item${s.id === activeServer?.id ? ' active' : ''}`}
+              className={`server-dropdown-item${s.serverName === activeServer?.serverName ? ' active' : ''}`}
               onClick={() => {
-                setActiveServerId(s.id)
+                setActiveServerName(s.serverName)
                 setOpen(false)
               }}
             >

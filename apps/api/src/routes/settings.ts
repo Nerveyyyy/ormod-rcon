@@ -1,15 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWrite } from '../plugins/auth.js'
 import * as ctrl from '../controllers/settings.js'
-import { serverParams as sharedServerParams } from './_schemas.js'
-
-const serverParams = sharedServerParams
+import { serverParams } from './_schemas.js'
 
 const settingKeyParams = {
   type: 'object',
-  required: ['id', 'key'],
+  required: ['serverName', 'key'],
   properties: {
-    id:  { type: 'string' },
+    serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' },
     key: { type: 'string', pattern: '^[a-zA-Z][a-zA-Z0-9_]*$' },
   },
 } as const
@@ -37,14 +35,14 @@ const bulkSettingsBody = {
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.route({
     method: 'GET',
-    url: '/servers/:id/settings',
+    url: '/servers/:serverName/settings',
     schema: { params: serverParams },
     handler: ctrl.getSettings,
   })
 
   app.route({
     method: 'PUT',
-    url: '/servers/:id/settings/:key',
+    url: '/servers/:serverName/settings/:key',
     schema: { params: settingKeyParams, body: settingKeyBody },
     preHandler: [requireWrite],
     handler: ctrl.updateSettingKey,
@@ -52,7 +50,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
 
   app.route({
     method: 'PUT',
-    url: '/servers/:id/settings',
+    url: '/servers/:serverName/settings',
     schema: { params: serverParams, body: bulkSettingsBody },
     preHandler: [requireWrite],
     handler: ctrl.bulkUpdateSettings,

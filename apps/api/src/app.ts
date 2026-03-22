@@ -11,6 +11,8 @@ import addFormats from 'ajv-formats'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { consoleWsRoutes } from './routes/console.js'
+import { activityWsRoutes } from './routes/activity-ws.js'
+import { rconConnectionManager } from './services/rcon-connection-manager.js'
 
 // config.ts must be imported so the module augmentation is picked up
 import './config.js'
@@ -55,12 +57,13 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
     dirNameRoutePrefix: false,
     options: { prefix: '/api' },
     forceESM: true,
-    ignorePattern: /\.d\./,
+    ignorePattern: /\.d\.|activity-ws/,
   })
 
   // WebSocket log route — Vite proxy maps /ws/* → ws://localhost:3001
   // Must be registered manually (no /api prefix)
   await app.register(consoleWsRoutes)
+  await app.register(activityWsRoutes)
 
   // Serve React frontend (Docker production only)
   const staticPath = app.config.STATIC_PATH
@@ -84,6 +87,14 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
       return reply.status(404).send({ error: 'Not found' })
     })
   }
+
+  // Decorate with the RCON connection manager singleton
+  app.decorate('rconManager', rconConnectionManager)
+
+  // Disconnect all RCON connections on graceful shutdown
+  app.addHook('onClose', async () => {
+    await rconConnectionManager.disconnectAll()
+  })
 
   return app as FastifyInstance
 }

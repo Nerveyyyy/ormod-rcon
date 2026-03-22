@@ -11,7 +11,7 @@ let _consoleLineId = 0
 
 export default function Console() {
   const { activeServer } = useServer()
-  const { lines: liveLog, status: wsStatus } = useLiveLog(activeServer?.id ?? null)
+  const { lines: liveLog, status: wsStatus } = useLiveLog(activeServer?.serverName ?? null)
   const [lines, setLines] = useState<ConsoleLine[]>([
     { lineId: _consoleLineId++, cls: 'c-comment', text: '# Console ready.' },
   ])
@@ -28,10 +28,10 @@ export default function Console() {
 
   // Load historical log on mount / server change
   useEffect(() => {
-    if (!activeServer?.id) return
+    if (!activeServer?.serverName) return
     setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Loading log history…' }])
     api
-      .get<{ lines: string[] }>(`/servers/${activeServer.id}/console/log?lines=1000`)
+      .get<{ lines: string[] }>(`/servers/${activeServer.serverName}/console/log?lines=1000`)
       .then((data) => {
         const initial = (data.lines ?? []).map((l) => ({
           lineId: _consoleLineId++,
@@ -45,7 +45,7 @@ export default function Console() {
         setError((e as Error).message || 'Failed to load log history')
       })
     lastLogRef.current = 0
-  }, [activeServer?.id])
+  }, [activeServer?.serverName])
 
   // Append new live log lines (deduplicated by index)
   useEffect(() => {
@@ -72,9 +72,9 @@ export default function Console() {
     setHist((h) => [cmd, ...h])
     setHi(-1)
     setInput('')
-    if (activeServer?.id) {
+    if (activeServer?.serverName) {
       api
-        .post(`/servers/${activeServer.id}/console/command`, { command: cmd })
+        .post(`/servers/${activeServer.serverName}/console/command`, { command: cmd })
         .then(() => appendLine('c-ok', '  [OK] Command dispatched.'))
         .catch((e) => {
           appendLine('c-err', '  [ERR] Command failed — server not running?')
