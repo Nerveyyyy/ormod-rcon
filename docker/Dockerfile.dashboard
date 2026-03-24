@@ -81,8 +81,14 @@ ENV STATIC_PATH=/app/apps/web/dist
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', \
-    r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "\
+    const port = process.env.PORT || 3000;\
+    const tls = process.env.TLS_CERT_PATH && process.env.TLS_KEY_PATH;\
+    const mod = tls ? require('https') : require('http');\
+    const proto = tls ? 'https' : 'http';\
+    const opts = tls ? { rejectAuthorized: false } : {};\
+    mod.get(proto + '://localhost:' + port + '/health', opts,\
+      r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 COPY docker/entrypoint-dashboard.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
