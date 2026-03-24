@@ -8,10 +8,23 @@ export async function listWipes(
 ) {
   const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
-  return prisma.wipeLog.findMany({
+  const logs = await prisma.wipeLog.findMany({
     where: { serverId: server.id },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Resolve user IDs to names
+  const userIds = [...new Set(logs.map((l) => l.triggeredBy))]
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true },
+  })
+  const userMap = new Map(users.map((u) => [u.id, u.name]))
+
+  return logs.map((l) => ({
+    ...l,
+    triggeredByName: userMap.get(l.triggeredBy) ?? null,
+  }))
 }
 
 export async function executeWipe(
@@ -67,6 +80,7 @@ export async function executeWipe(
       performedBy,
       userId: performedBy,
       action: 'WIPE',
+      targetSteamId: targetSteamId ?? null,
       beforeValue: JSON.stringify({ type: wipeType }),
       details: JSON.stringify({ success, errorMsg }),
     },

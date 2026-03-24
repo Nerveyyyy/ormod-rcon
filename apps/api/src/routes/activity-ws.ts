@@ -31,7 +31,19 @@ async function fetchRecentEvents(serverId: string, limit: number, after?: Date):
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      include: { user: { select: { name: true } } },
+      select: {
+        id: true,
+        action: true,
+        details: true,
+        beforeValue: true,
+        afterValue: true,
+        targetSteamId: true,
+        reason: true,
+        source: true,
+        performedBy: true,
+        createdAt: true,
+        user: { select: { name: true } },
+      },
     }),
     prisma.playerSession.findMany({
       where: {
@@ -102,12 +114,104 @@ async function fetchRecentEvents(serverId: string, limit: number, after?: Date):
 
 function formatActionDetail(a: {
   action: string
+  details: string | null
+  beforeValue: string | null
+  afterValue: string | null
   targetSteamId: string | null
   reason: string | null
+  source: string
   user?: { name: string } | null
   performedBy: string
 }): string {
   const actor = a.user?.name ?? a.performedBy
+
+  // Settings changes: show which keys were changed and their values
+  if (a.action === 'SETTINGS_SET' && a.details) {
+    try {
+      const parsed = JSON.parse(a.details)
+      if (parsed.key) {
+        return `${actor} changed ${parsed.key} to ${parsed.value}`
+      }
+    } catch {
+      // Bulk update: "Updated settings: key1, key2" — enrich with values from afterValue
+      if (a.details.startsWith('Updated settings:') && a.afterValue) {
+        try {
+          const values = JSON.parse(a.afterValue) as Record<string, unknown>
+          const pairs = Object.entries(values).map(([k, v]) => `${k}=${v}`).join(', ')
+          return `${actor} updated settings: ${pairs}`
+        } catch {
+          return `${actor} ${a.details.toLowerCase()}`
+        }
+      }
+    }
+  }
+
+  // Wipe actions: show wipe type and target
+  if (a.action === 'WIPE' && a.beforeValue) {
+    try {
+      const parsed = JSON.parse(a.beforeValue) as { type?: string }
+      const wipeType = parsed.type ?? 'full'
+      const typeLabel = wipeType === 'map' ? 'Map Wipe' : wipeType === 'playerdata' ? 'Player Data Wipe' : 'Full Wipe'
+      const target = a.targetSteamId ? ` (${a.targetSteamId})` : ''
+      return `${actor} executed ${typeLabel}${target}`
+    } catch { /* fall through */ }
+  }
+
+  // Schedule run actions
+  if (a.action === 'SCHEDULE_RUN' && a.details) {
+    try {
+      const parsed = JSON.parse(a.details) as { schedule?: string; type?: string; payload?: string; manual?: boolean }
+      if (parsed.schedule) {
+        const taskType = parsed.type === 'RESTART' ? 'restart' : `command: ${parsed.payload ?? ''}`
+        if (parsed.manual) {
+          return `${actor} manually ran "${parsed.schedule}" (${taskType})`
+        }
+        return `Scheduled "${parsed.schedule}" ran (${taskType})`
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Schedule CRUD actions
+  if (a.action === 'SCHEDULE_CREATE' || a.action === 'SCHEDULE_DELETE' || a.action === 'SCHEDULE_UPDATE') {
+    if (a.details) {
+      try {
+        const parsed = JSON.parse(a.details) as { label?: string; change?: string }
+        const verb = a.action === 'SCHEDULE_CREATE' ? 'created' : a.action === 'SCHEDULE_DELETE' ? 'deleted' : parsed.change ?? 'updated'
+        return `${actor} ${verb} schedule "${parsed.label ?? 'unknown'}"`
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Access list CRUD actions
+  if (a.action === 'LIST_CREATE' || a.action === 'LIST_DELETE') {
+    if (a.details) {
+      try {
+        const parsed = JSON.parse(a.details) as { name?: string; type?: string }
+        const verb = a.action === 'LIST_CREATE' ? 'created' : 'deleted'
+        const listType = parsed.type ? ` (${parsed.type.toLowerCase()})` : ''
+        return `${actor} ${verb} list "${parsed.name ?? 'unknown'}"${listType}`
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Access list entry actions with list name
+  if (['BAN', 'UNBAN', 'WHITELIST', 'REMOVEWHITELIST', 'SETPERMISSION', 'REMOVEPERMISSION'].includes(a.action) && a.details) {
+    try {
+      const parsed = JSON.parse(a.details) as { list?: string; permission?: string }
+      const target = a.targetSteamId ?? 'unknown'
+      if (parsed.list) {
+        const actionLabel: Record<string, string> = {
+          BAN: 'banned', UNBAN: 'unbanned',
+          WHITELIST: 'whitelisted', REMOVEWHITELIST: 'removed from whitelist',
+          SETPERMISSION: 'set permissions for', REMOVEPERMISSION: 'removed permissions for',
+        }
+        const verb = actionLabel[a.action] ?? a.action.toLowerCase()
+        const extra = a.action === 'SETPERMISSION' && parsed.permission ? ` (${parsed.permission})` : ''
+        return `${actor} ${verb} ${target} in "${parsed.list}"${extra}`
+      }
+    } catch { /* fall through */ }
+  }
+
   const target = a.targetSteamId ? ` on ${a.targetSteamId}` : ''
   const reason = a.reason ? ` — ${a.reason}` : ''
   return `${actor}: ${a.action}${target}${reason}`

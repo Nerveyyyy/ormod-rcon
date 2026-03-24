@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Outlet } from 'react-router'
 import NavTabs from './NavTabs.js'
 import ServerSwitcher from './ServerSwitcher.js'
@@ -6,20 +6,6 @@ import ChangePasswordModal from '../ui/ChangePasswordModal.js'
 import { useServerContext as useServer } from '../../context/ServerContext.js'
 import { useAuth } from '../../context/AuthContext.js'
 import { roleToClass } from '../../lib/constants.js'
-
-function Clock() {
-  const [t, setT] = useState(new Date())
-  useEffect(() => {
-    const i = setInterval(() => setT(new Date()), 1000)
-    return () => clearInterval(i)
-  }, [])
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    <span className="clock mono">
-      {pad(t.getUTCHours())}:{pad(t.getUTCMinutes())}:{pad(t.getUTCSeconds())} UTC
-    </span>
-  )
-}
 
 export default function AppShell() {
   const { activeServer } = useServer()
@@ -96,8 +82,6 @@ export default function AppShell() {
               </button>
             </div>
           )}
-          <div className="header-divider" />
-          <Clock />
         </div>
       </div>
       <NavTabs />

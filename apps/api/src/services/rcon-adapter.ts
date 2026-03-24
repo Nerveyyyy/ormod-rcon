@@ -60,8 +60,7 @@ export class DockerExecAdapter implements RconAdapter {
   constructor(private serverId: string) {}
 
   async sendCommand(cmd: string): Promise<string> {
-    await dockerManager.sendCommand(this.serverId, cmd)
-    return 'Command dispatched via docker exec'
+    return dockerManager.sendCommandAndCollect(this.serverId, cmd)
   }
 
   isConnected(): boolean {

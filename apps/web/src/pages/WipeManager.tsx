@@ -7,6 +7,9 @@ import { api } from '../api/client.js'
 type WipeLog = {
   id: string
   triggeredBy: string
+  triggeredByName: string | null
+  type: string
+  targetSteamId: string | null
   createdAt: string
   notes: string | null
   success: boolean
@@ -78,6 +81,7 @@ export default function WipeManager() {
   const [wiping, setWiping] = useState(false)
   const [targetSteamId, setTargetSteamId] = useState('')
   const [history, setHistory] = useState<WipeLog[]>([])
+  const [wipeNotes, setWipeNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const loadHistory = useCallback(() => {
@@ -101,6 +105,7 @@ export default function WipeManager() {
   const closeConfirm = () => {
     setShowConfirm(false)
     setPendingType(null)
+    setWipeNotes('')
   }
 
   const executeWipe = async () => {
@@ -114,6 +119,9 @@ export default function WipeManager() {
       const body: Record<string, string> = { type: chosen.backendType }
       if (chosen.id === 'PLAYER_DATA' && targetSteamId.trim()) {
         body.targetSteamId = targetSteamId.trim()
+      }
+      if (wipeNotes.trim()) {
+        body.notes = wipeNotes.trim()
       }
       await api.post(`/servers/${activeServer.serverName}/wipe`, body)
       setTargetSteamId('')
@@ -264,6 +272,7 @@ export default function WipeManager() {
             <thead>
               <tr>
                 <th scope="col">Result</th>
+                <th scope="col">Type</th>
                 <th scope="col">Triggered By</th>
                 <th scope="col">Date</th>
                 <th scope="col">Notes</th>
@@ -273,7 +282,7 @@ export default function WipeManager() {
               {history.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     style={{ textAlign: 'center', padding: '24px', color: 'var(--dim)' }}
                   >
                     No wipe history.
@@ -289,7 +298,14 @@ export default function WipeManager() {
                       <span className="pill pill-red" title={w.errorMsg ?? undefined}>Failed</span>
                     )}
                   </td>
-                  <td className="bright">{w.triggeredBy}</td>
+                  <td>
+                    <span className={`pill ${w.type === 'full' ? 'pill-red' : w.type === 'map' ? 'pill-orange' : 'pill-muted'}`} style={{ fontSize: '10px' }}>
+                      {w.type === 'playerdata' ? (w.targetSteamId ? `Player ${w.targetSteamId}` : 'All Players') : w.type === 'map' ? 'Map' : 'Full'}
+                    </span>
+                  </td>
+                  <td className="bright" title={w.triggeredBy}>
+                    {w.triggeredByName ?? w.triggeredBy}
+                  </td>
                   <td className="mono" style={{ color: 'var(--dim)' }}>
                     {new Date(w.createdAt).toLocaleString()}
                   </td>
@@ -351,6 +367,23 @@ export default function WipeManager() {
                 ✕ {f}
               </div>
             ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label
+              htmlFor="wipe-notes"
+              style={{ fontSize: '10px', color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+            >
+              Notes (optional)
+            </label>
+            <textarea
+              id="wipe-notes"
+              className="text-input"
+              rows={2}
+              value={wipeNotes}
+              onChange={(e) => setWipeNotes(e.target.value)}
+              placeholder="e.g. Weekly scheduled wipe, player requested reset..."
+              style={{ resize: 'vertical', fontFamily: 'var(--mono)', fontSize: '11px' }}
+            />
           </div>
         </ConfirmDialog>
       )}

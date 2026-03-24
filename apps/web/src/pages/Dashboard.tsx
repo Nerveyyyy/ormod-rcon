@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router'
 import { useServerContext as useServer } from '../context/ServerContext.js'
 import { useActivityFeed } from '../hooks/useActivityFeed.js'
@@ -44,6 +44,12 @@ const EVENT_PILL: Record<string, { className: string; label: string }> = {
   WIPE: { className: 'pill-red', label: 'Wipe' },
   RESTART: { className: 'pill-orange', label: 'Restart' },
   SETTINGS_SET: { className: 'pill-muted', label: 'Settings' },
+  SCHEDULE_RUN: { className: 'pill-orange', label: 'Schedule' },
+  SCHEDULE_CREATE: { className: 'pill-green', label: 'Schedule' },
+  SCHEDULE_DELETE: { className: 'pill-red', label: 'Schedule' },
+  SCHEDULE_UPDATE: { className: 'pill-muted', label: 'Schedule' },
+  LIST_CREATE: { className: 'pill-green', label: 'List' },
+  LIST_DELETE: { className: 'pill-red', label: 'List' },
 }
 
 export default function Dashboard() {
@@ -58,6 +64,14 @@ export default function Dashboard() {
   const [recentCombat, setRecentCombat] = useState<CombatEvent[]>([])
   const [recentChat, setRecentChat] = useState<ChatMessage[]>([])
   const endRef = useRef<HTMLDivElement>(null)
+  const activityScrollRef = useRef<HTMLDivElement>(null)
+  const activityAtBottomRef = useRef(true)
+
+  const handleActivityScroll = useCallback(() => {
+    const el = activityScrollRef.current
+    if (!el) return
+    activityAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+  }, [])
 
   useEffect(() => {
     if (!activeServer?.serverName) return
@@ -85,7 +99,9 @@ export default function Dashboard() {
   }, [activeServer?.serverName])
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (activityAtBottomRef.current) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [activityEvents])
 
   const enabledSchedules = schedules.filter((s) => s.enabled)
@@ -132,7 +148,11 @@ export default function Dashboard() {
               {activityStatus === 'connected' ? 'Live' : activityStatus === 'connecting' ? 'Connecting' : 'Offline'}
             </span>
           </div>
-          <div style={{ background: 'var(--bg0)', overflowY: 'auto', maxHeight: '280px' }}>
+          <div
+            ref={activityScrollRef}
+            onScroll={handleActivityScroll}
+            style={{ background: 'var(--bg0)', overflowY: 'auto', maxHeight: '280px' }}
+          >
             {activityEvents.length === 0 && (
               <div
                 style={{
@@ -146,7 +166,7 @@ export default function Dashboard() {
                 {activeServer?.running ? 'Waiting for activity…' : 'Server is not running.'}
               </div>
             )}
-            {activityEvents.map((e) => {
+            {[...activityEvents].reverse().map((e) => {
               const pill = EVENT_PILL[e.type] ?? { className: 'pill-muted', label: e.type }
               return (
                 <div key={e.id} className="log-entry log-info">

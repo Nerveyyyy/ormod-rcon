@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../../api/client.js'
 
 type Props = {
@@ -33,7 +33,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
     const last = focusable[focusable.length - 1]
     first?.focus()
 
-    function handleTab(e: KeyboardEvent) {
+    function handleTab(e: globalThis.KeyboardEvent) {
       if (e.key !== 'Tab') return
       if (e.shiftKey) {
         if (document.activeElement === first) { e.preventDefault(); last?.focus() }
@@ -41,8 +41,8 @@ export default function ChangePasswordModal({ onClose }: Props) {
         if (document.activeElement === last) { e.preventDefault(); first?.focus() }
       }
     }
-    document.addEventListener('keydown', handleTab as EventListener)
-    return () => document.removeEventListener('keydown', handleTab as EventListener)
+    document.addEventListener('keydown', handleTab)
+    return () => document.removeEventListener('keydown', handleTab)
   }, [])
 
   const valid =
@@ -66,7 +66,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
     }
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && valid && !loading) submit()
   }
 

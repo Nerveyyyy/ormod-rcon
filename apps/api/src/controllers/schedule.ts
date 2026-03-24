@@ -59,7 +59,7 @@ function computeNextRun(cronExpr: string): Date | null {
   }
 }
 
-async function runTask(task: TaskRow): Promise<void> {
+async function runTask(task: TaskRow, manualUserId?: string): Promise<void> {
   // AUDIT-21: re-fetch from DB to avoid stale-closure data
   const fresh = await prisma.scheduledTask.findUnique({ where: { id: task.id } })
   if (!fresh) {
@@ -84,6 +84,8 @@ async function runTask(task: TaskRow): Promise<void> {
     return
   }
 
+  let success = true
+  let errorMsg: string | undefined
   try {
     switch (fresh.type as TaskType) {
       case 'COMMAND': {
@@ -97,6 +99,8 @@ async function runTask(task: TaskRow): Promise<void> {
       }
     }
   } catch (err) {
+    success = false
+    errorMsg = err instanceof Error ? err.message : String(err)
     // AUDIT-95: use Pino logger instead of console.error
     logError(err, `[scheduler] Task "${fresh.label}" failed`)
   }
@@ -104,6 +108,27 @@ async function runTask(task: TaskRow): Promise<void> {
   await prisma.scheduledTask.update({
     where: { id: fresh.id },
     data: { lastRun: new Date(), nextRun: computeNextRun(fresh.cronExpr) },
+  })
+
+  // Log to activity feed
+  const source = manualUserId ? 'dashboard' : 'schedule'
+  const performedBy = manualUserId ?? 'schedule'
+  await prisma.actionLog.create({
+    data: {
+      serverId: server.id,
+      performedBy,
+      userId: manualUserId ?? null,
+      action: 'SCHEDULE_RUN',
+      source,
+      details: JSON.stringify({
+        schedule: fresh.label,
+        type: fresh.type,
+        payload: fresh.payload,
+        success,
+        ...(errorMsg ? { error: errorMsg } : {}),
+        manual: !!manualUserId,
+      }),
+    },
   })
 }
 
@@ -176,6 +201,17 @@ export async function createSchedule(
     },
   })
   if (task.enabled) registerCronJob(task)
+
+  await prisma.actionLog.create({
+    data: {
+      serverId: server.id,
+      performedBy: req.session!.user.id,
+      userId: req.session!.user.id,
+      action: 'SCHEDULE_CREATE',
+      details: JSON.stringify({ label: task.label, type: task.type, cronExpr: task.cronExpr }),
+    },
+  })
+
   reply.status(201)
   return task
 }
@@ -211,6 +247,22 @@ export async function updateSchedule(
 
   unregisterCronJob(existing.id)
   if (task.enabled) registerCronJob(task)
+
+  // Determine what changed for a meaningful activity message
+  let change = 'updated'
+  if (req.body.enabled !== undefined && req.body.enabled !== existing.enabled) {
+    change = req.body.enabled ? 'enabled' : 'paused'
+  }
+  await prisma.actionLog.create({
+    data: {
+      serverId: server.id,
+      performedBy: req.session!.user.id,
+      userId: req.session!.user.id,
+      action: 'SCHEDULE_UPDATE',
+      details: JSON.stringify({ label: task.label, change }),
+    },
+  })
+
   return task
 }
 
@@ -227,6 +279,17 @@ export async function deleteSchedule(
   if (!existing) return reply.status(404).send({ error: 'Task not found' })
   unregisterCronJob(existing.id)
   await prisma.scheduledTask.delete({ where: { id: existing.id } })
+
+  await prisma.actionLog.create({
+    data: {
+      serverId: server.id,
+      performedBy: req.session!.user.id,
+      userId: req.session!.user.id,
+      action: 'SCHEDULE_DELETE',
+      details: JSON.stringify({ label: existing.label }),
+    },
+  })
+
   return { ok: true }
 }
 
@@ -241,6 +304,6 @@ export async function runScheduleNow(
     where: { slug: req.params.slug, serverId: server.id },
   })
   if (!task) return reply.status(404).send({ error: 'Task not found' })
-  await runTask(task)
+  await runTask(task, req.session!.user.id)
   return { ok: true }
 }

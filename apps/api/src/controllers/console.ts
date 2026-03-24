@@ -1,6 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
-import { getAdapter } from '../services/rcon-adapter.js'
 import { dockerManager } from '../services/docker-manager.js'
 
 export async function sendCommand(
@@ -15,8 +14,9 @@ export async function sendCommand(
   }
 
   try {
-    const adapter = await getAdapter(server)
-    await adapter.sendCommand(req.body.command)
+    // Console is fire-and-forget — command output arrives via the
+    // WebSocket log stream, not the HTTP response.
+    await dockerManager.sendCommand(server.id, req.body.command)
     return { dispatched: true }
   } catch (err) {
     return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) })

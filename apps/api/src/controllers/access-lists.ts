@@ -65,6 +65,16 @@ export async function createAccessList(
   })
 
   const list = await prisma.accessList.create({ data: { name, slug, type, scope, description, externalUrl } })
+
+  await prisma.actionLog.create({
+    data: {
+      performedBy: req.session!.user.id,
+      userId: req.session!.user.id,
+      action: 'LIST_CREATE',
+      details: JSON.stringify({ name, type, scope: scope ?? 'SERVER' }),
+    },
+  })
+
   reply.status(201)
   return list
 }
@@ -120,9 +130,21 @@ export async function deleteAccessList(
 ) {
   const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
   if (!list) return reply.status(404).send({ error: 'List not found' })
+  const listName = list.name
+  const listType = list.type
   await prisma.serverListLink.deleteMany({ where: { listId: list.id } })
   await prisma.listEntry.deleteMany({ where: { listId: list.id } })
   await prisma.accessList.delete({ where: { id: list.id } })
+
+  await prisma.actionLog.create({
+    data: {
+      performedBy: req.session!.user.id,
+      userId: req.session!.user.id,
+      action: 'LIST_DELETE',
+      details: JSON.stringify({ name: listName, type: listType }),
+    },
+  })
+
   return { ok: true }
 }
 
@@ -158,16 +180,34 @@ export async function upsertEntry(
   if (list.type === 'ADMIN')     cmd = `setpermissions ${steamId} ${rest.permission ?? 'client'}`
 
   if (cmd) {
+    const servers = await getTargetServers(list.id, list.scope)
     await dispatchToList(list.id, list.scope, cmd, req.log)
-    await prisma.actionLog.create({
-      data: {
-        performedBy: req.session!.user.id,
-        userId: req.session!.user.id,
-        action: list.type === 'BAN' ? 'BAN' : list.type === 'WHITELIST' ? 'WHITELIST' : 'SETPERMISSION',
-        targetSteamId: steamId,
-        details: JSON.stringify({ listId: list.id, permission: rest.permission }),
-      },
-    })
+    const action = list.type === 'BAN' ? 'BAN' : list.type === 'WHITELIST' ? 'WHITELIST' : 'SETPERMISSION'
+    // Create one log per linked server so it appears in each server's activity feed
+    if (servers.length > 0) {
+      for (const server of servers) {
+        await prisma.actionLog.create({
+          data: {
+            serverId: server.id,
+            performedBy: req.session!.user.id,
+            userId: req.session!.user.id,
+            action,
+            targetSteamId: steamId,
+            details: JSON.stringify({ list: list.name, permission: rest.permission }),
+          },
+        })
+      }
+    } else {
+      await prisma.actionLog.create({
+        data: {
+          performedBy: req.session!.user.id,
+          userId: req.session!.user.id,
+          action,
+          targetSteamId: steamId,
+          details: JSON.stringify({ list: list.name, permission: rest.permission }),
+        },
+      })
+    }
   }
 
   return entry
@@ -196,16 +236,33 @@ export async function deleteEntry(
   if (list.type === 'ADMIN')     cmd = `removepermissions ${req.params.steamId}`
 
   if (cmd) {
+    const servers = await getTargetServers(list.id, list.scope)
     await dispatchToList(list.id, list.scope, cmd, req.log)
-    await prisma.actionLog.create({
-      data: {
-        performedBy: req.session!.user.id,
-        userId: req.session!.user.id,
-        action: list.type === 'BAN' ? 'UNBAN' : list.type === 'WHITELIST' ? 'REMOVEWHITELIST' : 'REMOVEPERMISSION',
-        targetSteamId: req.params.steamId,
-        details: JSON.stringify({ listId: list.id }),
-      },
-    })
+    const action = list.type === 'BAN' ? 'UNBAN' : list.type === 'WHITELIST' ? 'REMOVEWHITELIST' : 'REMOVEPERMISSION'
+    if (servers.length > 0) {
+      for (const server of servers) {
+        await prisma.actionLog.create({
+          data: {
+            serverId: server.id,
+            performedBy: req.session!.user.id,
+            userId: req.session!.user.id,
+            action,
+            targetSteamId: req.params.steamId,
+            details: JSON.stringify({ list: list.name }),
+          },
+        })
+      }
+    } else {
+      await prisma.actionLog.create({
+        data: {
+          performedBy: req.session!.user.id,
+          userId: req.session!.user.id,
+          action,
+          targetSteamId: req.params.steamId,
+          details: JSON.stringify({ list: list.name }),
+        },
+      })
+    }
   }
 
   return { ok: true }

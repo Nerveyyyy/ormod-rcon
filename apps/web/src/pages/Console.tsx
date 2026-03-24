@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import PageHeader from '../components/ui/PageHeader.js'
 import { useServerContext as useServer } from '../context/ServerContext.js'
 import { useLiveLog } from '../hooks/useLiveLog.js'
@@ -6,6 +6,8 @@ import { api } from '../api/client.js'
 import { GAME_COMMANDS } from '../lib/constants.js'
 
 type ConsoleLine = { lineId: number; cls: string; text: string }
+
+const LINE_CHUNK = 250
 
 let _consoleLineId = 0
 
@@ -19,17 +21,39 @@ export default function Console() {
   const [hist, setHist] = useState<string[]>([])
   const [hi, setHi] = useState(-1)
   const [error, setError] = useState<string | null>(null)
+  const [cmdState, setCmdState] = useState<'idle' | 'sending' | 'sent'>('idle')
+
+  // Smart scroll state
+  const [displayLimit, setDisplayLimit] = useState(LINE_CHUNK)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const isAtBottomRef = useRef(true)
   const lastLogRef = useRef<number>(0)
 
-  const appendLine = (cls: string, text: string) => {
-    setLines((prev) => [...prev.slice(-999), { lineId: _consoleLineId++, cls, text }])
-  }
+  // Track whether user is near the bottom of the scroll container
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const threshold = 40
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+
+    // Scroll-to-top: load more lines
+    if (el.scrollTop === 0 && lines.length > displayLimit) {
+      const prevHeight = el.scrollHeight
+      setDisplayLimit((prev) => Math.min(prev + LINE_CHUNK, lines.length))
+      // Preserve scroll position after adding lines at the top
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight - prevHeight
+      })
+    }
+  }, [lines.length, displayLimit])
 
   // Load historical log on mount / server change
   useEffect(() => {
     if (!activeServer?.serverName) return
     setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Loading log history…' }])
+    setDisplayLimit(LINE_CHUNK)
+    isAtBottomRef.current = true
     api
       .get<{ lines: string[] }>(`/servers/${activeServer.serverName}/console/log?lines=1000`)
       .then((data) => {
@@ -38,7 +62,7 @@ export default function Console() {
           cls: 'c-log',
           text: l,
         }))
-        setLines([...initial.slice(-999), { lineId: _consoleLineId++, cls: 'c-comment', text: '# Live stream active.' }])
+        setLines([...initial, { lineId: _consoleLineId++, cls: 'c-comment', text: '# Live stream active.' }])
       })
       .catch((e) => {
         setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Log unavailable — server may not be running.' }])
@@ -53,17 +77,17 @@ export default function Console() {
     const newLines = liveLog.slice(lastLogRef.current)
     if (newLines.length === 0) return
     lastLogRef.current = liveLog.length
-    setLines((prev) => {
-      const appended = [
-        ...prev,
-        ...newLines.map((ll) => ({ lineId: ll.lineId, cls: 'c-log', text: ll.raw })),
-      ]
-      return appended.slice(-1000)
-    })
+    setLines((prev) => [
+      ...prev,
+      ...newLines.map((ll) => ({ lineId: ll.lineId, cls: 'c-log', text: ll.raw })),
+    ])
   }, [liveLog])
 
+  // Auto-scroll to bottom only when user is already at the bottom
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isAtBottomRef.current) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [lines])
 
   const run = () => {
@@ -73,15 +97,19 @@ export default function Console() {
     setHi(-1)
     setInput('')
     if (activeServer?.serverName) {
+      setCmdState('sending')
       api
         .post(`/servers/${activeServer.serverName}/console/command`, { command: cmd })
-        .then(() => appendLine('c-ok', '  [OK] Command dispatched.'))
+        .then(() => {
+          setCmdState('sent')
+          setTimeout(() => setCmdState('idle'), 1500)
+        })
         .catch((e) => {
-          appendLine('c-err', '  [ERR] Command failed — server not running?')
+          setCmdState('idle')
           setError((e as Error).message || 'Command failed')
         })
     } else {
-      appendLine('c-err', '  [ERR] No active server selected.')
+      setError('No active server selected.')
     }
   }
 
@@ -95,6 +123,10 @@ export default function Console() {
     wsStatus === 'connected' ? 'pill-green' :
     wsStatus === 'connecting' ? 'pill-orange' : 'pill-muted'
 
+  // Only render the last displayLimit lines
+  const visibleLines = lines.slice(-displayLimit)
+  const hasMore = lines.length > displayLimit
+
   return (
     <div className="main fadein">
       <PageHeader
@@ -103,7 +135,10 @@ export default function Console() {
         actions={
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Console cleared.' }])}
+            onClick={() => {
+              setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Console cleared.' }])
+              setDisplayLimit(LINE_CHUNK)
+            }}
           >
             Clear
           </button>
@@ -136,8 +171,27 @@ export default function Console() {
               </span>
             </div>
             <div className="card-body">
-              <div className="console-out" aria-live="polite" aria-label="Console output">
-                {lines.map((l) => (
+              <div
+                ref={scrollRef}
+                className="console-out"
+                aria-live="polite"
+                aria-label="Console output"
+                onScroll={handleScroll}
+              >
+                {hasMore && (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      padding: '6px',
+                      fontSize: '10px',
+                      color: 'var(--dim)',
+                      fontFamily: 'var(--mono)',
+                    }}
+                  >
+                    Scroll up to load more ({lines.length - displayLimit} older lines)
+                  </div>
+                )}
+                {visibleLines.map((l) => (
                   <div key={l.lineId} className={`c-line ${l.cls}`}>
                     {l.text || '\u00A0'}
                   </div>
@@ -167,8 +221,12 @@ export default function Console() {
                   autoFocus
                   aria-label="Console command input"
                 />
-                <button className="btn btn-primary btn-sm" onClick={run}>
-                  Run
+                <button
+                  className={`btn btn-sm ${cmdState === 'sent' ? 'btn-green' : 'btn-primary'}`}
+                  onClick={run}
+                  disabled={cmdState === 'sending'}
+                >
+                  {cmdState === 'sending' ? 'Sending...' : cmdState === 'sent' ? 'Sent!' : 'Run'}
                 </button>
               </div>
             </div>

@@ -257,11 +257,76 @@ class DockerManager {
    * Commands are queued per-server to prevent concurrent sends from
    * interleaving bytes on the same socket connection.
    *
-   * Note: the game currently does not send console responses (Playtest 1.9.0).
-   * This is fire-and-forget until the game ships RCON.
+   * Note: the game now sends console responses for some commands (e.g.
+   * getserversettings, getplayers). Use sendCommandAndCollect() when you
+   * need to capture the response.
    */
   async sendCommand(serverId: string, cmd: string): Promise<void> {
     return commandQueue.enqueue(serverId, () => this._attachAndWrite(serverId, cmd))
+  }
+
+  /**
+   * Send a command and collect the response from the log stream.
+   *
+   * Listens on the output emitter for new lines after dispatching the
+   * command.  Uses a linger timer that resets on each new line — when no
+   * new lines arrive for `lingerMs` the response is considered complete.
+   * A hard timeout guarantees we never hang indefinitely.
+   *
+   * Returns the collected lines joined by newline, with the command echo
+   * stripped from the front.
+   */
+  async sendCommandAndCollect(
+    serverId: string,
+    cmd: string,
+    { lingerMs = 500, hardTimeoutMs = 5000 } = {}
+  ): Promise<string> {
+    const emitter = this.outputEmitters.get(serverId)
+    if (!emitter) throw new Error('Server is not running')
+
+    return new Promise<string>((resolve, reject) => {
+      const collected: string[] = []
+      let lingerTimer: ReturnType<typeof setTimeout> | null = null
+      let hardTimer: ReturnType<typeof setTimeout> | null = null
+      let settled = false
+
+      const finish = () => {
+        if (settled) return
+        settled = true
+        if (lingerTimer) clearTimeout(lingerTimer)
+        if (hardTimer) clearTimeout(hardTimer)
+        emitter.off('line', onLine)
+
+        // Strip the command echo (first line that matches the command)
+        const cmdTrimmed = cmd.trim()
+        const startIdx = collected.findIndex((l) => l.trim() === cmdTrimmed)
+        const lines = startIdx !== -1 ? collected.slice(startIdx + 1) : collected
+        resolve(lines.join('\n'))
+      }
+
+      const onLine = (line: string) => {
+        collected.push(line)
+        // Reset linger timer on each new line
+        if (lingerTimer) clearTimeout(lingerTimer)
+        lingerTimer = setTimeout(finish, lingerMs)
+      }
+
+      emitter.on('line', onLine)
+
+      // Hard timeout — resolve with whatever we have
+      hardTimer = setTimeout(finish, hardTimeoutMs)
+
+      // Dispatch the command
+      this.sendCommand(serverId, cmd).catch((err) => {
+        if (!settled) {
+          settled = true
+          if (lingerTimer) clearTimeout(lingerTimer)
+          if (hardTimer) clearTimeout(hardTimer)
+          emitter.off('line', onLine)
+          reject(err)
+        }
+      })
+    })
   }
 
   private async _attachAndWrite(serverId: string, cmd: string): Promise<void> {
@@ -345,8 +410,10 @@ class DockerManager {
 
     this.stopLogStream(serverId) // clean up any existing stream
 
-    const outputBuffer: string[] = []
-    const emitter = new EventEmitter()
+    // Reuse existing buffer/emitter if present (reconnect scenario) so
+    // WebSocket clients keep their event subscriptions intact.
+    const outputBuffer = this.outputBuffers.get(serverId) ?? []
+    const emitter = this.outputEmitters.get(serverId) ?? new EventEmitter()
     emitter.setMaxListeners(50)
 
     this.outputBuffers.set(serverId, outputBuffer)
@@ -437,11 +504,32 @@ class DockerManager {
   }
 
   private _onStreamEnd(serverId: string, emitter: EventEmitter): void {
+    this.logStreams.delete(serverId)
+
+    // Check if the container is actually still running — the log stream may
+    // have dropped due to a Docker attach (command dispatch) rather than the
+    // container stopping.  If still running, auto-reconnect the stream.
+    this.getContainerName(serverId)
+      .then((name) => this.inspect(name).then((info) => ({ name, info })))
+      .then(({ name, info }) => {
+        if (info?.running) {
+          this.log.warn({ serverId }, 'docker-manager: log stream dropped but container still running — reconnecting')
+          this.startLogStream(serverId, name)
+        } else {
+          this._cleanupAfterStop(serverId, emitter)
+        }
+      })
+      .catch(() => {
+        // Can't inspect — assume stopped
+        this._cleanupAfterStop(serverId, emitter)
+      })
+  }
+
+  private _cleanupAfterStop(serverId: string, emitter: EventEmitter): void {
     this.runningContainers.delete(serverId)
     const emitterRef = this.outputEmitters.get(serverId)
     if (emitterRef) emitterRef.emit('line', '# Container stopped.')
     emitter.emit('exit')
-    this.logStreams.delete(serverId)
 
     // AUDIT-57: store timer ID so a quick restart can cancel it
     const timer = setTimeout(() => {

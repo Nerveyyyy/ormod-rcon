@@ -6,6 +6,7 @@ import { api } from '../api/client.js'
 
 type ScheduledTask = {
   id: string
+  slug: string
   label: string
   type: string
   cronExpr: string
@@ -164,23 +165,24 @@ export default function Schedules() {
   const toggleEnabled = (task: ScheduledTask) => {
     if (!activeServer?.serverName) return
     api
-      .put(`/servers/${activeServer.serverName}/schedules/${task.id}`, { enabled: !task.enabled })
+      .put(`/servers/${activeServer.serverName}/schedules/${task.slug}`, { enabled: !task.enabled })
       .then(load)
       .catch((e) => setError((e as Error).message || 'Failed to update schedule'))
   }
 
-  const deleteTask = (taskId: string) => {
+  const deleteTask = (slug: string) => {
     if (!activeServer?.serverName) return
     api
-      .delete(`/servers/${activeServer.serverName}/schedules/${taskId}`)
+      .delete(`/servers/${activeServer.serverName}/schedules/${slug}`)
       .then(load)
       .catch((e) => setError((e as Error).message || 'Failed to delete task'))
   }
 
-  const runNow = (taskId: string) => {
+  const runNow = (slug: string) => {
     if (!activeServer?.serverName) return
     api
-      .post(`/servers/${activeServer.serverName}/schedules/${taskId}/run`)
+      .post(`/servers/${activeServer.serverName}/schedules/${slug}/run`)
+      .then(load)
       .catch((e) => setError(`Failed to trigger task: ${(e as Error).message}`))
   }
 
@@ -605,13 +607,13 @@ export default function Schedules() {
                       {s.type}
                     </span>
                     <div className="spacer" />
-                    <button className="btn btn-ghost btn-xs" onClick={() => runNow(s.id)}>
+                    <button className="btn btn-ghost btn-xs" onClick={() => runNow(s.slug)}>
                       Run Now
                     </button>
                     <button className="btn btn-ghost btn-xs" onClick={() => toggleEnabled(s)}>
                       {s.enabled ? 'Pause' : 'Enable'}
                     </button>
-                    <button className="btn btn-danger btn-xs" onClick={() => deleteTask(s.id)}>
+                    <button className="btn btn-danger btn-xs" onClick={() => deleteTask(s.slug)}>
                       Delete
                     </button>
                   </div>

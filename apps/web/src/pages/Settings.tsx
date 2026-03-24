@@ -9,19 +9,15 @@ type SettingValue = string | number | boolean
 type BulkSaveState = 'idle' | 'saving' | 'saved'
 
 /**
- * Settings currently available in the playtest via setserversetting.
- * Everything else is greyed out until the full release.
- * Remove this set (and the checks below) once all commands are enabled.
+ * Settings available via setserversetting.
+ * Currently all non-readonly settings are enabled. If the game restricts
+ * commands again, replace this with an explicit allowlist.
  */
-const AVAILABLE_SETTINGS = new Set([
-  'IsOnline',
-  'FriendsOnly',
-  'WorldRobotDensity',
-  'RobotPlating',
-  'RobotDifficulty',
-  'SkuttlerSpeed',
-  'SkuttlerNightSpeed',
-])
+const AVAILABLE_SETTINGS = new Set(
+  SERVER_SETTING_GROUPS.flatMap((g) => g.settings)
+    .filter((s) => s.type !== 'readonly')
+    .map((s) => s.key)
+)
 
 /** .NET DateTime ticks → JS Date. Ticks are 100ns intervals since 0001-01-01. */
 function ticksToDate(ticks: number): Date {
@@ -45,42 +41,8 @@ const TAB_ABBRS: Record<string, string> = {
   Player: 'PLR',
 }
 
-function tryParseSettings(raw: string): Record<string, unknown> | null {
-  // Attempt 1: JSON
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-  } catch {
-    // fall through
-  }
-
-  // Attempt 2: line-by-line Key: value or Key=value
-  const result: Record<string, unknown> = {}
-  let matched = 0
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const colonIdx = trimmed.indexOf(': ')
-    const equalsIdx = trimmed.indexOf('=')
-    let key: string | undefined
-    let rawVal: string | undefined
-    if (colonIdx !== -1) {
-      key = trimmed.slice(0, colonIdx).trim()
-      rawVal = trimmed.slice(colonIdx + 2).trim()
-    } else if (equalsIdx !== -1) {
-      key = trimmed.slice(0, equalsIdx).trim()
-      rawVal = trimmed.slice(equalsIdx + 1).trim()
-    }
-    if (!key || rawVal === undefined) continue
-    if (rawVal === 'true') result[key] = true
-    else if (rawVal === 'false') result[key] = false
-    else if (rawVal !== '' && !isNaN(Number(rawVal))) result[key] = Number(rawVal)
-    else result[key] = rawVal
-    matched++
-  }
-  return matched > 0 ? result : null
+type SettingsResponse = {
+  settings: Record<string, string | number | boolean>
 }
 
 function defaultVals(): Record<string, SettingValue> {
@@ -180,11 +142,29 @@ function SettingInput({
   )
 }
 
+const CACHE_KEY = 'ormod-settings-cache'
+
+function getCachedSettings(serverName: string): Record<string, SettingValue> | null {
+  try {
+    const cached = sessionStorage.getItem(`${CACHE_KEY}:${serverName}`)
+    return cached ? JSON.parse(cached) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedSettings(serverName: string, vals: Record<string, SettingValue>) {
+  try {
+    sessionStorage.setItem(`${CACHE_KEY}:${serverName}`, JSON.stringify(vals))
+  } catch { /* quota exceeded — ignore */ }
+}
+
 export default function Settings() {
   const { activeServer } = useServer()
 
   const [vals, setVals] = useState<Record<string, SettingValue>>(defaultVals)
   const loadedVals = useRef<Record<string, SettingValue>>(defaultVals())
+  const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bulkSaveState, setBulkSaveState] = useState<BulkSaveState>('idle')
@@ -195,21 +175,34 @@ export default function Settings() {
     setLoading(true)
     setError(null)
     api
-      .get<{ raw: string }>(`/servers/${activeServer.serverName}/settings`)
-      .then(({ raw }) => {
-        const parsed = tryParseSettings(raw)
-        if (parsed) {
-          const merged = { ...defaultVals(), ...(parsed as Record<string, SettingValue>) }
+      .get<SettingsResponse>(`/servers/${activeServer.serverName}/settings`)
+      .then(({ settings }) => {
+        if (settings && Object.keys(settings).length > 0) {
+          const merged = { ...defaultVals(), ...settings }
           loadedVals.current = merged
           setVals(merged)
+          setCachedSettings(activeServer.serverName, merged)
         }
+        setLoaded(true)
       })
-      .catch((e) => setError((e as Error).message || 'Failed to load settings'))
+      .catch((e) => {
+        setError((e as Error).message || 'Failed to load settings')
+        setLoaded(true)
+      })
       .finally(() => setLoading(false))
   }, [activeServer?.serverName])
 
+  // Restore cached settings on server switch, then fetch fresh
   useEffect(() => {
-    if (activeServer?.serverName && activeServer.running) load()
+    if (!activeServer?.serverName) return
+    setLoaded(false)
+    const cached = getCachedSettings(activeServer.serverName)
+    if (cached) {
+      loadedVals.current = cached
+      setVals(cached)
+      setLoaded(true)
+    }
+    if (activeServer.running) load()
   }, [activeServer?.serverName, activeServer?.running, load])
 
   const set = (k: string, v: SettingValue) => {
@@ -234,6 +227,8 @@ export default function Settings() {
       await api.put(`/servers/${activeServer.serverName}/settings`, { changes })
       // Commit the saved values so dirty tracking resets
       loadedVals.current = { ...loadedVals.current, ...changes }
+      // Update sessionStorage cache so tab switches show fresh values
+      setCachedSettings(activeServer.serverName, loadedVals.current)
       // Force a re-render so dirty indicators clear
       setVals((prev) => ({ ...prev }))
       setBulkSaveState('saved')
@@ -278,10 +273,11 @@ export default function Settings() {
         </div>
       )}
 
-      {loading && (
+      {!loaded && loading && (
         <div
           style={{
-            padding: '12px 0',
+            padding: '48px 0',
+            textAlign: 'center',
             color: 'var(--dim)',
             fontFamily: 'var(--mono)',
             fontSize: '11px',
@@ -291,7 +287,7 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="card">
+      {loaded && <div className="card">
         <div className="card-header">
           <span className="card-title">Parameters</span>
           <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
@@ -385,7 +381,7 @@ export default function Settings() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

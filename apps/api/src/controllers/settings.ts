@@ -2,6 +2,36 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
 
+/**
+ * Parse the raw `getserversettings` response into a typed key-value map.
+ *
+ * Format from the game:
+ *   Current Server Settings:
+ *
+ *     Key = Value
+ *     Key = Value
+ *
+ * Values are coerced: "True"/"False" → boolean, numeric strings → number,
+ * everything else stays as a string.
+ */
+function parseSettingsResponse(raw: string): Record<string, string | number | boolean> {
+  const result: Record<string, string | number | boolean> = {}
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.endsWith(':')) continue // skip blanks and header
+    const eqIdx = trimmed.indexOf('=')
+    if (eqIdx === -1) continue
+    const key = trimmed.slice(0, eqIdx).trim()
+    const rawVal = trimmed.slice(eqIdx + 1).trim()
+    if (!key) continue
+    if (rawVal.toLowerCase() === 'true') result[key] = true
+    else if (rawVal.toLowerCase() === 'false') result[key] = false
+    else if (rawVal !== '' && !isNaN(Number(rawVal))) result[key] = Number(rawVal)
+    else result[key] = rawVal
+  }
+  return result
+}
+
 export async function getSettings(
   req: FastifyRequest<{ Params: { serverName: string } }>,
   reply: FastifyReply
@@ -10,8 +40,9 @@ export async function getSettings(
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
-    const raw = await adapter.sendCommand('getserversettings')
-    return { raw }
+    const response = await adapter.sendCommand('getserversettings')
+    const settings = parseSettingsResponse(response)
+    return { settings }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return reply.status(503).send({ error: `Server unavailable: ${msg}` })
@@ -30,7 +61,7 @@ export async function updateSettingKey(
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
-    const raw = await adapter.sendCommand(
+    await adapter.sendCommand(
       `setserversetting ${req.params.key} ${req.body.value}`
     )
     await prisma.actionLog.create({
@@ -43,7 +74,7 @@ export async function updateSettingKey(
         afterValue: JSON.stringify({ [req.params.key]: req.body.value }),
       },
     })
-    return { ok: true, key: req.params.key, value: req.body.value, raw }
+    return { ok: true, key: req.params.key, value: req.body.value }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return reply.status(503).send({ error: `Server unavailable: ${msg}` })
@@ -76,12 +107,12 @@ export async function bulkUpdateSettings(
 
   try {
     const adapter = await getAdapter(server)
-    const results: { key: string; ok: boolean; raw: string }[] = []
+    const results: { key: string; ok: boolean; value: string | number | boolean }[] = []
 
     for (const [key, value] of entries) {
       const command = `setserversetting ${key} ${value}`
-      const raw = await adapter.sendCommand(command)
-      results.push({ key, ok: true, raw })
+      await adapter.sendCommand(command)
+      results.push({ key, ok: true, value })
     }
 
     const changedKeys = entries.map(([k]) => k).join(', ')

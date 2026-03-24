@@ -3,6 +3,7 @@ import prisma from '../db/prisma-client.js'
 import { dockerManager } from '../services/docker-manager.js'
 import { getAdapter } from '../services/rcon-adapter.js'
 import { unregisterCronJob } from './schedule.js'
+import { uniqueSlug } from '../lib/slug.js'
 
 const VALID_WEATHER_TYPES = [
   'cloudy',
@@ -55,6 +56,25 @@ export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, re
     data: { name, serverName, containerName, gamePort, queryPort, notes },
     select: SERVER_SELECT,
   })
+
+  // Auto-generate default access lists (Ban, Whitelist, Admin) for this server
+  const listTypes = [
+    { name: `${name} - Ban List`, type: 'BAN' },
+    { name: `${name} - Whitelist`, type: 'WHITELIST' },
+    { name: `${name} - Admin List`, type: 'ADMIN' },
+  ] as const
+  for (const lt of listTypes) {
+    const slug = await uniqueSlug(lt.name, async (s) => {
+      const existing = await prisma.accessList.findUnique({ where: { slug: s } })
+      return !!existing
+    })
+    const list = await prisma.accessList.create({
+      data: { name: lt.name, slug, type: lt.type, scope: 'SERVER' },
+    })
+    await prisma.serverListLink.create({
+      data: { serverId: server.id, listId: list.id },
+    })
+  }
 
   // Check if the container is already running and reconnect log stream if so
   let running = false
@@ -178,12 +198,12 @@ async function dispatchServerAction(
   reply: FastifyReply,
   command: string,
   action: string
-): Promise<{ ok: boolean; raw: string } | FastifyReply> {
+): Promise<{ ok: boolean } | FastifyReply> {
   const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
-    const raw = await adapter.sendCommand(command)
+    await adapter.sendCommand(command)
     await prisma.actionLog.create({
       data: {
         serverId: server.id,
@@ -193,7 +213,7 @@ async function dispatchServerAction(
         details: command,
       },
     })
-    return { ok: true, raw }
+    return { ok: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return reply.status(503).send({ error: `Server unavailable: ${msg}` })
