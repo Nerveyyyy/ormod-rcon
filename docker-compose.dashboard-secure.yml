@@ -7,12 +7,15 @@
 
 services:
   # ── Socket proxy ─────────────────────────────────────────────────────────────
+  # Bound to 127.0.0.1 — only reachable from localhost (the host-networked dashboard).
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: ormod-socket-proxy
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - '127.0.0.1:2375:2375'
     environment:
       CONTAINERS: 1
       EXEC: 1
@@ -33,8 +36,6 @@ services:
       DISTRIBUTION: 0
       PLUGINS: 0
       SYSTEM: 0
-    networks:
-      - proxy-internal
 
   # ── Dashboard ────────────────────────────────────────────────────────────────
   ormod-dashboard:
@@ -43,25 +44,23 @@ services:
       dockerfile: docker/Dockerfile.dashboard
     container_name: ormod-dashboard
     restart: unless-stopped
+    network_mode: host
     depends_on:
       socket-proxy:
         condition: service_started
     environment:
       DATABASE_URL: file:/app/data/ormod-rcon.db
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      HOST: '0.0.0.0'
-      PORT: '3000'
+      HOST: ${DASHBOARD_HOST:-0.0.0.0}
+      PORT: ${DASHBOARD_PORT:-3000}
       PUBLIC_URL: ${PUBLIC_URL:-}
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-server}
-      DOCKER_HOST: tcp://socket-proxy:2375
+      TLS_CERT_PATH: ${TLS_CERT_PATH:-}
+      TLS_KEY_PATH: ${TLS_KEY_PATH:-}
+      DOCKER_HOST: tcp://127.0.0.1:2375
     volumes:
       - dashboard-data:/app/data
-    ports:
-      - '${DASHBOARD_PORT:-3000}:3000'
-    networks:
-      - default
-      - proxy-internal
     deploy:
       resources:
         limits:
@@ -72,10 +71,3 @@ services:
 
 volumes:
   dashboard-data:
-
-networks:
-  default:
-    name: ormod-network
-  proxy-internal:
-    internal: true
-    name: ormod-proxy-internal

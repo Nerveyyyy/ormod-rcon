@@ -9,7 +9,7 @@
 #        GET  /containers/{name}/json       (inspect / TTY detection)
 #        POST /containers/{name}/start|stop|restart
 #        GET  /containers/{name}/logs       (log streaming)
-#        POST /containers/{name}/attach     (command dispatch → PTY master)
+#        POST /containers/{name}/attach     (command dispatch -> PTY master)
 #        POST /containers/{name}/exec       (exec session creation)
 #        GET  /exec/{id}/json               (exec inspect)
 #        POST /exec/{id}/start              (exec start)
@@ -21,28 +21,27 @@
 #      script briefly chowns the three volume-mount paths as root, then drops
 #      privileges before starting Prisma and the Fastify server.
 #
-#   3. INTERNAL PROXY NETWORK — The socket-proxy container is reachable only
-#      via the `ormod-proxy-internal` network, which is marked `internal: true`
-#      (no outbound internet access). The dashboard connects to the proxy over
-#      this network; the proxy connects to the host Docker socket.
+#   3. HOST NETWORKING — Both game and dashboard use network_mode: host so
+#      Docker does not manipulate iptables. UFW / your firewall controls all
+#      port access. The socket proxy binds to 127.0.0.1:2375, reachable only
+#      from localhost.
 #
 # Usage:
 #   docker compose -f docker-compose.secure.yml up -d
-#
-# The SQLite database is stored in a named Docker volume (dashboard-data)
-# at the default Prisma path inside the container. No host directories needed.
-# Prisma's migrate deploy is non-destructive.
 
 services:
   # ── Socket proxy ─────────────────────────────────────────────────────────────
   # Sits between /var/run/docker.sock (mounted read-only here) and the dashboard.
   # Implemented by tecnativa/docker-socket-proxy (HAProxy-based HTTP filter).
+  # Bound to 127.0.0.1 — only reachable from localhost (the host-networked dashboard).
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0 # Pin to 0.3.0 — upgrade deliberately after reviewing changelog
     container_name: ormod-socket-proxy
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro # read-only on the proxy side
+    ports:
+      - '127.0.0.1:2375:2375'
     environment:
       # ── Allowed API sections ─────────────────────────────────────────────────
       CONTAINERS: 1 # /containers/* — inspect, logs, start, stop, restart, attach
@@ -67,9 +66,6 @@ services:
       PLUGINS: 0
       SYSTEM: 0
 
-    networks:
-      - proxy-internal # only reachable from dashboard, not from outside
-
   # ══════════════════════════════════════════════════════════════════════════════
   # GAME SERVER (convenience — included so `docker compose up` runs everything)
   # This is a standalone image. Configure it directly below or run it separately
@@ -80,13 +76,10 @@ services:
     image: ghcr.io/nerveyyyy/ormod-server:latest
     container_name: ormod-server
     restart: unless-stopped
+    network_mode: host
     volumes:
       - ormod-game:/ormod
       - ./config:/config
-    ports:
-      - '27015:27015/udp'
-      - '27016:27016/udp'
-      - '7777:7777/udp'
     environment:
       SERVER_NAME: MyServer
       DESCRIPTION: An ORMOD Server
@@ -98,8 +91,6 @@ services:
       options:
         max-size: '50m'
         max-file: '3'
-    networks:
-      - default
     deploy:
       resources:
         limits:
@@ -108,9 +99,10 @@ services:
 
   # ══════════════════════════════════════════════════════════════════════════════
   # DASHBOARD (API + frontend)
-  # HOST/PORT are always 0.0.0.0:3000 inside the container.
-  # Use DASHBOARD_PORT to change the host-side port mapping (default: 3000).
-  # Docker API calls are routed through socket-proxy (TCP) — no raw socket mount.
+  #
+  # network_mode: host — Fastify binds directly to DASHBOARD_HOST:DASHBOARD_PORT.
+  # Docker API calls are routed through socket-proxy at 127.0.0.1:2375.
+  # No raw socket mount.
   # ══════════════════════════════════════════════════════════════════════════════
   ormod-dashboard:
     build:
@@ -118,8 +110,9 @@ services:
       dockerfile: docker/Dockerfile.dashboard
     container_name: ormod-dashboard
     restart: unless-stopped
+    network_mode: host
     # Runs as dashboard (UID 1001) after the entrypoint chowns volume mounts.
-    # The entrypoint script handles the root→non-root transition automatically.
+    # The entrypoint script handles the root->non-root transition automatically.
     depends_on:
       ormod-server:
         condition: service_started
@@ -128,23 +121,20 @@ services:
     environment:
       DATABASE_URL: file:/app/data/ormod-rcon.db
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      HOST: '0.0.0.0'
-      PORT: '3000'
+      HOST: ${DASHBOARD_HOST:-0.0.0.0}
+      PORT: ${DASHBOARD_PORT:-3000}
       PUBLIC_URL: ${PUBLIC_URL:-}
       STATIC_PATH: /app/apps/web/dist
       GAME_CONTAINER_NAME: ${GAME_CONTAINER_NAME:-ormod-server}
-      # Route Docker API calls through the socket proxy (TCP) instead of the raw
-      # Unix socket. docker-manager.ts reads this and switches to HTTP-over-TCP.
-      DOCKER_HOST: tcp://socket-proxy:2375
+      TLS_CERT_PATH: ${TLS_CERT_PATH:-}
+      TLS_KEY_PATH: ${TLS_KEY_PATH:-}
+      # Route Docker API calls through the socket proxy (localhost) instead of
+      # the raw Unix socket. docker-manager.ts reads this and switches to HTTP-over-TCP.
+      DOCKER_HOST: tcp://127.0.0.1:2375
     volumes:
       - dashboard-data:/app/data                # SQLite database (persisted)
       # /var/run/docker.sock is intentionally NOT mounted here.
-      # All Docker API access goes through socket-proxy over the internal network.
-    ports:
-      - '${DASHBOARD_PORT:-3000}:3000'
-    networks:
-      - default
-      - proxy-internal # can reach socket-proxy
+      # All Docker API access goes through socket-proxy on localhost.
     deploy:
       resources:
         limits:
@@ -156,13 +146,3 @@ services:
 volumes:
   ormod-game:
   dashboard-data:
-
-networks:
-  default:
-    name: ormod-network
-  proxy-internal:
-    # Internal-only network: socket-proxy ↔ dashboard.
-    # `internal: true` means no external routing — containers on this network
-    # cannot reach the internet, only each other.
-    internal: true
-    name: ormod-proxy-internal
