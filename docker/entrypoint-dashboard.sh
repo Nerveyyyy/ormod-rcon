@@ -7,11 +7,16 @@ mkdir -p /app/data
 chown -R 1001:1001 /app/data
 
 # Make the Docker socket accessible to the non-root dashboard user.
-# The socket is owned by root:docker on the host — the dashboard user
-# isn't in that group, so we widen permissions before dropping privileges.
+# Read the socket's owning GID and add the dashboard user to that group.
+# This avoids chown/chmod on the bind-mounted socket, which would alter
+# the host's socket permissions and break Docker access for host users.
 if [ -S /var/run/docker.sock ]; then
-  chmod 660 /var/run/docker.sock
-  chown root:1001 /var/run/docker.sock
+  SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+  if ! getent group "$SOCK_GID" > /dev/null 2>&1; then
+    groupadd -g "$SOCK_GID" dockersock
+  fi
+  SOCK_GROUP=$(getent group "$SOCK_GID" | cut -d: -f1)
+  usermod -aG "$SOCK_GROUP" dashboard
 fi
 
 exec gosu dashboard sh -c "
