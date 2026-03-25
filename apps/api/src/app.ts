@@ -65,6 +65,12 @@ export default async function buildApp(opts?: FastifyServerOptions): Promise<Fas
   await app.register(consoleWsRoutes)
   await app.register(activityWsRoutes)
 
+  // Prevent search engine indexing
+  app.get('/robots.txt', async (_req, reply) => {
+    reply.type('text/plain')
+    return 'User-agent: *\nDisallow: /\n'
+  })
+
   // Serve React frontend (Docker production only)
   const staticPath = app.config.STATIC_PATH
   if (staticPath) {

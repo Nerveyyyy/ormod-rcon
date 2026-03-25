@@ -27,6 +27,11 @@ export default fp(
       // Control Referer header leakage
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     })
+
+    // Prevent search engine indexing — this is a private dashboard
+    fastify.addHook('onSend', async (_request, reply) => {
+      reply.header('X-Robots-Tag', 'noindex, nofollow')
+    })
   },
   { name: 'helmet', dependencies: ['env'] }
 )
