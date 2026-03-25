@@ -12,6 +12,7 @@ import { api } from '../api/client.js'
 export default function ServerManagement() {
   const { servers, refresh } = useServer()
   const [showAdd, setShowAdd] = useState(false)
+  const [editTarget, setEditTarget] = useState<Server | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Server | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -23,7 +24,7 @@ export default function ServerManagement() {
     []
   )
 
-  // Add form state
+  // Form state (shared between add and edit)
   const [name, setName] = useState('')
   const [serverName, setServerName] = useState('')
   const [containerName, setContainerName] = useState('')
@@ -31,14 +32,33 @@ export default function ServerManagement() {
   const [queryPort, setQueryPort] = useState('27016')
   const [notes, setNotes] = useState('')
 
-  const closeAddModal = () => {
-    setShowAdd(false)
+  const resetForm = () => {
     setName('')
     setServerName('')
     setContainerName('')
     setGamePort('27015')
     setQueryPort('27016')
     setNotes('')
+  }
+
+  const closeAddModal = () => {
+    setShowAdd(false)
+    resetForm()
+  }
+
+  const openEditModal = (server: Server) => {
+    setName(server.name)
+    setServerName(server.serverName)
+    setContainerName(server.containerName ?? '')
+    setGamePort(String(server.gamePort))
+    setQueryPort(String(server.queryPort))
+    setNotes(server.notes ?? '')
+    setEditTarget(server)
+  }
+
+  const closeEditModal = () => {
+    setEditTarget(null)
+    resetForm()
   }
 
   const doAction = async (sn: string, action: 'start' | 'stop' | 'restart') => {
@@ -72,6 +92,24 @@ export default function ServerManagement() {
       refresh()
     } catch (e) {
       alert(`Failed to add server: ${(e as Error).message}`)
+    }
+  }
+
+  const updateServer = async () => {
+    if (!editTarget || !name.trim()) return
+    try {
+      await api.put(`/servers/${editTarget.serverName}`, {
+        name,
+        serverName,
+        containerName: containerName || null,
+        gamePort: parseInt(gamePort, 10),
+        queryPort: parseInt(queryPort, 10),
+        notes: notes || null,
+      })
+      closeEditModal()
+      refresh()
+    } catch (e) {
+      alert(`Failed to update server: ${(e as Error).message}`)
     }
   }
 
@@ -205,6 +243,110 @@ export default function ServerManagement() {
         </div>
       )}
 
+      {/* ── Edit Server Modal ────────────────────────────────── */}
+      {editTarget && (
+        <div className="overlay" onClick={closeEditModal}>
+          <div
+            className="modal fadein"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '560px' }}
+          >
+            <div className="card-header">
+              <span className="card-title">Edit Server</span>
+              <button className="btn btn-ghost btn-xs" onClick={closeEditModal}>
+                ✕
+              </button>
+            </div>
+            <div
+              className="card-body"
+              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+            >
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Display Name</div>
+                  <div className="setting-desc">Shown in the dashboard UI and switcher</div>
+                </div>
+                <input
+                  className="text-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My PvE Server"
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Server Name</div>
+                  <div className="setting-desc">URL-safe identifier used in API routes</div>
+                </div>
+                <input
+                  className="text-input"
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  placeholder="my-pve-server"
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Container Name</div>
+                  <div className="setting-desc">
+                    Docker container running this server (leave blank to use GAME_CONTAINER_NAME
+                    env)
+                  </div>
+                </div>
+                <input
+                  className="text-input"
+                  value={containerName}
+                  onChange={(e) => setContainerName(e.target.value)}
+                  placeholder="ormod-server"
+                  style={{ width: '300px' }}
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Game Port (UDP)</div>
+                </div>
+                <input
+                  className="num-input"
+                  type="number"
+                  value={gamePort}
+                  onChange={(e) => setGamePort(e.target.value)}
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Query Port (UDP)</div>
+                </div>
+                <input
+                  className="num-input"
+                  type="number"
+                  value={queryPort}
+                  onChange={(e) => setQueryPort(e.target.value)}
+                />
+              </div>
+              <div className="setting-row" style={{ padding: 0 }}>
+                <div className="setting-info">
+                  <div className="setting-name">Notes</div>
+                </div>
+                <input
+                  className="text-input"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Optional notes"
+                />
+              </div>
+              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={closeEditModal}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={updateServer} disabled={!name.trim()}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Delete Confirm ────────────────────────────────────── */}
       {deleteTarget && (
         <ConfirmDialog
@@ -269,6 +411,12 @@ export default function ServerManagement() {
                       onClick={() => doAction(server.serverName, 'restart')}
                     >
                       {actionLoading === `${server.serverName}-restart` ? 'Restarting…' : 'Restart'}
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => openEditModal(server)}
+                    >
+                      Edit
                     </button>
                     <button
                       className="btn btn-danger btn-sm"

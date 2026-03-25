@@ -65,6 +65,17 @@ async function fetchRecentEvents(serverId: string, limit: number, after?: Date):
 
   const events: ActivityEvent[] = []
 
+  // Batch-resolve player display names for targetSteamIds
+  const targetSteamIds = [...new Set(actions.map((a) => a.targetSteamId).filter(Boolean))] as string[]
+  const playerNameMap = new Map<string, string>()
+  if (targetSteamIds.length > 0) {
+    const players = await prisma.player.findMany({
+      where: { steamId: { in: targetSteamIds } },
+      select: { steamId: true, displayName: true },
+    })
+    for (const p of players) playerNameMap.set(p.steamId, p.displayName)
+  }
+
   // Action log events
   for (const a of actions) {
     events.push({
@@ -73,7 +84,7 @@ async function fetchRecentEvents(serverId: string, limit: number, after?: Date):
       timestamp: a.createdAt.toISOString(),
       displayName: a.user?.name ?? null,
       steamId: a.targetSteamId,
-      detail: formatActionDetail(a),
+      detail: formatActionDetail(a, playerNameMap),
       source: a.source,
     })
   }
@@ -122,7 +133,7 @@ function formatActionDetail(a: {
   source: string
   user?: { name: string } | null
   performedBy: string
-}): string {
+}, playerNameMap?: Map<string, string>): string {
   const actor = a.user?.name ?? a.performedBy
 
   // Settings changes: show which keys were changed and their values
@@ -198,7 +209,9 @@ function formatActionDetail(a: {
   if (['BAN', 'UNBAN', 'WHITELIST', 'REMOVEWHITELIST', 'SETPERMISSION', 'REMOVEPERMISSION'].includes(a.action) && a.details) {
     try {
       const parsed = JSON.parse(a.details) as { list?: string; permission?: string }
-      const target = a.targetSteamId ?? 'unknown'
+      const steamId = a.targetSteamId ?? 'unknown'
+      const name = a.targetSteamId && playerNameMap?.get(a.targetSteamId)
+      const target = name ? `${name} (${steamId})` : steamId
       if (parsed.list) {
         const actionLabel: Record<string, string> = {
           BAN: 'banned', UNBAN: 'unbanned',
@@ -210,6 +223,44 @@ function formatActionDetail(a: {
         return `${actor} ${verb} ${target} in "${parsed.list}"${extra}`
       }
     } catch { /* fall through */ }
+  }
+
+  // Player actions (kick, ban, unban, setpermission) — resolve player name for readability
+  const targetName = a.targetSteamId && playerNameMap?.get(a.targetSteamId)
+  const targetLabel = targetName
+    ? `${targetName} (${a.targetSteamId})`
+    : a.targetSteamId ?? 'unknown'
+
+  if (a.action === 'KICK') {
+    const reason = a.reason ? ` — ${a.reason}` : ''
+    return `${actor} kicked ${targetLabel}${reason}`
+  }
+
+  if (a.action === 'BAN') {
+    const reason = a.reason ? ` — ${a.reason}` : ''
+    return `${actor} banned ${targetLabel}${reason}`
+  }
+
+  if (a.action === 'UNBAN') {
+    return `${actor} unbanned ${targetLabel}`
+  }
+
+  if (a.action === 'SETPERMISSION') {
+    // Permission level may be in afterValue (from RCON events) or parsed from command in details
+    let level: string | null = null
+    if (a.afterValue) {
+      try { level = JSON.parse(a.afterValue) } catch { level = a.afterValue }
+    } else if (a.details) {
+      // details = "setpermissions <steamId> <level>"
+      const parts = a.details.split(/\s+/)
+      if (parts.length >= 3) level = parts[parts.length - 1] ?? null
+    }
+    const levelSuffix = level ? ` to ${level}` : ''
+    return `${actor} set permissions for ${targetLabel}${levelSuffix}`
+  }
+
+  if (a.action === 'REMOVEPERMISSION') {
+    return `${actor} removed permissions for ${targetLabel}`
   }
 
   const target = a.targetSteamId ? ` on ${a.targetSteamId}` : ''

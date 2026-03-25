@@ -28,7 +28,7 @@ export default function Console() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
-  const lastLogRef = useRef<number>(0)
+  const lastSeenLineIdRef = useRef<number>(-1)
 
   // Track whether user is near the bottom of the scroll container
   const handleScroll = useCallback(() => {
@@ -68,15 +68,16 @@ export default function Console() {
         setLines([{ lineId: _consoleLineId++, cls: 'c-comment', text: '# Log unavailable — server may not be running.' }])
         setError((e as Error).message || 'Failed to load log history')
       })
-    lastLogRef.current = 0
+    lastSeenLineIdRef.current = -1
   }, [activeServer?.serverName])
 
-  // Append new live log lines (deduplicated by index)
+  // Append new live log lines (deduplicated by lineId)
   useEffect(() => {
     if (liveLog.length === 0) return
-    const newLines = liveLog.slice(lastLogRef.current)
+    const lastSeenId = lastSeenLineIdRef.current
+    const newLines = liveLog.filter((ll) => ll.lineId > lastSeenId)
     if (newLines.length === 0) return
-    lastLogRef.current = liveLog.length
+    lastSeenLineIdRef.current = newLines[newLines.length - 1]!.lineId
     setLines((prev) => [
       ...prev,
       ...newLines.map((ll) => ({ lineId: ll.lineId, cls: 'c-log', text: ll.raw })),
