@@ -27,7 +27,7 @@ describe('Settings routes', () => {
       const res = await ctx.viewer.get(`/api/servers/${serverName}/settings`)
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
-      expect(body).toHaveProperty('raw')
+      expect(body).toHaveProperty('settings')
     })
 
     it('unauthenticated → 401', async () => {

@@ -6,18 +6,23 @@ import type { Setting } from '../lib/constants.js'
 import { api } from '../api/client.js'
 
 type SettingValue = string | number | boolean
-type BulkSaveState = 'idle' | 'saving' | 'saved'
+type BulkSaveState = 'idle' | 'saving' | 'saved' | 'partial'
 
 /**
- * Settings available via setserversetting.
- * Currently all non-readonly settings are enabled. If the game restricts
- * commands again, replace this with an explicit allowlist.
+ * Settings available via setserversetting during playtest.
+ * Only these keys can actually be changed in-game right now.
  */
-const AVAILABLE_SETTINGS = new Set(
-  SERVER_SETTING_GROUPS.flatMap((g) => g.settings)
-    .filter((s) => s.type !== 'readonly')
-    .map((s) => s.key)
-)
+const AVAILABLE_SETTINGS = new Set([
+  'IsOnline',
+  'FriendsOnly',
+  'MaxPlayers',
+  'Description',
+  'WorldRobotDensity',
+  'RobotPlating',
+  'RobotDifficulty',
+  'SkuttlerSpeed',
+  'SkuttlerNightSpeed',
+])
 
 /** .NET DateTime ticks → JS Date. Ticks are 100ns intervals since 0001-01-01. */
 function ticksToDate(ticks: number): Date {
@@ -168,6 +173,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bulkSaveState, setBulkSaveState] = useState<BulkSaveState>('idle')
+  const [failedKeys, setFailedKeys] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState(0)
 
   const load = useCallback(() => {
@@ -219,20 +225,43 @@ export default function Settings() {
     if (!activeServer?.serverName || dirtyCount === 0) return
     setBulkSaveState('saving')
     setError(null)
+    setFailedKeys({})
     const changes: Record<string, SettingValue> = {}
     for (const k of dirtyKeys) {
       changes[k] = vals[k] ?? ''
     }
     try {
-      await api.put(`/servers/${activeServer.serverName}/settings`, { changes })
-      // Commit the saved values so dirty tracking resets
-      loadedVals.current = { ...loadedVals.current, ...changes }
-      // Update sessionStorage cache so tab switches show fresh values
-      setCachedSettings(activeServer.serverName, loadedVals.current)
-      // Force a re-render so dirty indicators clear
-      setVals((prev) => ({ ...prev }))
-      setBulkSaveState('saved')
-      setTimeout(() => setBulkSaveState('idle'), 1500)
+      const res = await api.put<{ results: { key: string; ok: boolean; value: SettingValue; error?: string }[] }>(
+        `/servers/${activeServer.serverName}/settings`,
+        { changes }
+      )
+      const succeeded = res.results.filter((r) => r.ok)
+      const failed = res.results.filter((r) => !r.ok)
+
+      // Commit only the values that actually saved
+      if (succeeded.length > 0) {
+        const successMap = Object.fromEntries(succeeded.map((r) => [r.key, r.value]))
+        loadedVals.current = { ...loadedVals.current, ...successMap }
+        setCachedSettings(activeServer.serverName, loadedVals.current)
+      }
+
+      if (failed.length > 0) {
+        // Revert failed keys to their loaded values
+        setVals((prev) => {
+          const reverted = { ...prev }
+          for (const f of failed) reverted[f.key] = loadedVals.current[f.key] ?? ''
+          return reverted
+        })
+        setFailedKeys(Object.fromEntries(failed.map((f) => [f.key, f.error ?? 'Failed'])))
+        const names = failed.map((f) => f.key).join(', ')
+        setError(`Some settings could not be changed: ${names}`)
+        setBulkSaveState('partial')
+        setTimeout(() => { setBulkSaveState('idle'); setFailedKeys({}) }, 4000)
+      } else {
+        setVals((prev) => ({ ...prev }))
+        setBulkSaveState('saved')
+        setTimeout(() => setBulkSaveState('idle'), 1500)
+      }
     } catch (e) {
       setBulkSaveState('idle')
       setError((e as Error).message || 'Failed to save settings')
@@ -295,9 +324,11 @@ export default function Settings() {
               className={`btn btn-sm ${
                 bulkSaveState === 'saved'
                   ? 'btn-green'
-                  : dirtyCount > 0
-                    ? 'btn-primary'
-                    : 'btn-outline'
+                  : bulkSaveState === 'partial'
+                    ? 'btn-orange'
+                    : dirtyCount > 0
+                      ? 'btn-primary'
+                      : 'btn-outline'
               }`}
               onClick={saveAll}
               disabled={dirtyCount === 0 || bulkSaveState === 'saving' || isOffline}
@@ -306,9 +337,11 @@ export default function Settings() {
                 ? 'Saving...'
                 : bulkSaveState === 'saved'
                   ? 'Saved!'
-                  : dirtyCount > 0
-                    ? `Save ${dirtyCount} Change${dirtyCount !== 1 ? 's' : ''}`
-                    : 'No Changes'}
+                  : bulkSaveState === 'partial'
+                    ? 'Partially Saved'
+                    : dirtyCount > 0
+                      ? `Save ${dirtyCount} Change${dirtyCount !== 1 ? 's' : ''}`
+                      : 'No Changes'}
             </button>
             <span style={{ fontSize: '10px', color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
               Changes apply immediately
@@ -354,16 +387,22 @@ export default function Settings() {
                     const isAvailable = AVAILABLE_SETTINGS.has(s.key)
                     const isDisabled = isOffline || (!isReadonly && !isAvailable)
                     const isDirty = isAvailable && vals[s.key] !== loadedVals.current[s.key]
+                    const failError = failedKeys[s.key]
                     return (
                       <div
                         key={s.key}
                         className={`setting-row${isDisabled ? ' disabled' : ''}`}
-                        style={isDirty ? { borderLeft: '2px solid var(--orange)' } : undefined}
+                        style={failError ? { borderLeft: '2px solid var(--red)' } : isDirty ? { borderLeft: '2px solid var(--orange)' } : undefined}
                       >
                         <div className="setting-info">
                           <div className="setting-name">{s.name}</div>
                           <div className="setting-key">{s.key}</div>
                           <div className="setting-desc">{s.desc}</div>
+                          {failError && (
+                            <div style={{ fontSize: '10px', color: 'var(--red)', marginTop: '2px' }}>
+                              {failError}
+                            </div>
+                          )}
                         </div>
                         <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
                           <SettingInput

@@ -38,7 +38,12 @@ export class DemoAdapter implements RconAdapter {
     if (lower.startsWith('setpermissions ')) return `Permissions set to ${cmd.split(' ').pop()}`
     if (lower.startsWith('setserversetting ')) {
       const parts = cmd.split(' ')
-      return `Setting ${parts[1]} updated to ${parts.slice(2).join(' ')}`
+      const key = parts[1]
+      const value = parts.slice(2).join(' ')
+      return `[${new Date().toLocaleString()}] Set Server Setting (${key}:${value})`
+    }
+    if (lower === 'getplayers') {
+      return 'Current Serverlist:\nDemoPlayer1 : 76561198000000001\nDemoPlayer2 : 76561198000000002'
     }
     if (lower.startsWith('wipe')) return 'Wipe initiated'
 

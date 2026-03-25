@@ -11,6 +11,7 @@ import type { FastifyServerOptions } from 'fastify'
 import buildApp from './app.js'
 import { dockerManager } from './services/docker-manager.js'
 import { rconConnectionManager } from './services/rcon-connection-manager.js'
+import { playerPoller } from './services/player-poller.js'
 import prisma, { scheduleSqliteMaintenance } from './db/prisma-client.js'
 import { registerCronJob } from './routes/schedule.js'
 
@@ -30,10 +31,12 @@ const tlsOpts: FastifyServerOptions = tlsEnabled
 const app = await buildApp(tlsOpts)
 
 process.on('SIGTERM', async () => {
+  playerPoller.stopAll()
   await app.close()
   process.exit(0)
 })
 process.on('SIGINT', async () => {
+  playerPoller.stopAll()
   await app.close()
   process.exit(0)
 })
@@ -77,11 +80,20 @@ if (isDemo) {
   await initDemoMode(server.id)
 } else {
   dockerManager.setLogger(app.log)
+  playerPoller.setLogger(app.log)
 
   // Start in degraded mode (no live log streams) if Docker is unavailable.
   try {
     await dockerManager.reconnect()
     app.log.info('Docker manager reconnected to running containers')
+
+    // Start player polling for all running servers
+    const servers = await prisma.server.findMany()
+    for (const server of servers) {
+      if (dockerManager.isRunning(server.id)) {
+        playerPoller.startPolling(server.id)
+      }
+    }
   } catch (err) {
     app.log.warn({ err }, 'Docker manager reconnect failed — API starting in degraded mode (Docker unavailable)')
   }

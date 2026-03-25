@@ -51,6 +51,28 @@ export async function getSettings(
 
 const KEY_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/
 
+/**
+ * Check if a setserversetting response indicates success.
+ * The game returns "[timestamp] Set Server Setting (Key:Value)" on success.
+ * Anything else (empty response, "Value Cannot Be Changed Ingame", etc.) is failure.
+ */
+function parseSettingResult(
+  response: string,
+  key: string
+): { ok: true } | { ok: false; error: string } {
+  // Success pattern: "Set Server Setting (Key:Value)" anywhere in the response
+  if (response.includes(`Set Server Setting (${key}:`)) {
+    return { ok: true }
+  }
+  // The game gave an explicit error message
+  const trimmed = response.trim()
+  if (trimmed) {
+    return { ok: false, error: trimmed }
+  }
+  // Empty response — setting cannot be changed
+  return { ok: false, error: 'Setting cannot be changed (no response from server)' }
+}
+
 export async function updateSettingKey(
   req: FastifyRequest<{ Params: { serverName: string; key: string }; Body: { value: unknown } }>,
   reply: FastifyReply
@@ -61,9 +83,13 @@ export async function updateSettingKey(
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     const adapter = await getAdapter(server)
-    await adapter.sendCommand(
+    const response = await adapter.sendCommand(
       `setserversetting ${req.params.key} ${req.body.value}`
     )
+    const result = parseSettingResult(response, req.params.key)
+    if (!result.ok) {
+      return reply.status(422).send({ error: result.error, key: req.params.key })
+    }
     await prisma.actionLog.create({
       data: {
         serverId: server.id,
@@ -107,28 +133,38 @@ export async function bulkUpdateSettings(
 
   try {
     const adapter = await getAdapter(server)
-    const results: { key: string; ok: boolean; value: string | number | boolean }[] = []
+    const results: { key: string; ok: boolean; value: string | number | boolean; error?: string }[] = []
 
     for (const [key, value] of entries) {
       const command = `setserversetting ${key} ${value}`
-      await adapter.sendCommand(command)
-      results.push({ key, ok: true, value })
+      const response = await adapter.sendCommand(command)
+      const result = parseSettingResult(response, key)
+      if (result.ok) {
+        results.push({ key, ok: true, value })
+      } else {
+        results.push({ key, ok: false, value, error: result.error })
+      }
     }
 
-    const changedKeys = entries.map(([k]) => k).join(', ')
-    await prisma.actionLog.create({
-      data: {
-        serverId: server.id,
-        performedBy: req.session!.user.id,
-        userId: req.session!.user.id,
-        action: 'SETTINGS_SET',
-        details: `Updated settings: ${changedKeys}`,
-        beforeValue: null,
-        afterValue: JSON.stringify(changes),
-      },
-    })
+    const succeeded = results.filter((r) => r.ok)
+    if (succeeded.length > 0) {
+      const changedKeys = succeeded.map((r) => r.key).join(', ')
+      const successChanges = Object.fromEntries(succeeded.map((r) => [r.key, r.value]))
+      await prisma.actionLog.create({
+        data: {
+          serverId: server.id,
+          performedBy: req.session!.user.id,
+          userId: req.session!.user.id,
+          action: 'SETTINGS_SET',
+          details: `Updated settings: ${changedKeys}`,
+          beforeValue: null,
+          afterValue: JSON.stringify(successChanges),
+        },
+      })
+    }
 
-    return { results }
+    const anyFailed = results.some((r) => !r.ok)
+    return reply.status(anyFailed ? 207 : 200).send({ results })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return reply.status(503).send({ error: `Server unavailable: ${msg}` })

@@ -5,6 +5,7 @@ export default defineConfig({
     root: '.',
     include: ['tests/**/*.test.ts'],
     pool: 'forks',
+    fileParallelism: false,
     // Register tsx ESM loader in forked processes so Node.js can resolve
     // .js → .ts imports (used by TypeScript NodeNext moduleResolution) and
     // handle @fastify/autoload's runtime dynamic imports of .ts files.
