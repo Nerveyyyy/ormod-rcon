@@ -268,6 +268,62 @@ export async function deleteEntry(
   return { ok: true }
 }
 
+// ── Sync all entries to target servers ────────────────────────────────────────
+
+export async function syncToServer(
+  req: FastifyRequest<{ Params: { slug: string; serverName: string } }>,
+  reply: FastifyReply
+) {
+  const list = await prisma.accessList.findUnique({ where: { slug: req.params.slug } })
+  if (!list) return reply.status(404).send({ error: 'List not found' })
+
+  const entries = await prisma.listEntry.findMany({ where: { listId: list.id } })
+  if (entries.length === 0) return { ok: true, dispatched: 0, errors: 0, servers: 0 }
+
+  const servers = await getTargetServers(list.id, list.scope)
+  if (servers.length === 0) return { ok: true, dispatched: 0, errors: 0, servers: 0 }
+
+  // Build commands for each entry
+  const commands: string[] = []
+  for (const entry of entries) {
+    if (list.type === 'BAN')       commands.push(`ban ${entry.steamId}`)
+    if (list.type === 'WHITELIST') commands.push(`whitelist ${entry.steamId}`)
+    if (list.type === 'ADMIN')     commands.push(`setpermissions ${entry.steamId} ${entry.permission ?? 'client'}`)
+  }
+
+  // Dispatch to all target servers
+  let dispatched = 0
+  let errors = 0
+  for (const server of servers) {
+    try {
+      const adapter = await getAdapter(server)
+      const results = await Promise.allSettled(
+        commands.map((cmd) => adapter.sendCommand(cmd))
+      )
+      dispatched += results.filter((r) => r.status === 'fulfilled').length
+      errors += results.filter((r) => r.status === 'rejected').length
+    } catch (err) {
+      req.log.error({ err, serverId: server.id }, `Sync: failed to connect to server ${server.id}`)
+      errors += commands.length
+    }
+  }
+
+  // Log one SYNC action per server
+  for (const server of servers) {
+    await prisma.actionLog.create({
+      data: {
+        serverId: server.id,
+        performedBy: req.session!.user.id,
+        userId: req.session!.user.id,
+        action: 'SYNC',
+        details: JSON.stringify({ list: list.name, type: list.type, entries: entries.length }),
+      },
+    })
+  }
+
+  return { ok: true, dispatched, errors, servers: servers.length }
+}
+
 // ── External URL refresh (diff-based) ────────────────────────────────────────
 
 export async function refreshExternal(

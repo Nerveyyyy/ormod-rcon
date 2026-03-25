@@ -179,7 +179,7 @@ export default function PlayerPanel({ steamId, serverName, online, onClose }: Pl
   const [banReason, setBanReason] = useState('')
   const [kickReason, setKickReason] = useState('')
   const [whitelistSlug, setWhitelistSlug] = useState('')
-  const [permLevel, setPermLevel] = useState('client')
+
   const [pendingModerate, setPendingModerate] = useState(false)
   const [moderateError, setModerateError] = useState<string | null>(null)
   const [moderateSuccess, setModerateSuccess] = useState<string | null>(null)
@@ -329,12 +329,6 @@ export default function PlayerPanel({ steamId, serverName, online, onClose }: Pl
     )
   }
 
-  async function doSetPermission() {
-    await execModerate(
-      () => api.post(`/servers/${serverName}/players/${steamId}/permissions`, { level: permLevel }),
-      `Permission set to ${permLevel}.`
-    )
-  }
 
   // ── Pagination helpers ────────────────────────────────────────────────────
   const sessionPages = Math.ceil(sessionTotal / 20)
@@ -721,45 +715,6 @@ export default function PlayerPanel({ steamId, serverName, online, onClose }: Pl
                           )}
                         </div>
 
-                        {/* Set Permission */}
-                        <div
-                          style={{
-                            background: 'var(--bg2)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            padding: '10px 12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                          }}
-                        >
-                          <div style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--muted)' }}>
-                            Set Permission
-                          </div>
-                          <select
-                            className="text-input"
-                            style={{ fontSize: '12px' }}
-                            value={permLevel}
-                            onChange={(e) => setPermLevel(e.target.value)}
-                          >
-                            {['client', 'operator', 'admin', 'server'].map((lvl) => (
-                              <option key={lvl} value={lvl}>{lvl}</option>
-                            ))}
-                          </select>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            disabled={pendingModerate}
-                            onClick={() =>
-                              setConfirm({
-                                action: 'permission',
-                                label: 'Set Permission',
-                                fn: doSetPermission,
-                              })
-                            }
-                          >
-                            Set Permission
-                          </button>
-                        </div>
                       </div>
                     )}
                   </div>

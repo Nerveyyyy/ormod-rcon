@@ -23,16 +23,6 @@ const reasonBody = {
   properties: { reason: { type: 'string', maxLength: 500 } },
 } as const
 
-const permissionsBody = {
-  type: 'object',
-  required: ['level'],
-  additionalProperties: false,
-  properties: {
-    level: { type: 'string' },
-    reason: { type: 'string', maxLength: 500 },
-  },
-} as const
-
 const playersQuery = {
   type: 'object',
   properties: {
@@ -146,13 +136,6 @@ const playersRoutes: FastifyPluginAsync = async (app) => {
     handler: ctrl.whitelistPlayer,
   })
 
-  app.route({
-    method: 'POST',
-    url: '/servers/:serverName/players/:steamId/permissions',
-    schema: { params: playerActionParams, body: permissionsBody },
-    preHandler: [requireWrite],
-    handler: ctrl.setPlayerPermissions,
-  })
 }
 
 export default playersRoutes

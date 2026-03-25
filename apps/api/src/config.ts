@@ -75,6 +75,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     config: EnvConfig
     rconManager: import('./services/rcon-connection-manager.js').RconConnectionManager
+    presenceTracker: Map<string, { name: string; role: string; lastSeen: Date }>
   }
   interface FastifyRequest {
     session?: SessionData

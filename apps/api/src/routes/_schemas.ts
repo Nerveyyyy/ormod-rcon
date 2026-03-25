@@ -52,6 +52,15 @@ export const paginatedResponse = (itemSchema: object) => ({
   },
 }) as const
 
+export const listServerParams = {
+  type: 'object',
+  properties: {
+    slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*$' },
+    serverName: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' },
+  },
+  required: ['slug', 'serverName'],
+} as const
+
 export const entryParams = {
   type: 'object',
   properties: {

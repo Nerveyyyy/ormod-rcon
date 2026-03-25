@@ -3,8 +3,6 @@ import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
 import { paginationParams } from '../lib/pagination.js'
 
-const VALID_PERMISSION_LEVELS = ['server', 'admin', 'operator', 'client'] as const
-
 export async function listPlayers(
   req: FastifyRequest<{
     Params: { serverName: string }
@@ -236,22 +234,3 @@ export async function whitelistPlayer(
   return dispatchPlayerAction(req, reply, `whitelist ${steamId}`, 'WHITELIST', steamId)
 }
 
-export async function setPlayerPermissions(
-  req: FastifyRequest<{ Params: PlayerActionParams; Body: { level: string } }>,
-  reply: FastifyReply
-) {
-  const { steamId } = req.params
-  const { level } = req.body
-  if (!(VALID_PERMISSION_LEVELS as readonly string[]).includes(level)) {
-    return reply.status(400).send({
-      error: `Invalid permission level. Must be one of: ${VALID_PERMISSION_LEVELS.join(', ')}`,
-    })
-  }
-  return dispatchPlayerAction(
-    req,
-    reply,
-    `setpermissions ${steamId} ${level}`,
-    'SETPERMISSION',
-    steamId
-  )
-}

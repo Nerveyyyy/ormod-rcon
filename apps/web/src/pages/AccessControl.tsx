@@ -84,6 +84,8 @@ export default function AccessControl() {
 
   const [deleteTarget, setDeleteTarget] = useState<AccessList | null>(null)
   const [removeTarget, setRemoveTarget] = useState<ListEntry | null>(null)
+  const [syncConfirm, setSyncConfirm] = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
 
   // Modal refs for focus traps
   const addListModalRef = useRef<HTMLDivElement>(null)
@@ -130,11 +132,27 @@ export default function AccessControl() {
       .catch((e) => setError((e as Error).message || 'Failed to remove entry'))
   }
 
-  const syncList = () => {
+  const triggerSync = () => {
     if (!selectedSlug || !activeServer?.serverName) return
+    // For GLOBAL lists, show a warning first
+    if (selected?.scope === 'GLOBAL') {
+      setSyncConfirm(true)
+      return
+    }
+    doSync()
+  }
+
+  const doSync = () => {
+    if (!selectedSlug || !activeServer?.serverName) return
+    setSyncConfirm(false)
+    setSyncResult(null)
     api
-      .post(`/lists/${selectedSlug}/sync/${activeServer.serverName}`)
-      .then(() => setError(null))
+      .post<{ dispatched: number; errors: number; servers: number }>(`/lists/${selectedSlug}/sync/${activeServer.serverName}`)
+      .then((r) => {
+        setError(null)
+        setSyncResult(`Synced ${r.dispatched} commands to ${r.servers} server${r.servers !== 1 ? 's' : ''}${r.errors > 0 ? ` (${r.errors} failed)` : ''}`)
+        setTimeout(() => setSyncResult(null), 5000)
+      })
       .catch((e) => setError(`Sync failed: ${(e as Error).message}`))
   }
 
@@ -238,6 +256,19 @@ export default function AccessControl() {
             className="btn btn-ghost btn-xs"
             style={{ marginLeft: 'auto' }}
             onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {syncResult && (
+        <div className="info-banner" style={{ color: 'var(--green)', background: 'var(--green-bg)', borderColor: 'var(--green-dim)' }}>
+          {syncResult}
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setSyncResult(null)}
           >
             Dismiss
           </button>
@@ -466,6 +497,30 @@ export default function AccessControl() {
               </span>
             )}
             {' '}from <strong style={{ color: 'var(--orange)' }}>{selected?.name}</strong>?
+            {selected?.type === 'ADMIN' && (
+              <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--orange)', fontFamily: 'var(--mono)' }}>
+                If this player is currently offline, their in-game permissions will persist until
+                they come online and the command can be executed. You may need to manually
+                run <code>removepermissions</code> via Console.
+              </div>
+            )}
+          </div>
+        </ConfirmDialog>
+      )}
+
+      {syncConfirm && (
+        <ConfirmDialog
+          title="Sync to All Servers"
+          onCancel={() => setSyncConfirm(false)}
+          onConfirm={doSync}
+        >
+          <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.6' }}>
+            This is a <strong style={{ color: 'var(--orange)' }}>global list</strong>.
+            Syncing will re-apply all entries to <strong>every server</strong> in the dashboard.
+            <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+              Permissions can only be applied to players who are currently online.
+              Offline players will not be affected.
+            </div>
           </div>
         </ConfirmDialog>
       )}
@@ -605,11 +660,14 @@ export default function AccessControl() {
                     borderTop: 'none',
                   }}
                 >
-                  Sync this list to <strong style={{ margin: '0 4px' }}>{activeServer.name}</strong>
+                  {selected.scope === 'GLOBAL'
+                    ? 'Re-apply all entries to all servers'
+                    : <>Sync this list to <strong style={{ margin: '0 4px' }}>{activeServer.name}</strong></>
+                  }
                   <button
                     className="btn btn-ghost btn-xs"
                     style={{ marginLeft: 'auto' }}
-                    onClick={syncList}
+                    onClick={triggerSync}
                     disabled={!activeServer?.running}
                   >
                     Sync Now

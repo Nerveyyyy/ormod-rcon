@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { requireWrite } from '../plugins/auth.js'
 import * as ctrl from '../controllers/access-lists.js'
-import { serverParams, listParams, entryParams } from './_schemas.js'
+import { serverParams, listParams, listServerParams, entryParams } from './_schemas.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -122,6 +122,17 @@ const accessListsRoutes: FastifyPluginAsync = async (app) => {
     schema: { params: entryParams },
     preHandler: [requireWrite],
     handler: ctrl.deleteEntry,
+  })
+
+  // ── Sync all entries to target servers ─────────────────────────────────────
+
+  // Sync — ADMIN+
+  app.route({
+    method: 'POST',
+    url: '/lists/:slug/sync/:serverName',
+    schema: { params: listServerParams },
+    preHandler: [requireWrite],
+    handler: ctrl.syncToServer,
   })
 
   // ── External URL refresh ───────────────────────────────────────────────────

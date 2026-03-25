@@ -31,6 +31,11 @@ type ChatMessage = {
   createdAt: string
 }
 
+type PresenceData = {
+  dashboardUsers: { name: string; role: string }[]
+  onlineAdmins: { displayName: string; steamId: string; permission: string }[]
+}
+
 const EVENT_PILL: Record<string, { className: string; label: string }> = {
   JOIN: { className: 'pill-green', label: 'Join' },
   LEAVE: { className: 'pill-muted', label: 'Leave' },
@@ -50,6 +55,7 @@ const EVENT_PILL: Record<string, { className: string; label: string }> = {
   SCHEDULE_UPDATE: { className: 'pill-muted', label: 'Schedule' },
   LIST_CREATE: { className: 'pill-green', label: 'List' },
   LIST_DELETE: { className: 'pill-red', label: 'List' },
+  SYNC: { className: 'pill-green', label: 'Sync' },
 }
 
 export default function Dashboard() {
@@ -63,6 +69,7 @@ export default function Dashboard() {
   const [playerCount, setPlayerCount] = useState<number>(0)
   const [recentCombat, setRecentCombat] = useState<CombatEvent[]>([])
   const [recentChat, setRecentChat] = useState<ChatMessage[]>([])
+  const [presence, setPresence] = useState<PresenceData>({ dashboardUsers: [], onlineAdmins: [] })
   const endRef = useRef<HTMLDivElement>(null)
   const activityScrollRef = useRef<HTMLDivElement>(null)
   const activityAtBottomRef = useRef(true)
@@ -96,6 +103,19 @@ export default function Dashboard() {
     api.get<{ data: ChatMessage[] }>(`/servers/${activeServer.serverName}/chat?limit=10`)
       .then((res) => setRecentChat(res.data))
       .catch(() => {})
+  }, [activeServer?.serverName])
+
+  // Poll presence every 30s
+  useEffect(() => {
+    if (!activeServer?.serverName) return
+    const load = () => {
+      api.get<PresenceData>(`/presence/${activeServer.serverName}`)
+        .then(setPresence)
+        .catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, 30_000)
+    return () => clearInterval(interval)
   }, [activeServer?.serverName])
 
   useEffect(() => {
@@ -303,6 +323,52 @@ export default function Dashboard() {
                 >
                   {s.type}
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 3: Who's Here ──────────────────────────────────── */}
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Dashboard Users</span>
+            <span className="pill pill-muted" style={{ fontSize: '9px' }}>
+              {presence.dashboardUsers.length} online
+            </span>
+          </div>
+          <div className="card-body-0">
+            {presence.dashboardUsers.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                No active users.
+              </div>
+            )}
+            {presence.dashboardUsers.map((u) => (
+              <div key={u.name} className="setting-row" style={{ padding: '8px 18px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text)' }}>{u.name}</span>
+                <span className={`role-badge role-${u.role.toLowerCase()}`}>{u.role}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">In-Game Admins</span>
+            <span className="pill pill-muted" style={{ fontSize: '9px' }}>
+              {presence.onlineAdmins.length} online
+            </span>
+          </div>
+          <div className="card-body-0">
+            {presence.onlineAdmins.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                No admins in-game.
+              </div>
+            )}
+            {presence.onlineAdmins.map((a) => (
+              <div key={a.steamId} className="setting-row" style={{ padding: '8px 18px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text)' }}>{a.displayName}</span>
+                <span className={`perm perm-${a.permission}`}>[{a.permission}]</span>
               </div>
             ))}
           </div>
