@@ -63,9 +63,6 @@ services:
     container_name: ormod-dashboard
     restart: unless-stopped
     network_mode: host
-    depends_on:
-      ormod-server:
-        condition: service_started
     environment:
       DATABASE_URL: file:/app/data/ormod-rcon.db
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}

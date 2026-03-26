@@ -114,8 +114,6 @@ services:
     # Runs as dashboard (UID 1001) after the entrypoint chowns volume mounts.
     # The entrypoint script handles the root->non-root transition automatically.
     depends_on:
-      ormod-server:
-        condition: service_started
       socket-proxy:
         condition: service_started
     environment:
