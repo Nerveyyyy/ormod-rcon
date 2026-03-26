@@ -80,6 +80,7 @@ services:
     volumes:
       - ormod-game:/ormod
       - ./config:/config
+      - ./backups:/backups
     environment:
       SERVER_NAME: MyServer
       DESCRIPTION: An ORMOD Server
