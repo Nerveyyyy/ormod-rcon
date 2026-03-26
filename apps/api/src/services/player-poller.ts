@@ -32,11 +32,13 @@ function parseGetPlayers(raw: string): ParsedPlayer[] {
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.endsWith(':') || trimmed.toLowerCase().startsWith('current')) continue
+    // Skip log/error lines that leak into command output (e.g. "[ERROR] ...")
+    if (trimmed.startsWith('[')) continue
     // Format: "DisplayName : SteamId64"
-    const colonIdx = trimmed.lastIndexOf(':')
+    const colonIdx = trimmed.lastIndexOf(' : ')
     if (colonIdx === -1) continue
-    const displayName = trimmed.slice(0, colonIdx).trim()
-    const steamId = trimmed.slice(colonIdx + 1).trim()
+    const displayName = trimmed.slice(0, colonIdx)
+    const steamId = trimmed.slice(colonIdx + 3)
     // Validate steamId looks like a Steam ID64 (17-digit number)
     if (!displayName || !/^\d{10,20}$/.test(steamId)) continue
     players.push({ displayName, steamId })
