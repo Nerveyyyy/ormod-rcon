@@ -84,6 +84,7 @@ services:
       SERVER_NAME: MyServer
       DESCRIPTION: An ORMOD Server
       MAX_PLAYERS: '8'
+      BACKUP_ENABLED: true
     stdin_open: true  # dashboard writes commands to game stdin
     tty: true         # game reads commands via PTY; also produces raw log bytes (no framing)
     logging:
