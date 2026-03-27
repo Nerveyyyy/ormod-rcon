@@ -33,6 +33,15 @@ function ticksToDate(ticks: number): Date {
 
 const TICK_FIELDS = new Set(['LastPlayedTime', 'ServerWipeTime'])
 
+function formatTimeAgo(ts: number): string {
+  const seconds = Math.floor((Date.now() - ts) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m ago`
+}
+
 const TAB_ABBRS: Record<string, string> = {
   General: 'GEN',
   Server: 'SRV',
@@ -48,6 +57,7 @@ const TAB_ABBRS: Record<string, string> = {
 
 type SettingsResponse = {
   settings: Record<string, string | number | boolean>
+  fetchedAt?: number
 }
 
 function defaultVals(): Record<string, SettingValue> {
@@ -175,20 +185,23 @@ export default function Settings() {
   const [bulkSaveState, setBulkSaveState] = useState<BulkSaveState>('idle')
   const [failedKeys, setFailedKeys] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState(0)
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null)
 
-  const load = useCallback(() => {
+  const load = useCallback((forceRefresh = false) => {
     if (!activeServer?.serverName) return
     setLoading(true)
     setError(null)
+    const qs = forceRefresh ? '?refresh=true' : ''
     api
-      .get<SettingsResponse>(`/servers/${activeServer.serverName}/settings`)
-      .then(({ settings }) => {
+      .get<SettingsResponse>(`/servers/${activeServer.serverName}/settings${qs}`)
+      .then(({ settings, fetchedAt: ts }) => {
         if (settings && Object.keys(settings).length > 0) {
           const merged = { ...defaultVals(), ...settings }
           loadedVals.current = merged
           setVals(merged)
           setCachedSettings(activeServer.serverName, merged)
         }
+        if (ts) setFetchedAt(ts)
         setLoaded(true)
       })
       .catch((e) => {
@@ -261,6 +274,8 @@ export default function Settings() {
         setVals((prev) => ({ ...prev }))
         setBulkSaveState('saved')
         setTimeout(() => setBulkSaveState('idle'), 1500)
+        // Re-fetch from game server to confirm saved values
+        load(true)
       }
     } catch (e) {
       setBulkSaveState('idle')
@@ -277,9 +292,16 @@ export default function Settings() {
         title="Server Settings"
         subtitle="getserversettings · setserversetting [key] [value]"
         actions={
-          <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading || isOffline}>
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {fetchedAt && !loading && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--dim)' }}>
+                {formatTimeAgo(fetchedAt)}
+              </span>
+            )}
+            <button className="btn btn-ghost btn-sm" onClick={() => load(true)} disabled={loading || isOffline}>
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </span>
         }
       />
 

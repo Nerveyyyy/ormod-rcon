@@ -32,11 +32,16 @@ const bulkSettingsBody = {
   },
 } as const
 
+const settingsQuerystring = {
+  type: 'object',
+  properties: { refresh: { type: 'string', enum: ['true'] } },
+} as const
+
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.route({
     method: 'GET',
     url: '/servers/:serverName/settings',
-    schema: { params: serverParams },
+    schema: { params: serverParams, querystring: settingsQuerystring },
     handler: ctrl.getSettings,
   })
 

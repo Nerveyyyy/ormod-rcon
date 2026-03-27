@@ -1,20 +1,21 @@
 /**
  * player-poller.ts
  *
- * Background service that polls `getplayers` every 10 seconds for each running
- * server. Diffs the result against open PlayerSessions to detect joins and
- * leaves, then upserts Player / PlayerServerStats / PlayerSession records.
+ * Reconciliation service that polls `getplayers` every 5 minutes for each
+ * running server. Diffs the result against open PlayerSessions to catch any
+ * joins/leaves that the real-time log monitor (log-monitor.ts) may have missed.
  *
- * This is the interim solution until the game provides push events via WebSocket.
+ * Primary player tracking is now event-driven via log-monitor.ts. This service
+ * acts as a safety net to prevent state drift.
  */
 
 import prisma from '../db/prisma-client.js'
 import { getAdapter } from './rcon-adapter.js'
 import type { FastifyBaseLogger } from 'fastify'
 
-const POLL_INTERVAL_MS = 10_000
+const POLL_INTERVAL_MS = 300_000 // 5 minutes — reconciliation safety net
 
-interface ParsedPlayer {
+export interface ParsedPlayer {
   displayName: string
   steamId: string
 }
@@ -27,7 +28,7 @@ interface ParsedPlayer {
  *   Nerve : 76561198242849554
  *   SomePlayer : 76561198000000001
  */
-function parseGetPlayers(raw: string): ParsedPlayer[] {
+export function parseGetPlayers(raw: string): ParsedPlayer[] {
   const players: ParsedPlayer[] = []
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
@@ -57,7 +58,7 @@ class PlayerPoller {
   /** Start polling for a specific server. Idempotent — restarts if already running. */
   startPolling(serverId: string): void {
     this.stopPolling(serverId)
-    this.log.info({ serverId }, 'player-poller: starting 10s poll')
+    this.log.info({ serverId }, 'player-poller: starting 5min reconciliation')
 
     // Run immediately, then on interval
     this.poll(serverId).catch((err) =>

@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { dockerManager } from '../services/docker-manager.js'
 import { playerPoller } from '../services/player-poller.js'
+import { logMonitor } from '../services/log-monitor.js'
 import { getAdapter } from '../services/rcon-adapter.js'
 import { unregisterCronJob } from './schedule.js'
 import { uniqueSlug } from '../lib/slug.js'
@@ -85,6 +86,7 @@ export async function createServer(req: FastifyRequest<{ Body: ServerBody }>, re
     running = info?.running === true
     if (running) {
       await dockerManager.reconnectServer(server.id)
+      logMonitor.startMonitoring(server.id)
       playerPoller.startPolling(server.id)
     }
   } catch {
@@ -144,6 +146,7 @@ export async function deleteServer(
   }
 
   if (dockerManager.isRunning(server.id)) {
+    logMonitor.stopMonitoring(server.id)
     await playerPoller.stopAndCloseSessions(server.id)
     await dockerManager.stop(server.id)
   }
@@ -160,6 +163,7 @@ export async function startServer(
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
     await dockerManager.start(server.id)
+    logMonitor.startMonitoring(server.id)
     playerPoller.startPolling(server.id)
     return { status: 'started' }
   } catch (err) {
@@ -174,6 +178,7 @@ export async function stopServer(
   if (process.env.DEMO_MODE === 'true') return { status: 'stopped' }
   const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
+  logMonitor.stopMonitoring(server.id)
   await playerPoller.stopAndCloseSessions(server.id)
   await dockerManager.stop(server.id)
   return { status: 'stopped' }
@@ -187,10 +192,14 @@ export async function restartServer(
   const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
   try {
+    logMonitor.stopMonitoring(server.id)
     await playerPoller.stopAndCloseSessions(server.id)
     await dockerManager.restart(server.id)
-    // Delay polling start slightly — container needs time to boot
-    setTimeout(() => playerPoller.startPolling(server.id), 5000)
+    // Delay monitoring and polling start slightly — container needs time to boot
+    setTimeout(() => {
+      logMonitor.startMonitoring(server.id)
+      playerPoller.startPolling(server.id)
+    }, 5000)
     return { status: 'restarted' }
   } catch (err) {
     return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) })

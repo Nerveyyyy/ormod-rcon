@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db/prisma-client.js'
 import { getAdapter } from '../services/rcon-adapter.js'
+import { settingsCache } from '../services/settings-cache.js'
 
 /**
  * Parse the raw `getserversettings` response into a typed key-value map.
@@ -33,17 +34,30 @@ function parseSettingsResponse(raw: string): Record<string, string | number | bo
 }
 
 export async function getSettings(
-  req: FastifyRequest<{ Params: { serverName: string } }>,
+  req: FastifyRequest<{ Params: { serverName: string }; Querystring: { refresh?: string } }>,
   reply: FastifyReply
 ) {
   const server = await prisma.server.findUnique({ where: { serverName: req.params.serverName } })
   if (!server) return reply.status(404).send({ error: 'Server not found' })
+
+  const forceRefresh = (req.query as { refresh?: string }).refresh === 'true'
+
+  // Return cached settings if available and not force-refreshing
+  if (!forceRefresh) {
+    const cached = settingsCache.get(server.id)
+    if (cached) return { settings: cached.settings, fetchedAt: cached.fetchedAt }
+  }
+
   try {
     const adapter = await getAdapter(server)
     const response = await adapter.sendCommand('getserversettings')
     const settings = parseSettingsResponse(response)
-    return { settings }
+    const entry = settingsCache.set(server.id, settings)
+    return { settings, fetchedAt: entry.fetchedAt }
   } catch (err) {
+    // If game server is unavailable but we have stale cache, return it
+    const stale = settingsCache.get(server.id)
+    if (stale) return { settings: stale.settings, fetchedAt: stale.fetchedAt, stale: true }
     const msg = err instanceof Error ? err.message : String(err)
     return reply.status(503).send({ error: `Server unavailable: ${msg}` })
   }
@@ -100,6 +114,7 @@ export async function updateSettingKey(
         afterValue: JSON.stringify({ [req.params.key]: req.body.value }),
       },
     })
+    settingsCache.invalidate(server.id)
     return { ok: true, key: req.params.key, value: req.body.value }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -162,6 +177,8 @@ export async function bulkUpdateSettings(
         },
       })
     }
+
+    if (succeeded.length > 0) settingsCache.invalidate(server.id)
 
     const anyFailed = results.some((r) => !r.ok)
     return reply.status(anyFailed ? 207 : 200).send({ results })
