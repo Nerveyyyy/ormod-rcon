@@ -8,8 +8,8 @@ import { api } from '../api/client.js'
 type ActivityStats = {
   killsToday: number
   deathsToday: number
-  messagesToday: number
-  playersSeenToday: number
+  recurringPlayersToday: number
+  newPlayersToday: number
 }
 
 type CombatEntry = {
@@ -177,14 +177,14 @@ export default function Activity() {
           <div className="stat-sub">All causes</div>
         </div>
         <div className="stat-item">
-          <div className="stat-label">Messages Today</div>
-          <div className="stat-value">{stats?.messagesToday ?? '—'}</div>
-          <div className="stat-sub">Chat messages</div>
+          <div className="stat-label">Recurring Players</div>
+          <div className="stat-value">{stats?.recurringPlayersToday ?? '—'}</div>
+          <div className="stat-sub">Returning today</div>
         </div>
         <div className="stat-item">
-          <div className="stat-label">Players Seen Today</div>
-          <div className="stat-value">{stats?.playersSeenToday ?? '—'}</div>
-          <div className="stat-sub">Unique players</div>
+          <div className="stat-label">New Players</div>
+          <div className="stat-value">{stats?.newPlayersToday ?? '—'}</div>
+          <div className="stat-sub">First time today</div>
         </div>
       </div>
 

@@ -62,6 +62,42 @@ const typeColor: Record<string, string> = {
   RESTART: 'pill-orange',
 }
 
+/** Parse a cron expression back into frequency + time fields. */
+function parseCron(expr: string): {
+  freq: CronFreq
+  hour: number
+  minute: number
+  weekday: number
+  monthDay: number
+  custom: string
+} {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length !== 5) return { freq: 'custom', hour: 6, minute: 0, weekday: 1, monthDay: 1, custom: expr }
+  const [min, hr, dom, mon, dow] = parts
+  const minute = Number(min)
+  const hour = Number(hr)
+  if (isNaN(minute) || isNaN(hour)) return { freq: 'custom', hour: 6, minute: 0, weekday: 1, monthDay: 1, custom: expr }
+  // daily: M H * * *
+  if (dom === '*' && mon === '*' && dow === '*') return { freq: 'daily', hour, minute, weekday: 1, monthDay: 1, custom: '' }
+  // weekly: M H * * D
+  if (dom === '*' && mon === '*' && dow !== '*') return { freq: 'weekly', hour, minute, weekday: Number(dow) || 0, monthDay: 1, custom: '' }
+  // monthly: M H D * *
+  if (dom !== '*' && mon === '*' && dow === '*') return { freq: 'monthly', hour, minute, weekday: 1, monthDay: Number(dom) || 1, custom: '' }
+  return { freq: 'custom', hour: 6, minute: 0, weekday: 1, monthDay: 1, custom: expr }
+}
+
+/** Parse a payload string back into command value + param. */
+function parsePayload(payload: string | null): { command: string; param: string } {
+  if (!payload) return { command: 'forcesave', param: '' }
+  const trimmed = payload.trim()
+  // Try to match against known commands
+  for (const cmd of SCHEDULE_COMMANDS) {
+    if (trimmed === cmd.value) return { command: cmd.value, param: '' }
+    if (trimmed.startsWith(cmd.value + ' ')) return { command: cmd.value, param: trimmed.slice(cmd.value.length + 1) }
+  }
+  return { command: trimmed, param: '' }
+}
+
 const SCHEDULE_COMMANDS = [
   {
     value: 'forcesave',
@@ -106,7 +142,8 @@ export default function Schedules() {
   const { activeServer } = useServer()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [loading, setLoading] = useState(false)
-  const [showAdd, setShowAdd] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Add form state
@@ -122,12 +159,12 @@ export default function Schedules() {
   const [newParam, setNewParam] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
 
-  const addModalRef = useRef<HTMLDivElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
-  // Focus trap for add modal
+  // Focus trap for modal
   useEffect(() => {
-    if (!showAdd) return
-    const modal = addModalRef.current
+    if (!showModal) return
+    const modal = modalRef.current
     if (!modal) return
     const focusable = modal.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -146,7 +183,7 @@ export default function Schedules() {
     }
     document.addEventListener('keydown', handleTab)
     return () => document.removeEventListener('keydown', handleTab)
-  }, [showAdd])
+  }, [showModal])
 
   const load = useCallback(() => {
     if (!activeServer?.serverName) return
@@ -186,7 +223,7 @@ export default function Schedules() {
       .catch((e) => setError(`Failed to trigger task: ${(e as Error).message}`))
   }
 
-  const resetAddForm = () => {
+  const resetForm = () => {
     setNewLabel('')
     setNewType('COMMAND')
     setNewFreq('daily')
@@ -200,29 +237,61 @@ export default function Schedules() {
     setNewEnabled(true)
   }
 
-  const createTask = () => {
+  const openAdd = () => {
+    resetForm()
+    setEditingSlug(null)
+    setShowModal(true)
+  }
+
+  const openEdit = (task: ScheduledTask) => {
+    const { freq, hour, minute, weekday, monthDay, custom } = parseCron(task.cronExpr)
+    const { command, param } = parsePayload(task.payload)
+    setNewLabel(task.label)
+    setNewType(task.type as 'COMMAND' | 'RESTART')
+    setNewFreq(freq)
+    setNewHour(hour)
+    setNewMinute(minute)
+    setNewWeekday(weekday)
+    setNewMonthDay(monthDay)
+    setNewCustomCron(custom)
+    setNewCommand(command)
+    setNewParam(param)
+    setNewEnabled(task.enabled)
+    setEditingSlug(task.slug)
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setEditingSlug(null)
+  }
+
+  const submitTask = () => {
     if (!activeServer?.serverName || !newLabel.trim()) return
     const cronExpr = buildCron(newFreq, newHour, newMinute, newWeekday, newMonthDay, newCustomCron)
-    api
-      .post(`/servers/${activeServer.serverName}/schedules`, {
-        label: newLabel.trim(),
-        type: newType,
-        cronExpr,
-        payload: newType === 'COMMAND'
-          ? (() => {
-              const cmd = SCHEDULE_COMMANDS.find(c => c.value === newCommand)
-              if (!cmd) return newCommand
-              return cmd.hasParam && newParam ? `${cmd.value} ${newParam}` : cmd.value
-            })()
-          : null,
-        enabled: newEnabled,
-      })
+    const body = {
+      label: newLabel.trim(),
+      type: newType,
+      cronExpr,
+      payload: newType === 'COMMAND'
+        ? (() => {
+            const cmd = SCHEDULE_COMMANDS.find(c => c.value === newCommand)
+            if (!cmd) return newCommand
+            return cmd.hasParam && newParam ? `${cmd.value} ${newParam}` : cmd.value
+          })()
+        : null,
+      enabled: newEnabled,
+    }
+    const request = editingSlug
+      ? api.put(`/servers/${activeServer.serverName}/schedules/${editingSlug}`, body)
+      : api.post(`/servers/${activeServer.serverName}/schedules`, body)
+    request
       .then(() => {
-        setShowAdd(false)
-        resetAddForm()
+        closeModal()
+        resetForm()
         load()
       })
-      .catch((e) => setError(`Failed to create task: ${(e as Error).message}`))
+      .catch((e) => setError(`Failed to ${editingSlug ? 'update' : 'create'} task: ${(e as Error).message}`))
   }
 
   const activeCount = tasks.filter((s) => s.enabled).length
@@ -238,7 +307,7 @@ export default function Schedules() {
         title="Schedules"
         subtitle="Cron-based tasks · command · restart"
         actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
             + Add Schedule
           </button>
         }
@@ -258,21 +327,23 @@ export default function Schedules() {
       )}
 
       {/* ── Add Schedule Modal ────────────────────────────────── */}
-      {showAdd && (
-        <div className="overlay" onClick={() => setShowAdd(false)}>
+      {showModal && (
+        <div className="overlay" onClick={closeModal}>
           <div
-            ref={addModalRef}
+            ref={modalRef}
             className="modal fadein"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="add-schedule-modal-title"
+            aria-labelledby="schedule-modal-title"
           >
             <div className="card-header">
-              <span className="card-title" id="add-schedule-modal-title">New Scheduled Task</span>
+              <span className="card-title" id="schedule-modal-title">
+                {editingSlug ? 'Edit Scheduled Task' : 'New Scheduled Task'}
+              </span>
               <button
                 className="btn btn-ghost btn-xs"
-                onClick={() => setShowAdd(false)}
+                onClick={closeModal}
                 aria-label="Close dialog"
               >
                 ✕
@@ -528,12 +599,12 @@ export default function Schedules() {
               </div>
 
               <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>
+                <button className="btn btn-ghost" onClick={closeModal}>
                   Cancel
                 </button>
                 <button
                   className="btn btn-primary"
-                  onClick={createTask}
+                  onClick={submitTask}
                   disabled={
                     !newLabel.trim() ||
                     (newType === 'COMMAND' && (() => {
@@ -543,7 +614,7 @@ export default function Schedules() {
                     (newFreq === 'custom' && !newCustomCron.trim())
                   }
                 >
-                  Create
+                  {editingSlug ? 'Save' : 'Create'}
                 </button>
               </div>
             </div>
@@ -609,6 +680,9 @@ export default function Schedules() {
                     <div className="spacer" />
                     <button className="btn btn-ghost btn-xs" onClick={() => runNow(s.slug)}>
                       Run Now
+                    </button>
+                    <button className="btn btn-ghost btn-xs" onClick={() => openEdit(s)}>
+                      Edit
                     </button>
                     <button className="btn btn-ghost btn-xs" onClick={() => toggleEnabled(s)}>
                       {s.enabled ? 'Pause' : 'Enable'}

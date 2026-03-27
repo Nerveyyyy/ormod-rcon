@@ -13,21 +13,32 @@ export async function getActivityStats(
 
   const where = { serverId: server.id, createdAt: { gte: todayStart } }
 
-  const [killsToday, deathsToday, messagesToday, playersSeen] = await Promise.all([
+  const [killsToday, deathsToday, recurringPlayersToday, newPlayersToday] = await Promise.all([
     prisma.combatLog.count({ where: { ...where, killerSteamId: { not: null } } }),
     prisma.combatLog.count({ where }),
-    prisma.playerChat.count({ where }),
-    prisma.playerSession.findMany({
-      where: { serverId: server.id, joinedAt: { gte: todayStart } },
-      select: { playerId: true },
-      distinct: ['playerId'],
+    prisma.playerServerStats.count({
+      where: {
+        serverId: server.id,
+        firstSeen: { lt: todayStart },
+        player: {
+          sessions: {
+            some: { serverId: server.id, joinedAt: { gte: todayStart } },
+          },
+        },
+      },
+    }),
+    prisma.playerServerStats.count({
+      where: {
+        serverId: server.id,
+        firstSeen: { gte: todayStart },
+      },
     }),
   ])
 
   return {
     killsToday,
     deathsToday,
-    messagesToday,
-    playersSeenToday: playersSeen.length,
+    recurringPlayersToday,
+    newPlayersToday,
   }
 }
