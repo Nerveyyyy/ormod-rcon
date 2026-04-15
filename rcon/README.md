@@ -28,9 +28,9 @@ the game developer can prioritise. Untagged items are still to be decided.
 
 | Tag | Meaning |
 |-----|---------|
-| **MVP** | Must ship in the initial RCON release — dashboard is blocked without it |
-| **NTH** | Nice to have — valuable but not blocking |
-| **post-launch** | Ships after the core RCON (e.g. arena mode) |
+| **MVP** | Useful things to have right away |
+| **NTH** | Nice to have — not urgent but should be added before full release |
+| **post-launch** | For when things like arena gamemode gets added |
 
 ---
 
