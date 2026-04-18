@@ -1,23 +1,4 @@
-# Host networking — UFW / iptables controls all port access.
-# For socket-proxy hardening use docker-compose.secure.yml.
-#
-# Quick start:
-#   cp .env.example .env
-#   # Edit .env — set BETTER_AUTH_SECRET and PUBLIC_URL
-#   docker compose up -d
-
 services:
-
-  # ══════════════════════════════════════════════════════════════════════════════
-  # GAME SERVER (convenience — included so `docker compose up` runs everything)
-  # This is a standalone image. Configure it directly below or run it separately
-  # using docker-compose.dashboard.yml and your own game server compose.
-  # See https://github.com/Nerveyyyy/ormod-server for full env var reference.
-  #
-  # network_mode: host — the game binary binds to 0.0.0.0 (all interfaces).
-  # Use UFW to restrict which IPs accept game traffic, e.g.:
-  #   ufw allow in on eth0 to 203.0.113.5 port 27015 proto udp
-  # ══════════════════════════════════════════════════════════════════════════════
   ormod-server:
     image: ghcr.io/nerveyyyy/ormod-server:latest
     container_name: ormod-server
@@ -32,8 +13,8 @@ services:
       DESCRIPTION: An ORMOD Server
       MAX_PLAYERS: '8'
       BACKUP_ENABLED: true
-    stdin_open: true  # dashboard writes commands to game stdin
-    tty: true         # game reads commands via PTY; also produces raw log bytes (no framing)
+    stdin_open: true
+    tty: true
     logging:
       driver: json-file
       options:
@@ -44,20 +25,6 @@ services:
         limits:
           memory: 4G
           cpus: '4'
-
-  # ══════════════════════════════════════════════════════════════════════════════
-  # DASHBOARD (API + frontend)
-  #
-  # network_mode: host — Fastify binds directly to DASHBOARD_HOST:DASHBOARD_PORT
-  # on the host. No Docker port mappings, no iptables bypass — UFW is in full
-  # control of who can reach the dashboard.
-  #
-  # DASHBOARD_HOST — IP address Fastify binds to (default: 0.0.0.0).
-  #                  Set to a specific IP to restrict which interface serves
-  #                  the dashboard, e.g. 10.0.0.1 for LAN-only.
-  #
-  # DASHBOARD_PORT — Port Fastify listens on (default: 3000).
-  # ══════════════════════════════════════════════════════════════════════════════
   ormod-dashboard:
     build:
       context: .
@@ -76,7 +43,7 @@ services:
       TLS_CERT_PATH: ${TLS_CERT_PATH:-}
       TLS_KEY_PATH: ${TLS_KEY_PATH:-}
     volumes:
-      - dashboard-data:/app/data                # SQLite database (persisted)
+      - dashboard-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
     deploy:
       resources:
