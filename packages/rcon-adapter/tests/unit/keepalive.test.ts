@@ -228,7 +228,7 @@ describe('per-client keepalive', () => {
     // after the ping — overdue.
     vi.advanceTimersByTime(KEEPALIVE_INTERVAL_MS)
     expect(onFailure).toHaveBeenCalledTimes(1)
-    const err = onFailure.mock.calls[0]?.[0]
+    const err: unknown = onFailure.mock.calls[0]?.[0]
     expect(err).toBeInstanceOf(RconTransportError)
     expect((err as RconTransportError).code).toBe('socket_closed')
     expect((err as RconTransportError).message).toMatch(/pong/i)
@@ -274,7 +274,7 @@ describe('per-client keepalive', () => {
     })
     vi.advanceTimersByTime(KEEPALIVE_INTERVAL_MS)
     expect(onFailure).toHaveBeenCalledTimes(1)
-    const err = onFailure.mock.calls[0]?.[0]
+    const err: unknown = onFailure.mock.calls[0]?.[0]
     expect((err as Error).message).toBe('socket dead')
   })
 

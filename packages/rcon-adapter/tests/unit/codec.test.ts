@@ -35,7 +35,7 @@ describe('codec — encoders', () => {
   })
 
   it('encodeCommand omits data for no-param commands', () => {
-    const wire = JSON.parse(encodeCommand({ cmd: 'getplayers' }, 'req-1'))
+    const wire = JSON.parse(encodeCommand({ cmd: 'getplayers' }, 'req-1')) as Record<string, unknown>
     expect(wire).toEqual({ type: 'command', id: 'req-1', cmd: 'getplayers' })
     expect('data' in wire).toBe(false)
   })
@@ -49,7 +49,7 @@ describe('codec — encoders', () => {
         },
         'req-3',
       ),
-    )
+    ) as Record<string, unknown>
     expect(wire).toEqual({
       type: 'command',
       id: 'req-3',

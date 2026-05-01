@@ -22,9 +22,9 @@ describe('correlation table', () => {
   it('assigns monotonically increasing ids', () => {
     const table = createCorrelationTable()
     const ids: string[] = []
-    registerSilent(table, (id) => ids.push(id))
-    registerSilent(table, (id) => ids.push(id))
-    registerSilent(table, (id) => ids.push(id))
+    void registerSilent(table, (id) => ids.push(id))
+    void registerSilent(table, (id) => ids.push(id))
+    void registerSilent(table, (id) => ids.push(id))
     expect(ids).toEqual([ '1', '2', '3' ])
     table.rejectAll(new Error('cleanup'))
   })
@@ -81,10 +81,10 @@ describe('correlation table', () => {
     const table = createCorrelationTable()
     let idA = ''
     let idB = ''
-    registerSilent(table, (id) => {
+    void registerSilent(table, (id) => {
       idA = id
     }, 'alpha')
-    registerSilent(table, (id) => {
+    void registerSilent(table, (id) => {
       idB = id
     }, 'beta')
     expect(table.size()).toBe(2)

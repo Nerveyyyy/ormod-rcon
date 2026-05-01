@@ -31,6 +31,9 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      '@typescript-eslint/require-await': 'off',
+    },
   },
 
   // ── React overlay — web only ─────────────────────────────────────────────────

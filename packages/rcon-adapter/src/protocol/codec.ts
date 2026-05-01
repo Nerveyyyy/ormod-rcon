@@ -79,11 +79,13 @@ export const decodeFrame = (data: string): DecodedFrame => {
       return { kind: 'result_ok', id, data: frame.data }
     }
     const errObj = frame.error as { code?: unknown, message?: unknown } | undefined
+    const code = typeof errObj?.code === 'string' ? errObj.code : 'UNKNOWN'
+    const message = typeof errObj?.message === 'string' ? errObj.message : ''
     return {
       kind: 'result_error',
       id,
-      code: String(errObj?.code ?? 'UNKNOWN'),
-      message: String(errObj?.message ?? ''),
+      code,
+      message,
     }
   }
 

@@ -100,10 +100,8 @@ describe('authenticator', () => {
     const p = auth.run(makeStubTransport())
     auth.handleAuthError('totally_made_up_reason')
     await expect(p).rejects.toBeInstanceOf(RconProtocolError)
-    await expect(p).rejects.toMatchObject({
-      code: 'invalid_secret',
-      message: expect.stringContaining('totally_made_up_reason'),
-    })
+    await expect(p).rejects.toMatchObject({ code: 'invalid_secret' })
+    await expect(p).rejects.toThrow(/totally_made_up_reason/)
   })
 
   it('reply timeout fires RconTransportError(socket_closed)', async () => {

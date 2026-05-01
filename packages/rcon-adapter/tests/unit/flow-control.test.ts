@@ -95,7 +95,7 @@ describe('flow-control', () => {
       return fc.send(transport, 'frame3')
     }).toThrow(RconOverloadError)
     expect(onTerminate).toHaveBeenCalledTimes(1)
-    const passedErr = onTerminate.mock.calls[0]?.[0]
+    const passedErr: unknown = onTerminate.mock.calls[0]?.[0]
     expect(passedErr).toBeInstanceOf(RconTransportError)
   })
 

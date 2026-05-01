@@ -150,7 +150,9 @@ export const createWsTransport: TransportFactory = (options, handlers) => {
           // ws fires 'error' then 'close' on a failed handshake — reject once
           // and let the post-open handler take over from here.
           ws.off('open', onOpen)
-          const error = err instanceof Error ? err : new Error(String(err))
+          const error = err instanceof Error
+            ? err
+            : new Error(err.message || 'unknown websocket error')
           reject(new RconTransportError(error.message, classifyConnectError(error)))
         }
 
@@ -164,7 +166,7 @@ export const createWsTransport: TransportFactory = (options, handlers) => {
             ? data.toString('utf8')
             : Array.isArray(data)
               ? Buffer.concat(data).toString('utf8')
-              : Buffer.from(data as ArrayBuffer).toString('utf8')
+              : Buffer.from(data).toString('utf8')
           handlers.onMessage(asString)
         })
 
