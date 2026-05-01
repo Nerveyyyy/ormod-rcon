@@ -1,6 +1,6 @@
 {
   "name": "ormod-rcon",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Self-hosted RCON dashboard for ORMOD: Directive dedicated servers. Manage players, settings, access lists, wipes, and scheduled tasks from a single web UI.",
   "private": true,
   "type": "module",
@@ -10,13 +10,17 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
-    "test": "pnpm --filter @ormod-rcon/api test",
-    "build": "tsc",
+    "dev": "pnpm -r --parallel --stream dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "mock-rcon": "node refs/mock-rcon-server.mjs"
   },
   "devDependencies": {
     "eslint": "^10.0.2",
@@ -25,11 +29,19 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "prettier": "^3.8.1",
     "typescript": "^5.9.0",
-    "typescript-eslint": "^8.56.1"
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^3.0.0",
+    "ws": "^8.18.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint": "10",
+        "zod": "3"
+      }
+    }
   }
 }

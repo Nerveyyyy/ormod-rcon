@@ -1,0 +1,32 @@
+{
+  "name": "@ormod/rcon-adapter",
+  "version": "0.0.1",
+  "description": "RCON WebSocket client for ORMOD: Directive game servers.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:load": "vitest run --config vitest.load.config.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.8",
+    "utf-8-validate": "^6.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}
