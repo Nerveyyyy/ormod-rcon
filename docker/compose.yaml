@@ -1,0 +1,94 @@
+name: ormod-rcon
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Full-stack local compose — postgres, the dashboard container (API + web
+# static bundle), and Adminer for live DB inspection.
+#
+# Start:     docker compose -f docker/compose.yaml up -d --build
+#            The migrate service runs first on every `up`, applies any
+#            pending migrations, and exits; the app service only starts
+#            after it succeeds. Re-runs are a no-op.
+# Dashboard: http://localhost:3000
+# Adminer:   http://localhost:5435
+# Postgres:  localhost:5432          (exposed for drizzle-kit / psql on the host)
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ormod}
+    ports:
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
+    volumes:
+      - ormod_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ormod}
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    # One-shot migrate runner. Compose triggers it on every `up`; the
+    # app service depends on its successful completion. Already-applied
+    # migrations are skipped, so re-runs are a no-op. No restart policy
+    # so it won't relaunch after exiting.
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ormod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ['pnpm', '--filter', '@ormod/database', 'db:migrate']
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '3000'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ormod}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      ORMOD_SECRET_KEY: ${ORMOD_SECRET_KEY}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # API serves the built dashboard bundle from this path so one
+      # container answers both /api/* and / (SPA).
+      SERVE_WEB_DIR: /app/apps/web/dist
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - '${APP_HOST_PORT:-3000}:3000'
+
+  adminer:
+    # Single-file PHP UI against the postgres service. No local state,
+    # no user accounts — sign in with the POSTGRES_USER / POSTGRES_PASSWORD
+    # each session. The server is pre-filled in the login form so the
+    # only field you touch is the password.
+    image: adminer:4
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: ${ADMINER_DESIGN:-pepa-linha-dark}
+    ports:
+      - '${ADMINER_HOST_PORT:-5435}:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ormod_pgdata:

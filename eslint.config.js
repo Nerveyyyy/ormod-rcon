@@ -10,6 +10,8 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       'apps/api/src/generated/**',
+      'vitest.config.ts',
+      'apps/web/dist/**',
       // Compiled TypeScript output emitted in-tree (web tsconfig has no outDir)
       // Must be excluded so Prettier/ESLint never touch compiled artifacts
       'apps/web/src/**/*.js',
@@ -28,6 +30,9 @@ export default tseslint.config(
         project: true,
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+    rules: {
+      '@typescript-eslint/require-await': 'off',
     },
   },
 

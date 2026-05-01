@@ -1,0 +1,1 @@
+ALTER TABLE "server_runtime" ADD COLUMN "last_error_reason" text;
