@@ -1,0 +1,12 @@
+{
+  "name": "ormod-rcon",
+  "version": "0.1.0",
+  "description": "Self-hosted RCON dashboard for ORMOD: Directive dedicated servers.",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}
