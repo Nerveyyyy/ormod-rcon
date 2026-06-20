@@ -24,7 +24,7 @@ git config --global user.name "Your Name"
 git config --global user.email "your.email@example.com"
 ```
 
-The sign-off asserts that you wrote the code (or have the right to submit it) and that you agree to license it under the project's license. Pull requests missing sign-offs will be blocked by CI until every commit carries one.
+The sign-off asserts that you wrote the code (or have the right to submit it) and that you agree to license it under the project's license. Pull requests missing sign-offs will be blocked by the DCO check until every commit carries one.
 
 Contributors retain copyright to their contributions. The DCO does not transfer copyright or grant relicensing rights.
 
