@@ -107,6 +107,8 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@26.0.0)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.0.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
+  packages/rcon: {}
+
 packages:
 
   '@asamuzakjp/css-color@5.1.11':

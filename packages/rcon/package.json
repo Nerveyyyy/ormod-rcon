@@ -1,0 +1,32 @@
+{
+  "name": "ormod-rcon",
+  "version": "0.1.0",
+  "description": "Lightweight WebSocket RCON client for Ormod: Directive game servers.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "rcon",
+    "ormod",
+    "websocket",
+    "game-server"
+  ]
+}
