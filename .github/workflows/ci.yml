@@ -31,8 +31,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate route tree
-        run: pnpm --filter @ormod/web routes:generate
+      - name: Check dependency versions
+        run: pnpm deps:check
+
+      - name: Verify routes are current
+        run: |
+          pnpm --filter @ormod/web routes:generate
+          git diff --exit-code apps/web/src/routeTree.gen.ts
 
       - name: Lint
         run: pnpm lint
@@ -45,3 +50,26 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  commitlint:
+    name: commitlint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint commit messages
+        run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
