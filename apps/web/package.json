@@ -1,5 +1,5 @@
 {
-  "name": "@ormod-rcon/web",
+  "name": "@ormod/web",
   "version": "0.0.1",
   "description": "Vite + React dashboard for the ORMOD:Directive RCON admin UI.",
   "private": true,
