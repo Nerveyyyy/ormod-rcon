@@ -11,8 +11,13 @@
         ".env.example",
         ".gitignore",
         ".release-please-manifest.json",
-        "release-please-config.json"
+        "release-please-config.json",
+        "packages/rcon"
       ]
+    },
+    "packages/rcon": {
+      "release-type": "node",
+      "component": "ormod-rcon"
     }
   }
 }
