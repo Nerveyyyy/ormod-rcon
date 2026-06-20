@@ -1,6 +1,6 @@
 # Commercial License
 
-`ormod-rcon` is released under the [PolyForm Perimeter 1.0.0](LICENSE) license. That license permits any use **except** offering a product that competes with ORMOD RCON — for example, running it as a hosted service or reselling it as a managed offering.
+`ormod-rcon` is released under the [PolyForm Perimeter 1.0.0](LICENSE) license. That license permits any use **except** offering a product that competes with ORMOD RCON, for example running it as a hosted service or reselling it as a managed offering.
 
 If your intended use falls within the competing-use restriction, a separate commercial license is required.
 

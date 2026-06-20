@@ -26,12 +26,12 @@ This policy covers vulnerabilities in ormod-rcon itself:
 - Docker images and `docker/compose.yaml` as shipped in this repo
 - Authentication, session handling, and tenant isolation
 
-Vulnerabilities in third-party dependencies we ship are in scope — report them here and we'll coordinate with upstream if needed.
+Vulnerabilities in third-party dependencies we ship are in scope. Report them here and we'll coordinate with upstream if needed.
 
 **Out of scope:**
 
 - Your own self-hosted deployment misconfigurations (exposed Docker socket, weak secrets, missing TLS, etc.)
-- The ORMOD: Directive game server itself — report those to the game's developer.
+- The ORMOD: Directive game server itself. Report those to the game's developer.
 
 ## Best practices for self-hosters
 

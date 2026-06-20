@@ -41,19 +41,23 @@ Open an [issue](https://github.com/Nerveyyyy/ormod-rcon/issues) using the **Feat
 ### Submitting code
 
 1. Open an issue first to discuss the approach before writing code
-2. Fork the repo and create a feature branch from `master`
+2. Fork the repo and create a feature branch from `main`
 3. Make your changes (sign every commit off with `-s`)
-4. Open a pull request against `master`
+4. Open a pull request against `main`
 
 ### Commit messages
 
-Use short, descriptive commit messages in the imperative mood:
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Release tooling parses commit messages to decide version bumps and generate the changelog, so the format is required, not just a style preference.
+
+Each message starts with a type, an optional scope, and a short imperative summary:
 
 ```
-add player kick confirmation dialog
-fix wipe backup path on Windows
-update schedule cron validation schema
+feat(web): add player kick confirmation dialog
+fix(web): correct wipe backup path on Windows
+chore(ci): pin the pnpm version
 ```
+
+Common types: `feat` for a new feature (minor version bump), `fix` for a bug fix (patch bump), plus `chore`, `docs`, `refactor`, `test`, `ci`, `build`, and `perf`. For a breaking change, append `!` after the type (for example `feat!:`) or add a `BREAKING CHANGE:` footer to trigger a major bump.
 
 ## Questions?
 

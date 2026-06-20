@@ -1,4 +1,4 @@
-# ORMOD: Directive — RCON Protocol
+# ORMOD: Directive - RCON Protocol
 
 **Version:** 1.0.0
 **Transport:** WebSocket (`ws://` or `wss://`)
@@ -6,7 +6,7 @@
 **Max frame size:** 65 535 bytes
 **Default port:** 28016 (set via `serversettings.json`)
 
-The machine-readable type definitions live in [`schema.ts`](./schema.ts) alongside this file. This document is the human-readable companion — use it to understand the protocol, build integrations, or implement the server side.
+The machine-readable type definitions live in [`schema.ts`](./schema.ts) alongside this file. This document is the human-readable companion - use it to understand the protocol, build integrations, or implement the server side.
 
 ---
 
@@ -15,7 +15,7 @@ The machine-readable type definitions live in [`schema.ts`](./schema.ts) alongsi
 1. [Connection & Auth](#1-connection--auth)
 2. [Message Framing](#2-message-framing)
 3. [Command Details](#3-command-details)
-4. [Events — Quick Reference](#4-events--quick-reference)
+4. [Events Quick Reference](#4-events-quick-reference)
 5. [Event Details](#5-event-details)
 6. [Player Data Schema](#6-player-data-schema)
 7. [Error Codes](#7-error-codes)
@@ -29,7 +29,7 @@ the game developer can prioritise. Untagged items are still to be decided.
 | Tag | Meaning |
 |-----|---------|
 | **MVP** | Useful things to have right away |
-| **NTH** | Nice to have — not urgent but should be added before full release |
+| **NTH** | Nice to have - not urgent but should be added before full release |
 | **post-launch** | For when things like arena gamemode gets added |
 
 ---
@@ -101,10 +101,10 @@ Every message is a single JSON object with a `type` field.
 
 Every command is a JSON object with:
 
-- `type` — always `"command"`
-- `id` — any unique string chosen by the client. The server echoes it back in the `result` so you can match responses to requests even when multiple commands are in-flight.
-- `cmd` — the command name (e.g. `"kick"`, `"ban"`, `"spawn"`)
-- `data` — object containing any parameters the command needs. **Optional** — omit it entirely for commands that take no parameters (e.g. `getplayers`, `forcesave`).
+- `type` - always `"command"`
+- `id` - any unique string chosen by the client. The server echoes it back in the `result` so you can match responses to requests even when multiple commands are in-flight.
+- `cmd` - the command name (e.g. `"kick"`, `"ban"`, `"spawn"`)
+- `data` - object containing any parameters the command needs. **Optional** - omit it entirely for commands that take no parameters (e.g. `getplayers`, `forcesave`).
 
 This mirrors the `result` envelope, which also uses `data` for its payload.
 
@@ -119,7 +119,7 @@ This mirrors the `result` envelope, which also uses `data` for its payload.
   }
 }
 
-// Command with no parameters — data omitted
+// Command with no parameters - data omitted
 {
   "type": "command",
   "id": "req-002",
@@ -174,9 +174,9 @@ I have not added commands that are basic or simple with the return values.
 
 Every heading below is annotated with its ship tag so specific events/commands are added with the biggest affect.
 
-### `setserversetting` — **MVP**
+### `setserversetting` - **MVP**
 
-Changes one field in `serversettings.json`. The file hot-reloads — no restart needed.
+Changes one field in `serversettings.json`. The file hot-reloads - no restart needed.
 The dashboard only needs the new value echoed back (not the prior value).
 
 ```json
@@ -192,11 +192,11 @@ The dashboard only needs the new value echoed back (not the prior value).
 
 ---
 
-### `wipe` — **NTH**
+### `wipe` - **NTH**
 
-**Type `map`** — Deletes world geometry data. Player inventories, skills, and XP survive.
-**Type `playerdata`** — Deletes `PlayerData/<steamId>.json` files. World stays intact.
-**Type `full`** — Both map and all player data.
+**Type `map`** - Deletes world geometry data. Player inventories, skills, and XP survive.
+**Type `playerdata`** - Deletes `PlayerData/<steamId>.json` files. World stays intact.
+**Type `full`** - Both map and all player data.
 
 ```json
 // Wipe the map only
@@ -233,7 +233,7 @@ The dashboard only needs the new value echoed back (not the prior value).
 
 ---
 
-### `spawn` — **NTH**
+### `spawn` - **NTH**
 
 Spawn priority: coordinates > steamId position > server error (RCON has no implicit position).
 
@@ -263,7 +263,7 @@ Entity names: see `getentities`, `getenemies`, `getworkbenches`, `getvehicles`.
 
 ---
 
-### `teleport` — **NTH**
+### `teleport` - **NTH**
 
 Exactly one destination must be provided: either `toSteamId` or all three of `x`, `y`, `z`.
 The result echoes both `from` and `to` so the dashboard can log the movement cleanly.
@@ -289,7 +289,7 @@ The result echoes both `from` and `to` so the dashboard can log the movement cle
 
 ---
 
-### `playerdata` — **MVP**
+### `playerdata` - **MVP**
 
 Returns full stored data for any player, online or offline. This is a read of the `PlayerData/<steamId>.json` file merged with live server state if the player is online.
 
@@ -317,7 +317,7 @@ Returns full stored data for any player, online or offline. This is a read of th
 
 ---
 
-### `playerparty` — **NTH**
+### `playerparty` - **NTH**
 
 ```json
 → { "type": "command", "id": "1", "cmd": "playerparty", "data": {
@@ -340,7 +340,7 @@ Returns full stored data for any player, online or offline. This is a read of th
 
 ---
 
-### `playerinv` — **NTH**
+### `playerinv` - **NTH**
 
 ```json
 → { "type": "command", "id": "1", "cmd": "playerinv", "data": {
@@ -360,7 +360,7 @@ Returns full stored data for any player, online or offline. This is a read of th
 
 ---
 
-### `getplayers` — **MVP**
+### `getplayers` - **MVP**
 
 ```json
 → { "type": "command", "id": "1", "cmd": "getplayers" }
@@ -375,7 +375,7 @@ Returns full stored data for any player, online or offline. This is a read of th
 
 ---
 
-### `getbans` — **NTH**
+### `getbans` - **NTH**
 
 Returns the full contents of `banlist.txt`.
 
@@ -393,7 +393,7 @@ Returns the full contents of `banlist.txt`.
 
 ---
 
-### `getwhitelist` — **NTH**
+### `getwhitelist` - **NTH**
 
 Returns the full contents of `whitelist.txt`.
 
@@ -410,7 +410,7 @@ Returns the full contents of `whitelist.txt`.
 
 ---
 
-### `getadmins` — **NTH**
+### `getadmins` - **NTH**
 
 Returns the full contents of `adminlist.txt` parsed into `{ steamId, level }` entries.
 
@@ -426,7 +426,7 @@ Returns the full contents of `adminlist.txt` parsed into `{ steamId, level }` en
 
 ---
 
-### `serverstatus` — **MVP**
+### `serverstatus` - **MVP**
 
 Single source of truth for live server metadata. The dashboard calls this on
 connect and polls on a low cadence (or on reconnect) to keep the status panel
@@ -449,7 +449,7 @@ fresh.
 
 ---
 
-### `serverperformance` — **MVP**
+### `serverperformance` - **MVP**
 
 On-demand performance snapshot. Sampling tick rate / memory / frame time can be expensive, so the
 dashboard decides when to take the hit.
@@ -466,7 +466,7 @@ dashboard decides when to take the hit.
 
 ---
 
-### `privatemessage` — **NTH**
+### `privatemessage` - **NTH**
 
 Private message to a single player.
 
@@ -485,9 +485,9 @@ return error if player is not online.
 
 ---
 
-## 4. Events — Quick Reference
+## 4. Events Quick Reference
 
-Events are pushed by the server with no prior request. Always ignore unknown `event.name` values — new events will be added in future versions.
+Events are pushed by the server with no prior request. Always ignore unknown `event.name` values - new events will be added in future versions.
 
 ### Anti-cheat Events
 
@@ -511,27 +511,27 @@ Events are pushed by the server with no prior request. Always ignore unknown `ev
 
 | `name` | Ship | Description |
 |--------|------|-------------|
-| `server.save` | — | Server completed a save (auto or manual) |
-| `server.restart` | — | Server is about to restart (countdown included) |
-| `server.start` | — | Server has fully started |
-| `server.shutdown` | — | Server is shutting down |
-| `server.setting.change` | — | A server setting was changed |
-| `server.command.executed` | — | A command was run (via RCON or in-game console) |
+| `server.save` | - | Server completed a save (auto or manual) |
+| `server.restart` | - | Server is about to restart (countdown included) |
+| `server.start` | - | Server has fully started |
+| `server.shutdown` | - | Server is shutting down |
+| `server.setting.change` | - | A server setting was changed |
+| `server.command.executed` | - | A command was run (via RCON or in-game console) |
 
 ### Wipe Events
 
 | `name` | Ship | Description |
 |--------|------|-------------|
-| `wipe.start` | — | A wipe operation began |
-| `wipe.complete` | — | A wipe operation finished |
+| `wipe.start` | - | A wipe operation began |
+| `wipe.complete` | - | A wipe operation finished |
 
 ### World Events
 
 | `name` | Ship | Description |
 |--------|------|-------------|
-| `world.loot.respawn` | — | Loot respawned across the map |
-| `world.day.change` | — | Server crossed midnight (new day) |
-| `world.weather.change` | — | Weather state changed |
+| `world.loot.respawn` | - | Loot respawned across the map |
+| `world.day.change` | - | Server crossed midnight (new day) |
+| `world.weather.change` | - | Weather state changed |
 
 ### Arena Events
 
@@ -595,7 +595,7 @@ Non-blocking but valuable additions?
 ### `player.death`
 
 Dashboard joins `victim.steamId` and `killer.steamId` against its own player
-records for display names — names are not duplicated into this event.
+records for display names - names are not duplicated into this event.
 
 `source` values:
 
@@ -603,8 +603,8 @@ records for display names — names are not duplicated into this event.
 |-------|---------|
 | `suicide` | Self-inflicted (`/kill`, grenade-on-foot, etc.) |
 | `environment` | Fall, drowning, starvation, thirst, temperature |
-| `ai` | NPC / creature kill — see `killer.npcType` |
-| `player` | PvP kill — see `killer.steamId` |
+| `ai` | NPC / creature kill - see `killer.npcType` |
+| `player` | PvP kill - see `killer.steamId` |
 
 ```json
 // PvP kill with full hit telemetry
@@ -676,7 +676,7 @@ records for display names — names are not duplicated into this event.
 }
 ```
 
-`killer`, `weapon`, and `hit` are all optional — populate whichever fields are
+`killer`, `weapon`, and `hit` are all optional - populate whichever fields are
 known at the time of the event. `hit.zone` values: `head`, `chest`, `stomach`,
 `arm_left`, `arm_right`, `leg_left`, `leg_right`, `other`.
 
@@ -731,7 +731,7 @@ known at the time of the event. `hit.zone` values: `head`, `chest`, `stomach`,
   }}
 ```
 
-`wipedAt` on `wipe.complete` is the canonical "last wiped at" timestamp —
+`wipedAt` on `wipe.complete` is the canonical "last wiped at" timestamp -
 the dashboard stores this value as-is. Prefer it over the envelope `timestamp`.
 
 ---
@@ -812,7 +812,7 @@ protocol bump. Expected values include `aimbot`, `speedhack`, `teleport`,
 
 ### `server.command.executed`
 
-Audit trail for mutating actions taken outside the dashboard UI — e.g. an admin
+Audit trail for mutating actions taken outside the dashboard UI - e.g. an admin
 running `ban` from the in-game console. The dashboard still needs this to keep
 its activity log consistent.
 
@@ -857,7 +857,7 @@ player. `reason` values: `banned`, `not_whitelisted`, `server_full`,
 
 ### `player.party.change` *(nice to have)*
 
-Live party membership change — lets the dashboard maintain party state without
+Live party membership change - lets the dashboard maintain party state without
 polling `playerparty`.
 
 ```json
@@ -903,17 +903,17 @@ polling `playerparty`.
 - Emit all events to **all** authenticated RCON connections simultaneously.
 - Unknown command names must return `UNKNOWN_COMMAND`, never crash.
 - Implement the `ping`/`pong` keepalive. Close idle connections after 90 seconds with no ping.
-- The `wipe` command should emit `wipe.start` before beginning and `wipe.complete` after — treat it as a fire-and-forget with events tracking progress.
+- The `wipe` command should emit `wipe.start` before beginning and `wipe.complete` after - treat it as a fire-and-forget with events tracking progress.
 
 ### Protocol versioning
 
-The `auth_ok` message includes a `version` field. If the server returns a version the dashboard does not support, log a warning but continue — the command/event sets are designed to be backwards-compatible.
+The `auth_ok` message includes a `version` field. If the server returns a version the dashboard does not support, log a warning but continue - the command/event sets are designed to be backwards-compatible.
 Breaking changes increment the major version (e.g. `2.0.0`) and will require a coordinated update.
 
 ### New player data commands
 
 The following are also agreed additions that will be exposed over RCON & game console:
 
-- `playerdata <steamId>` — full player record
-- `playerparty <steamId>` — party membership
-- `playerinv <steamId>` — full inventory
+- `playerdata <steamId>` - full player record
+- `playerparty <steamId>` - party membership
+- `playerinv <steamId>` - full inventory

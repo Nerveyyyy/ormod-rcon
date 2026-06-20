@@ -7,7 +7,7 @@
     &nbsp;&middot;&nbsp;
     <a href="https://github.com/Nerveyyyy/ormod-rcon/issues">Report Bug</a>
     &nbsp;&middot;&nbsp;
-    <a href="https://discord.gg/placeholder">Discord</a>
+    <a href="https://discord.gg/brazen">Discord</a>
   </p>
 </p>
 
@@ -21,12 +21,12 @@
 
 ## Community
 
-- **Discord:** [discord.gg/placeholder](https://discord.gg/placeholder)
+- **Discord:** [discord.gg/brazen](https://discord.gg/brazen)
 - **Issues:** [GitHub Issues](https://github.com/Nerveyyyy/ormod-rcon/issues)
 - **Wiki:** [Full Documentation](https://github.com/Nerveyyyy/ormod-rcon/wiki)
 
 ## License
 
-Released under [PolyForm Perimeter 1.0.0](LICENSE) — free for communities, non-profits, businesses, and any use that doesn't compete with ORMOD RCON as a hosted product. Commercial licenses for competing use cases are available; see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+Released under [PolyForm Perimeter 1.0.0](LICENSE). Free for communities, non-profits, businesses, and any use that doesn't compete with ORMOD RCON as a hosted product. Commercial licenses for competing use cases are available; see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/); see [CONTRIBUTING.md](CONTRIBUTING.md).
