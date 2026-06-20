@@ -14,7 +14,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(rootPkg.version),
   },
-  plugins: [ react() ],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(here, 'src'),

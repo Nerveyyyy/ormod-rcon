@@ -8,9 +8,10 @@ interface Props {
   previewVariant?: 'default' | 'subtle'
 }
 
-export const AuthLayout = (
-  { children, previewVariant = 'default' }: Props
-): JSX.Element => {
+export const AuthLayout = ({
+  children,
+  previewVariant = 'default',
+}: Props): JSX.Element => {
   return (
     <div className="auth-shell">
       <div className="auth-shell-grid" aria-hidden="true" />

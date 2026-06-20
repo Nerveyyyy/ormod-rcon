@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, type JSX, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  type JSX,
+  type ReactNode,
+} from 'react'
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -10,8 +16,12 @@ const STORAGE_KEY = 'ormod.authed'
 
 const AuthContext = createContext<AuthState | null>(null)
 
-export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
-  const [ isAuthenticated, setIsAuthenticated ] = useState((): boolean => {
+export const AuthProvider = ({
+  children,
+}: {
+  children: ReactNode
+}): JSX.Element => {
+  const [isAuthenticated, setIsAuthenticated] = useState((): boolean => {
     return localStorage.getItem(STORAGE_KEY) === 'true'
   })
 

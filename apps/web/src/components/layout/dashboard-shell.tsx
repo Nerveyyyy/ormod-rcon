@@ -23,7 +23,11 @@ const NAV: NavItem[] = [
   },
 ]
 
-export const DashboardShell = ({ children }: { children: ReactNode }): JSX.Element => {
+export const DashboardShell = ({
+  children,
+}: {
+  children: ReactNode
+}): JSX.Element => {
   const { logout } = useAuth()
 
   return (
@@ -53,7 +57,9 @@ export const DashboardShell = ({ children }: { children: ReactNode }): JSX.Eleme
             variant="ghost"
             size="sm"
             className="w-full justify-start text-muted-foreground"
-            onClick={() => { logout() }}
+            onClick={() => {
+              logout()
+            }}
           >
             Sign out
           </Button>

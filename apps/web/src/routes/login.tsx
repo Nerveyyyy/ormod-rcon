@@ -13,9 +13,9 @@ const LoginPage = (): JSX.Element => {
   const navigate = useNavigate()
   const { login } = useAuth()
   const { redirect: redirectTo } = Route.useSearch()
-  const [ email, setEmail ] = useState('')
-  const [ password, setPassword ] = useState('')
-  const [ showPassword, setShowPassword ] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const onSubmit = (e: FormEvent): void => {
     e.preventDefault()
@@ -31,7 +31,9 @@ const LoginPage = (): JSX.Element => {
       >
         <form className="auth-form" onSubmit={onSubmit}>
           <div className="auth-field">
-            <label className="sr-only" htmlFor="login-email">Email</label>
+            <label className="sr-only" htmlFor="login-email">
+              Email
+            </label>
             <span className="auth-field-icon" aria-hidden="true">
               <IconMail size={16} stroke={1.75} />
             </span>
@@ -41,12 +43,16 @@ const LoginPage = (): JSX.Element => {
               autoComplete="email"
               placeholder="Email Address"
               value={email}
-              onChange={(e) => { setEmail(e.target.value) }}
+              onChange={(e) => {
+                setEmail(e.target.value)
+              }}
             />
           </div>
 
           <div className="auth-field">
-            <label className="sr-only" htmlFor="login-password">Password</label>
+            <label className="sr-only" htmlFor="login-password">
+              Password
+            </label>
             <span className="auth-field-icon" aria-hidden="true">
               <IconLock size={16} stroke={1.75} />
             </span>
@@ -56,18 +62,26 @@ const LoginPage = (): JSX.Element => {
               autoComplete="current-password"
               placeholder="Password"
               value={password}
-              onChange={(e) => { setPassword(e.target.value) }}
+              onChange={(e) => {
+                setPassword(e.target.value)
+              }}
             />
             <button
               type="button"
               className="auth-field-toggle"
-              onClick={() => { setShowPassword((v) => { return !v }) }}
+              onClick={() => {
+                setShowPassword((v) => {
+                  return !v
+                })
+              }}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showPassword}
             >
-              {showPassword
-                ? <IconEyeOff size={18} stroke={1.75} />
-                : <IconEye size={18} stroke={1.75} />}
+              {showPassword ? (
+                <IconEyeOff size={18} stroke={1.75} />
+              ) : (
+                <IconEye size={18} stroke={1.75} />
+              )}
             </button>
           </div>
 
@@ -82,8 +96,10 @@ const LoginPage = (): JSX.Element => {
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): LoginSearch => {
-    const target = typeof search.redirect === 'string' ? search.redirect : undefined
-    const isInternal = !!target && target.startsWith('/') && !target.startsWith('//')
+    const target =
+      typeof search.redirect === 'string' ? search.redirect : undefined
+    const isInternal =
+      !!target && target.startsWith('/') && !target.startsWith('//')
     return { redirect: isInternal ? target : undefined }
   },
   beforeLoad: ({ context, search }) => {

@@ -6,9 +6,11 @@ interface Props {
   children: ReactNode
 }
 
-export const AuthForegroundCard = (
-  { title, subtitle, children }: Props
-): JSX.Element => {
+export const AuthForegroundCard = ({
+  title,
+  subtitle,
+  children,
+}: Props): JSX.Element => {
   return (
     <div className="auth-card">
       <header className="auth-card-head">

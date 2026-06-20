@@ -1,3 +1,3 @@
-export function hello (): string {
+export function hello(): string {
   return 'hello from ormod-rcon'
 }

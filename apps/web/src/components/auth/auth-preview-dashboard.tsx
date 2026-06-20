@@ -4,14 +4,11 @@ interface Props {
   variant?: 'default' | 'subtle'
 }
 
-export const AuthPreviewDashboard = (
-  { variant = 'default' }: Props
-): JSX.Element => {
+export const AuthPreviewDashboard = ({
+  variant = 'default',
+}: Props): JSX.Element => {
   return (
-    <div
-      className={`auth-preview auth-preview--${ variant }`}
-      aria-hidden="true"
-    >
+    <div className={`auth-preview auth-preview--${variant}`} aria-hidden="true">
       <div className="auth-preview-window">
         <div className="auth-preview-chrome">
           <span className="light r" />

@@ -13,28 +13,54 @@ describe('useAuth', () => {
   })
 
   it('starts unauthenticated when storage is empty', () => {
-    const { result } = renderHook(() => { return useAuth() }, { wrapper })
+    const { result } = renderHook(
+      () => {
+        return useAuth()
+      },
+      { wrapper }
+    )
     expect(result.current.isAuthenticated).toBe(false)
   })
 
   it('login persists to storage and flips state', () => {
-    const { result } = renderHook(() => { return useAuth() }, { wrapper })
-    act(() => { result.current.login() })
+    const { result } = renderHook(
+      () => {
+        return useAuth()
+      },
+      { wrapper }
+    )
+    act(() => {
+      result.current.login()
+    })
     expect(result.current.isAuthenticated).toBe(true)
     expect(localStorage.getItem('ormod.authed')).toBe('true')
   })
 
   it('logout clears storage and state', () => {
-    const { result } = renderHook(() => { return useAuth() }, { wrapper })
-    act(() => { result.current.login() })
-    act(() => { result.current.logout() })
+    const { result } = renderHook(
+      () => {
+        return useAuth()
+      },
+      { wrapper }
+    )
+    act(() => {
+      result.current.login()
+    })
+    act(() => {
+      result.current.logout()
+    })
     expect(result.current.isAuthenticated).toBe(false)
     expect(localStorage.getItem('ormod.authed')).toBeNull()
   })
 
   it('reads initial state from existing storage', () => {
     localStorage.setItem('ormod.authed', 'true')
-    const { result } = renderHook(() => { return useAuth() }, { wrapper })
+    const { result } = renderHook(
+      () => {
+        return useAuth()
+      },
+      { wrapper }
+    )
     expect(result.current.isAuthenticated).toBe(true)
   })
 })
