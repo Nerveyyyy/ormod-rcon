@@ -10,20 +10,26 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "lint": "pnpm -r --if-present lint",
-    "lint:fix": "pnpm -r --if-present lint:fix",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
     "test": "vitest run",
-    "build": "pnpm -r --if-present build"
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "deps:check": "syncpack lint",
+    "deps:fix": "syncpack fix"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@stylistic/eslint-plugin": "^5.10.0",
+    "@biomejs/biome": "^2.5.0",
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@ormod/config": "workspace:*",
     "@types/node": "^22.0.0",
-    "eslint": "^10.5.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
+    "syncpack": "^15.3.2",
+    "tsx": "^4.22.4",
+    "turbo": "^2.9.18",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1",
     "vitest": "^4.1.9"
   }
 }

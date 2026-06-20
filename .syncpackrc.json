@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/syncpack/dist/schema.json",
+  "semverGroups": [
+    {
+      "label": "Use caret ranges for all dependencies",
+      "range": "^",
+      "dependencies": ["**"],
+      "packages": ["**"]
+    }
+  ]
+}

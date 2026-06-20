@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.keys
 
 # OS
 .DS_Store
@@ -16,8 +17,8 @@ Thumbs.db
 # Build output
 dist/
 
-# TanStack Router generated route tree
-routeTree.gen.ts
+# Turbo
+.turbo
 
 # TLS certificates (keep certs/README.md, ignore actual certs)
 certs/*.pem

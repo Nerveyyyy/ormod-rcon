@@ -17,9 +17,9 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "biome check .",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },
@@ -28,5 +28,8 @@
     "ormod",
     "websocket",
     "game-server"
-  ]
+  ],
+  "devDependencies": {
+    "@ormod/config": "workspace:*"
+  }
 }
