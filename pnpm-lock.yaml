@@ -90,12 +90,18 @@ importers:
       '@fastify/under-pressure':
         specifier: ^9.0.3
         version: 9.0.3
+      '@ormod/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       better-auth:
         specifier: ^1.6.0
         version: 1.6.20(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(kysely@0.29.2)(postgres@3.4.9))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.9(@types/node@26.0.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.3)))
       close-with-grace:
         specifier: ^2.1.0
         version: 2.5.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(kysely@0.29.2)(postgres@3.4.9)
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -106,7 +112,7 @@ importers:
         specifier: ^1.2.18
         version: 1.2.18
       uuidv7:
-        specifier: 1.2.1
+        specifier: ^1.2.1
         version: 1.2.1
     devDependencies:
       '@ormod/config':
@@ -203,7 +209,7 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
       uuidv7:
-        specifier: 1.2.1
+        specifier: ^1.2.1
         version: 1.2.1
     devDependencies:
       '@ormod/config':
