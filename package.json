@@ -10,7 +10,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "dotenvx run --ignore MISSING_ENV_FILE -- turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
@@ -24,6 +24,7 @@
     "@biomejs/biome": "^2.5.0",
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
+    "@dotenvx/dotenvx": "^1.75.0",
     "@ormod/config": "workspace:*",
     "@types/node": "^22.0.0",
     "syncpack": "^15.3.2",
