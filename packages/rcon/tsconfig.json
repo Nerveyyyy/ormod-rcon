@@ -1,7 +1,9 @@
 {
   "extends": "@ormod/config/typescript/base.json",
   "compilerOptions": {
-    "noEmit": true
+    "rootDir": "src",
+    "outDir": "dist",
+    "declarationMap": false
   },
-  "include": ["src", "test"]
+  "include": ["src"]
 }

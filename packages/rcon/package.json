@@ -17,10 +17,9 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },
   "keywords": [
