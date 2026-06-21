@@ -1,6 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
-// scoped so user-owned (TOTP seeds) and tenant-owned (RCON passwords) can use different key material later
 export interface SecretEncrypter {
   encryptUserScoped(plaintext: string): string
   decryptUserScoped(ciphertext: string): string
@@ -12,7 +11,6 @@ const ALGO = 'aes-256-gcm'
 const KEY_LEN_BYTES = 32
 const NONCE_LEN_BYTES = 12
 const TAG_LEN_BYTES = 16
-// v1: prefix leaves room to change algorithm without a schema migration
 const CIPHERTEXT_VERSION = 'v1'
 
 const encryptWithKey = (
@@ -21,7 +19,9 @@ const encryptWithKey = (
   plaintext: string
 ): string => {
   const nonce = randomBytes(NONCE_LEN_BYTES)
-  const cipher = createCipheriv(ALGO, key, nonce)
+  const cipher = createCipheriv(ALGO, key, nonce, {
+    authTagLength: TAG_LEN_BYTES,
+  })
   const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
   const payload = Buffer.concat([enc, tag]).toString('base64')
@@ -48,14 +48,18 @@ const decryptWithKey = (
   }
   const nonce = Buffer.from(nonceB64, 'base64')
   const payload = Buffer.from(payloadB64, 'base64')
+  if (payload.length < TAG_LEN_BYTES) {
+    throw new Error('malformed ciphertext: payload too short')
+  }
   const ct = payload.subarray(0, payload.length - TAG_LEN_BYTES)
   const tag = payload.subarray(payload.length - TAG_LEN_BYTES)
-  const decipher = createDecipheriv(ALGO, key, nonce)
+  const decipher = createDecipheriv(ALGO, key, nonce, {
+    authTagLength: TAG_LEN_BYTES,
+  })
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8')
 }
 
-// tenantId accepted for interface symmetry, ignored in the single-key implementation
 export const createSingleKeyEncrypter = (
   masterKey: Buffer
 ): SecretEncrypter => {
@@ -82,7 +86,6 @@ export const createSingleKeyEncrypter = (
   }
 }
 
-// generate with: openssl rand -base64 32
 export const loadMasterKeyFromEnv = (envValue: string | undefined): Buffer => {
   if (!envValue) {
     throw new Error('ORMOD_SECRET_KEY is not set')

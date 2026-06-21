@@ -43,4 +43,11 @@ describe('SecretEncrypter', () => {
     const loaded = loadMasterKeyFromEnv(randomBytes(32).toString('base64'))
     expect(loaded.length).toBe(32)
   })
+
+  it('rejects ciphertext with a too-short payload', () => {
+    const enc = createSingleKeyEncrypter(key)
+    expect(() => enc.decryptUserScoped('v1:AAAA:AAAA')).toThrow(
+      /payload too short/
+    )
+  })
 })
