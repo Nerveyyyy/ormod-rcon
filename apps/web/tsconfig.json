@@ -3,16 +3,11 @@
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true,
-    "composite": false,
-    "declaration": false,
-    "declarationMap": false,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client"],
     "moduleResolution": "Bundler",
     "module": "ESNext",
-    "allowImportingTsExtensions": false,
-    "verbatimModuleSyntax": false,
     "paths": {
       "@/*": ["./src/*"]
     }
