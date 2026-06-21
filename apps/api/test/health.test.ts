@@ -1,9 +1,14 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest'
+import Fastify, { type FastifyInstance } from 'fastify'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import health from '../src/routes/health.js'
 
-import { loadConfig } from '../src/config.js'
-import { buildServer } from '../src/server.js'
+const buildTestApp = async (): Promise<FastifyInstance> => {
+  const app = Fastify()
+  await app.register(health)
+  return app
+}
 
-const app = buildServer(loadConfig({ NODE_ENV: 'test' }))
+const app = await buildTestApp()
 
 beforeAll(async () => {
   await app.ready()

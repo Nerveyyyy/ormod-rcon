@@ -1,30 +1,32 @@
-import { Type } from '@fastify/type-provider-typebox'
-import type { FastifyInstance } from 'fastify'
+import {
+  type FastifyPluginAsyncTypebox,
+  Type,
+} from '@fastify/type-provider-typebox'
+import { version } from '../lib/version.js'
 
-const HealthResponse = Type.Object({
-  status: Type.Literal('ok'),
-  uptime: Type.Number(),
-  version: Type.String(),
-})
-
-export async function healthRoutes(app: FastifyInstance): Promise<void> {
-  app.get(
+const health: FastifyPluginAsyncTypebox = async (fastify) => {
+  fastify.get(
     '/health',
     {
       schema: {
-        summary: 'Liveness probe',
-        tags: ['system'],
         response: {
-          200: HealthResponse,
+          200: Type.Object({
+            status: Type.Literal('ok'),
+            uptime: Type.Number(),
+            version: Type.String(),
+          }),
         },
+        tags: ['system'],
       },
     },
     async () => {
       return {
         status: 'ok' as const,
         uptime: process.uptime(),
-        version: app.config.version,
+        version,
       }
     }
   )
 }
+
+export default health

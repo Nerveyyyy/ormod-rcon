@@ -1,19 +1,22 @@
-import { loadConfig } from './config.js'
-import { buildServer } from './server.js'
+import closeWithGrace from 'close-with-grace'
+import { buildApp } from './app.js'
 
-const config = loadConfig()
-const app = buildServer(config)
+const app = await buildApp()
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, async () => {
+closeWithGrace({ delay: 500 }, async ({ signal, err }) => {
+  if (err) {
+    app.log.error({ err }, 'shutting down after error')
+  } else {
     app.log.info(`received ${signal}, shutting down`)
-    await app.close()
-    process.exit(0)
-  })
-}
+  }
+  await app.close()
+})
 
 try {
-  await app.listen({ host: config.host, port: config.port })
+  await app.listen({
+    host: app.config.HOST,
+    port: app.config.PORT,
+  })
 } catch (err) {
   app.log.error(err)
   process.exit(1)
