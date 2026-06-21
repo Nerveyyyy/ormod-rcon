@@ -8,6 +8,6 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/routeTree.gen.ts", "!**/*.css", "!**/*.svg"]
+    "includes": ["**", "!**/routeTree.gen.ts", "!**/*.css", "!**/*.svg", "!**/migrations/**"]
   }
 }
