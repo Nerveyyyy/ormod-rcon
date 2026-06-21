@@ -64,9 +64,15 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       )
 
       reply.status(response.status)
+      const setCookies = response.headers.getSetCookie()
       response.headers.forEach((value, key) => {
-        void reply.header(key, value)
+        if (key !== 'set-cookie') {
+          void reply.header(key, value)
+        }
       })
+      if (setCookies.length > 0) {
+        void reply.header('set-cookie', setCookies)
+      }
       return reply.send(response.body ? await response.text() : null)
     },
   })
