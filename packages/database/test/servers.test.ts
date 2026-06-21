@@ -19,9 +19,10 @@ describe('servers table', () => {
     )
   })
 
-  it('references organization with a foreign key', () => {
+  it('references organization with a cascading foreign key', () => {
     const fks = getTableConfig(servers).foreignKeys
     expect(fks.length).toBe(1)
+    expect(fks[0]?.onDelete).toBe('cascade')
   })
 
   it('enforces tenant-scoped unique server names', () => {

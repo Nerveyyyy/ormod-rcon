@@ -1,3 +1,4 @@
+import { relations } from 'drizzle-orm'
 import {
   boolean,
   integer,
@@ -29,5 +30,17 @@ export const servers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [unique().on(table.organizationId, table.name)]
+  (table) => [
+    unique('servers_organization_id_name_unique').on(
+      table.organizationId,
+      table.name
+    ),
+  ]
 )
+
+export const serversRelations = relations(servers, ({ one }) => ({
+  organization: one(organization, {
+    fields: [servers.organizationId],
+    references: [organization.id],
+  }),
+}))
