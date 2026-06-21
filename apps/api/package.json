@@ -1,9 +1,12 @@
 {
   "name": "@ormod/api",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Fastify control API for the ORMOD:Directive RCON dashboard.",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
@@ -29,17 +32,18 @@
     "@fastify/swagger-ui": "^6.0.0",
     "@fastify/type-provider-typebox": "^6.1.0",
     "@fastify/under-pressure": "^9.0.3",
+    "@ormod/auth": "workspace:*",
     "@ormod/database": "workspace:*",
-    "better-auth": "^1.6.0",
+    "@ormod/redis": "workspace:*",
     "close-with-grace": "^2.1.0",
-    "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
     "fastify-plugin": "^6.0.0",
-    "typebox": "^1.2.18",
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {
     "@ormod/config": "workspace:*",
+    "@testcontainers/postgresql": "^12.0.3",
+    "@testcontainers/redis": "^12.0.3",
     "pino-pretty": "^13.1.3"
   }
 }
