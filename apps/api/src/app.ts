@@ -1,10 +1,11 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { uuidv7 } from "uuidv7"
+import { uuidv7 } from 'uuidv7'
 import autoload from '@fastify/autoload'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify'
 import { loggerOptions } from './lib/logger.js'
+import env, { autoConfig as envConfig } from './plugins/env.js'
 
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
@@ -32,16 +33,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   }).withTypeProvider<TypeBoxTypeProvider>()
 
+  await app.register(env, envConfig())
   await app.register(autoload, {
     dir: join(rootDir, 'plugins/external'),
     options: {},
   })
   await app.register(autoload, {
     dir: join(rootDir, 'plugins/app'),
-    options: {},
-  })
-  await app.register(autoload, {
-    dir: join(rootDir, 'hooks'),
     options: {},
   })
   await app.register(autoload, {
@@ -79,13 +77,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setNotFoundHandler(
     {
       preHandler: app.rateLimit({
-        max: 3,
-        timeWindow: 500,
+        max: 20,
+        timeWindow: 1000,
       }),
     },
     (request, reply) => {
       if (
-        app.config.SERVE_WEB_DIR &&
+        app.serveWeb &&
         request.method === 'GET' &&
         !request.url.startsWith('/api')
       ) {

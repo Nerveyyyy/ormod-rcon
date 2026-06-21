@@ -1,8 +1,9 @@
+import type { FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
-import { requestLogLevel } from '../lib/logger.js'
+import { requestLogLevel } from '../../lib/logger.js'
 
 export default fp(
-  async (app) => {
+  async (app: FastifyInstance) => {
     app.addHook('onResponse', async (request, reply) => {
       const level = requestLogLevel(reply.statusCode)
       request.log[level](
