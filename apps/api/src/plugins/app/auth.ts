@@ -1,60 +1,50 @@
-import { betterAuth } from 'better-auth'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { fromNodeHeaders } from 'better-auth/node'
-import { captcha } from 'better-auth/plugins'
-import { authBaseOptions, authPlugins } from '@ormod/database/auth'
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import { createAuth, fromNodeHeaders, type Auth } from '@ormod/auth'
+import { createRedisClient } from '@ormod/redis'
+import type { FastifyPluginAsync } from 'fastify'
 import fp from 'fastify-plugin'
 import { isPublicPath } from './is-public-path.js'
-
-const createAuth = (fastify: FastifyInstance) => {
-  const captchaProvider = fastify.config.CAPTCHA_PROVIDER
-  const captchaSecretKey = fastify.config.CAPTCHA_SECRET_KEY
-  const plugins = [
-    ...authPlugins,
-    ...(captchaProvider && captchaSecretKey
-      ? [
-          captcha({
-            provider: captchaProvider,
-            secretKey: captchaSecretKey,
-          }),
-        ]
-      : []),
-  ]
-
-  return betterAuth({
-    ...authBaseOptions,
-    database: drizzleAdapter(fastify.db, { provider: 'pg' }),
-    secret: fastify.config.BETTER_AUTH_SECRET,
-    baseURL: fastify.config.PUBLIC_URL,
-    trustedOrigins: [fastify.config.CORS_ORIGIN, fastify.config.PUBLIC_URL],
-    plugins,
-  })
-}
-
-type Auth = ReturnType<typeof createAuth>
 
 declare module 'fastify' {
   interface FastifyInstance {
     auth: Auth
   }
-  interface FastifyRequest {
-    user: Auth['$Infer']['Session']['user'] | null
-  }
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
-  const auth = createAuth(fastify)
+  const captchaProvider = fastify.config.CAPTCHA_PROVIDER
+  const captchaSecretKey = fastify.config.CAPTCHA_SECRET_KEY
+
+  const redis = createRedisClient(fastify.config.REDIS_URL, {
+    onError: (err) => {
+      fastify.log.error({ err }, 'redis client error')
+    },
+  })
+  fastify.addHook('onClose', async () => {
+    await redis.close()
+  })
+
+  const auth = createAuth({
+    db: fastify.db,
+    secret: fastify.config.BETTER_AUTH_SECRET,
+    baseURL: fastify.config.PUBLIC_URL,
+    trustedOrigins: [
+      fastify.config.PUBLIC_URL,
+      ...(fastify.config.WEB_ORIGIN ? [fastify.config.WEB_ORIGIN] : []),
+    ],
+    redisClient: redis.client,
+    ipAddressHeader: fastify.config.TRUSTED_IP_HEADER,
+    captcha:
+      captchaProvider && captchaSecretKey
+        ? { provider: captchaProvider, secretKey: captchaSecretKey }
+        : undefined,
+  })
   fastify.decorate('auth', auth)
 
   fastify.route({
     method: ['GET', 'POST'],
     url: '/api/auth/*',
     handler: async (request, reply) => {
-      const url = new URL(
-        request.url,
-        `http://${request.headers.host ?? 'localhost'}`
-      )
+      const url = new URL(request.url, fastify.config.PUBLIC_URL)
       const response = await auth.handler(
         new Request(url, {
           method: request.method,
@@ -77,17 +67,18 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     },
   })
 
-  fastify.decorateRequest('user', null)
-
   fastify.addHook('onRequest', async (request) => {
-    if (request.url.startsWith('/api/auth/')) {
+    if (isPublicPath(request.url)) {
       return
     }
     try {
       const session = await auth.api.getSession({
         headers: fromNodeHeaders(request.headers),
       })
-      request.user = session?.user ?? null
+      if (session) {
+        request.requestContext.set('user', session.user)
+        request.requestContext.set('sessionId', session.session.id)
+      }
     } catch (err) {
       request.log.warn({ err }, 'failed to resolve session')
     }
@@ -97,7 +88,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     if (isPublicPath(request.url)) {
       return
     }
-    if (!request.user) {
+    if (!request.requestContext.get('user')) {
       return reply.unauthorized('not signed in')
     }
   })
