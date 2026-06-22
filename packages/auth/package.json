@@ -1,0 +1,37 @@
+{
+  "name": "@ormod/auth",
+  "version": "0.0.1",
+  "description": "better-auth setup for ormod-rcon: createAuth, plugins, and schema generation.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "db:generate": "pnpm dlx @better-auth/cli@latest generate --config ./src/createAuth.ts --output ../database/src/schema/auth.ts --yes && biome check --write ../database/src/schema/auth.ts"
+  },
+  "dependencies": {
+    "@better-auth/api-key": "^1.6.0",
+    "@better-auth/redis-storage": "^1.6.0",
+    "@ormod/database": "workspace:*",
+    "@ormod/redis": "workspace:*",
+    "better-auth": "^1.6.0",
+    "drizzle-orm": "^0.45.2",
+    "uuidv7": "^1.2.1"
+  },
+  "devDependencies": {
+    "@ormod/config": "workspace:*"
+  }
+}
