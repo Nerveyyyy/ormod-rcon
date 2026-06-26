@@ -29,6 +29,11 @@ export default defineConfig({
       '@': path.resolve(here, 'src'),
     },
   },
+  build: {
+    modulePreload: {
+      polyfill: false,
+    },
+  },
   server: {
     port: 8080,
     proxy: {
