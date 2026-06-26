@@ -50,6 +50,14 @@ describe.skipIf(!RUN)('first-time setup', () => {
     return { res, cookie: cookie ?? '' }
   }
 
+  let ownerCookie = ''
+  const ownerSession = async () => {
+    if (!ownerCookie) {
+      ownerCookie = (await signIn()).cookie
+    }
+    return ownerCookie
+  }
+
   it('rejects public sign-up', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -81,7 +89,30 @@ describe.skipIf(!RUN)('first-time setup', () => {
   })
 
   it('reports mustChangePassword for the seeded owner', async () => {
-    const { cookie } = await signIn()
+    const cookie = await ownerSession()
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { cookie },
+    })
+    expect(me.statusCode).toBe(200)
+    expect(me.json().mustChangePassword).toBe(true)
+  })
+
+  it('keeps mustChangePassword true after a failed password change', async () => {
+    const cookie = await ownerSession()
+
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie },
+      payload: {
+        currentPassword: 'wrongpassword',
+        newPassword: 'newpassword123',
+      },
+    })
+    expect(changed.statusCode).toBeGreaterThanOrEqual(400)
+
     const me = await app.inject({
       method: 'GET',
       url: '/api/me',
@@ -92,7 +123,7 @@ describe.skipIf(!RUN)('first-time setup', () => {
   })
 
   it('clears mustChangePassword after a password change', async () => {
-    const { cookie } = await signIn()
+    const cookie = await ownerSession()
 
     const changed = await app.inject({
       method: 'POST',

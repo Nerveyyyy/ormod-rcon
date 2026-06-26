@@ -2,6 +2,7 @@ import {
   type FastifyPluginAsyncTypebox,
   Type,
 } from '@fastify/type-provider-typebox'
+import { mustChangePasswordFor } from '@ormod/database'
 
 const me: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
@@ -32,7 +33,10 @@ const me: FastifyPluginAsyncTypebox = async (fastify) => {
         name: user.name,
         emailVerified: user.emailVerified,
         image: user.image ?? null,
-        mustChangePassword: user.mustChangePassword ?? false,
+        mustChangePassword: await mustChangePasswordFor(
+          request.server.db,
+          user.id
+        ),
       }
     }
   )
