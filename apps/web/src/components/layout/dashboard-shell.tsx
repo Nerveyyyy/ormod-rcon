@@ -1,5 +1,5 @@
 import type { ComponentType, JSX, ReactNode } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { IconLayoutDashboard, IconUsers } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { useSignOut } from '@/features/auth/mutations'
@@ -29,6 +29,7 @@ export const DashboardShell = ({
   children: ReactNode
 }): JSX.Element => {
   const signOut = useSignOut()
+  const navigate = useNavigate()
 
   return (
     <div className="flex min-h-screen">
@@ -58,7 +59,11 @@ export const DashboardShell = ({
             size="sm"
             className="w-full justify-start text-muted-foreground"
             onClick={() => {
-              signOut.mutate()
+              signOut.mutate(undefined, {
+                onSuccess: () => {
+                  void navigate({ to: '/login' })
+                },
+              })
             }}
           >
             Sign out
