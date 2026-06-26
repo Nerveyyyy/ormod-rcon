@@ -1,9 +1,15 @@
-import { useState, type FormEvent, type JSX } from 'react'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { IconEye, IconEyeOff, IconLock, IconMail } from '@tabler/icons-react'
+import { useState, type JSX } from 'react'
+import {
+  createFileRoute,
+  isRedirect,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { AuthLayout } from '@/components/auth/auth-layout'
 import { AuthForegroundCard } from '@/components/auth/auth-foreground-card'
-import { useAuth } from '@/lib/auth'
+import { SignInForm } from '@/features/auth/sign-in-form'
+import { TwoFactorForm } from '@/features/auth/two-factor-form'
+import { meQueryOptions } from '@/features/auth/queries'
 
 interface LoginSearch {
   redirect?: string
@@ -11,16 +17,24 @@ interface LoginSearch {
 
 const LoginPage = (): JSX.Element => {
   const navigate = useNavigate()
-  const { login } = useAuth()
   const { redirect: redirectTo } = Route.useSearch()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [step, setStep] = useState<'credentials' | 'twoFactor'>('credentials')
 
-  const onSubmit = (e: FormEvent): void => {
-    e.preventDefault()
-    login()
+  const onComplete = (): void => {
     void navigate({ to: redirectTo ?? '/' })
+  }
+
+  if (step === 'twoFactor') {
+    return (
+      <AuthLayout>
+        <AuthForegroundCard
+          title="Two-factor authentication"
+          subtitle="Enter the code from your authenticator app."
+        >
+          <TwoFactorForm onComplete={onComplete} />
+        </AuthForegroundCard>
+      </AuthLayout>
+    )
   }
 
   return (
@@ -29,66 +43,12 @@ const LoginPage = (): JSX.Element => {
         title="Welcome back"
         subtitle="Sign in to your operator dashboard."
       >
-        <form className="auth-form" onSubmit={onSubmit}>
-          <div className="auth-field">
-            <label className="sr-only" htmlFor="login-email">
-              Email
-            </label>
-            <span className="auth-field-icon" aria-hidden="true">
-              <IconMail size={16} stroke={1.75} />
-            </span>
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              placeholder="Email Address"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-              }}
-            />
-          </div>
-
-          <div className="auth-field">
-            <label className="sr-only" htmlFor="login-password">
-              Password
-            </label>
-            <span className="auth-field-icon" aria-hidden="true">
-              <IconLock size={16} stroke={1.75} />
-            </span>
-            <input
-              id="login-password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value)
-              }}
-            />
-            <button
-              type="button"
-              className="auth-field-toggle"
-              onClick={() => {
-                setShowPassword((v) => {
-                  return !v
-                })
-              }}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? (
-                <IconEyeOff size={18} stroke={1.75} />
-              ) : (
-                <IconEye size={18} stroke={1.75} />
-              )}
-            </button>
-          </div>
-
-          <button type="submit" className="auth-submit">
-            Sign in
-          </button>
-        </form>
+        <SignInForm
+          onTwoFactorRequired={() => {
+            setStep('twoFactor')
+          }}
+          onComplete={onComplete}
+        />
       </AuthForegroundCard>
     </AuthLayout>
   )
@@ -102,9 +62,19 @@ export const Route = createFileRoute('/login')({
       !!target && target.startsWith('/') && !target.startsWith('//')
     return { redirect: isInternal ? target : undefined }
   },
-  beforeLoad: ({ context, search }) => {
-    if (context.auth.isAuthenticated) {
-      throw redirect({ to: search.redirect ?? '/' })
+  beforeLoad: async ({ context, search }) => {
+    try {
+      const me = await context.queryClient.ensureQueryData(meQueryOptions)
+      throw redirect({
+        to: me.mustChangePassword
+          ? '/change-password'
+          : (search.redirect ?? '/'),
+      })
+    } catch (error) {
+      if (isRedirect(error)) {
+        throw error
+      }
+      // no session: stay on the login page
     }
   },
   component: LoginPage,
