@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { UseMutationResult } from '@tanstack/react-query'
+import type { QueryClient, UseMutationResult } from '@tanstack/react-query'
 import { authClient } from '@/lib/auth-client'
 import { ApiError } from '@/lib/api'
 import { meKey } from './queries'
@@ -20,11 +20,18 @@ const unwrap = <T>(res: AuthResult): T => {
   return res.data as T
 }
 
+// the me query has no reactive observer, so invalidation alone never refetches
+// it; force the refetch and await it so guards read fresh state after navigation
+const refetchMe = (queryClient: QueryClient): Promise<void> => {
+  return queryClient.invalidateQueries({ queryKey: meKey, refetchType: 'all' })
+}
+
 export const useSignIn = (): UseMutationResult<
   { twoFactorRedirect?: boolean },
   Error,
   { email: string; password: string }
 > => {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({
       email,
@@ -33,6 +40,13 @@ export const useSignIn = (): UseMutationResult<
       twoFactorRedirect?: boolean
     }> => {
       return unwrap(await authClient.signIn.email({ email, password }))
+    },
+    onSuccess: async (data): Promise<void> => {
+      // a 2FA challenge has no session yet, so there is nothing to refresh
+      if (data.twoFactorRedirect) {
+        return
+      }
+      await refetchMe(queryClient)
     },
   })
 }
@@ -49,8 +63,8 @@ export const useVerifyTotp = (): UseMutationResult<
         await authClient.twoFactor.verifyTotp({ code, trustDevice })
       )
     },
-    onSuccess: (): void => {
-      void queryClient.invalidateQueries({ queryKey: meKey })
+    onSuccess: (): Promise<void> => {
+      return refetchMe(queryClient)
     },
   })
 }
@@ -65,8 +79,8 @@ export const useVerifyBackupCode = (): UseMutationResult<
     mutationFn: async ({ code }): Promise<unknown> => {
       return unwrap(await authClient.twoFactor.verifyBackupCode({ code }))
     },
-    onSuccess: (): void => {
-      void queryClient.invalidateQueries({ queryKey: meKey })
+    onSuccess: (): Promise<void> => {
+      return refetchMe(queryClient)
     },
   })
 }
@@ -83,8 +97,8 @@ export const useChangePassword = (): UseMutationResult<
         await authClient.changePassword({ currentPassword, newPassword })
       )
     },
-    onSuccess: (): void => {
-      void queryClient.invalidateQueries({ queryKey: meKey })
+    onSuccess: (): Promise<void> => {
+      return refetchMe(queryClient)
     },
   })
 }
@@ -95,8 +109,8 @@ export const useSignOut = (): UseMutationResult<unknown, Error, void> => {
     mutationFn: async (): Promise<unknown> => {
       return unwrap(await authClient.signOut())
     },
-    onSuccess: (): void => {
-      void queryClient.invalidateQueries({ queryKey: meKey })
+    onSuccess: (): Promise<void> => {
+      return refetchMe(queryClient)
     },
   })
 }

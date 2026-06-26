@@ -20,6 +20,8 @@ vi.mock('@/lib/auth-client', () => {
 
 import { useSignIn, useVerifyTotp } from '@/features/auth/mutations'
 
+const meRefetch = { queryKey: ['me'], refetchType: 'all' }
+
 const makeWrapper = (
   client: QueryClient
 ): ((props: { children: ReactNode }) => JSX.Element) => {
@@ -51,6 +53,47 @@ describe('auth mutations', () => {
     await waitFor(() => {
       expect(result.current.data).toEqual({ twoFactorRedirect: true })
     })
+  })
+
+  it('useSignIn refetches the me query when no 2FA is required', async () => {
+    signInEmail.mockResolvedValue({ data: {}, error: null })
+    const client = new QueryClient()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(
+      () => {
+        return useSignIn()
+      },
+      { wrapper: makeWrapper(client) }
+    )
+
+    result.current.mutate({ email: 'a@b.co', password: 'pw' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(spy).toHaveBeenCalledWith(meRefetch)
+  })
+
+  it('useSignIn does not refetch me on a 2FA challenge', async () => {
+    signInEmail.mockResolvedValue({
+      data: { twoFactorRedirect: true },
+      error: null,
+    })
+    const client = new QueryClient()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(
+      () => {
+        return useSignIn()
+      },
+      { wrapper: makeWrapper(client) }
+    )
+
+    result.current.mutate({ email: 'a@b.co', password: 'pw' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(spy).not.toHaveBeenCalled()
   })
 
   it('useSignIn throws ApiError on an auth error', async () => {
@@ -93,7 +136,7 @@ describe('auth mutations', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(spy).toHaveBeenCalledWith({ queryKey: ['me'] })
+    expect(spy).toHaveBeenCalledWith(meRefetch)
     expect(verifyTotp).toHaveBeenCalledWith({
       code: '123456',
       trustDevice: true,
