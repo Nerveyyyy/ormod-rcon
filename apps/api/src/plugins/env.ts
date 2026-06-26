@@ -12,6 +12,7 @@ const schema = Type.Object({
   REDIS_URL: Type.String({ minLength: 1 }),
   BETTER_AUTH_SECRET: Type.String({ minLength: 32 }),
   ORMOD_SECRET_KEY: Type.String({ minLength: 1 }),
+  OWNER_PASSWORD: Type.String({ default: 'changeme', minLength: 8 }),
   CAPTCHA_PROVIDER: Type.Optional(
     Type.Union([
       Type.Literal('cloudflare-turnstile'),
