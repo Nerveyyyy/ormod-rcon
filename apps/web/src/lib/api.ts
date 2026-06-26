@@ -29,12 +29,12 @@ export const apiFetch = async <T>(
   init?: RequestInit
 ): Promise<T> => {
   const res = await fetch(apiUrl(path), {
+    ...init,
     credentials: 'include',
     headers: {
       'content-type': 'application/json',
       ...init?.headers,
     },
-    ...init,
   })
 
   if (!res.ok) {

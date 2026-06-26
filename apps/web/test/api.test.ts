@@ -53,4 +53,25 @@ describe('apiFetch', () => {
       message: 'nope',
     })
   })
+
+  it('keeps json content-type when a caller passes custom headers', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('/api/me', { headers: { 'x-custom': 'y' } })
+
+    const init = (
+      fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    )[1]
+    expect(init.credentials).toBe('include')
+    expect(init.headers).toMatchObject({
+      'content-type': 'application/json',
+      'x-custom': 'y',
+    })
+  })
 })
