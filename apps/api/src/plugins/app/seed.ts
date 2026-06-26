@@ -14,6 +14,11 @@ const seedPlugin: FastifyPluginAsync = async (fastify) => {
       'seeded owner account; sign in and change the password'
     )
   }
+  if (fastify.config.OWNER_PASSWORD === 'changeme') {
+    fastify.log.warn(
+      'OWNER_PASSWORD is the published default; set a strong value and restart'
+    )
+  }
 }
 
 export default fp(seedPlugin, {
