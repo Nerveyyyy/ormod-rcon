@@ -79,4 +79,15 @@ describe.skipIf(!RUN)('first-time setup', () => {
     const seeded = await seedOwner(app.auth, app.db, 'changeme')
     expect(seeded).toBe(false)
   })
+
+  it('reports mustChangePassword for the seeded owner', async () => {
+    const { cookie } = await signIn()
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { cookie },
+    })
+    expect(me.statusCode).toBe(200)
+    expect(me.json().mustChangePassword).toBe(true)
+  })
 })

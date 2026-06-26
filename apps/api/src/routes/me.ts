@@ -15,6 +15,7 @@ const me: FastifyPluginAsyncTypebox = async (fastify) => {
             name: Type.String(),
             emailVerified: Type.Boolean(),
             image: Type.Union([Type.String(), Type.Null()]),
+            mustChangePassword: Type.Boolean(),
           }),
         },
         tags: ['user'],
@@ -31,6 +32,7 @@ const me: FastifyPluginAsyncTypebox = async (fastify) => {
         name: user.name,
         emailVerified: user.emailVerified,
         image: user.image ?? null,
+        mustChangePassword: user.mustChangePassword ?? false,
       }
     }
   )
