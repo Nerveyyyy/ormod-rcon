@@ -2,6 +2,7 @@ import { uuidv7 } from 'uuidv7'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { captcha, organization, twoFactor } from 'better-auth/plugins'
+import { createAuthMiddleware } from 'better-auth/api'
 import { apiKey } from '@better-auth/api-key'
 import { redisStorage } from '@better-auth/redis-storage'
 import type { BetterAuthOptions, BetterAuthPlugin } from 'better-auth'
@@ -41,6 +42,20 @@ export const authBaseOptions = {
         input: false,
       },
     },
+  },
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/change-password') {
+        return
+      }
+      const userId = ctx.context.session?.user?.id
+      if (!userId) {
+        return
+      }
+      await ctx.context.internalAdapter.updateUser(userId, {
+        mustChangePassword: false,
+      })
+    }),
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7,

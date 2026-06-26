@@ -90,4 +90,23 @@ describe.skipIf(!RUN)('first-time setup', () => {
     expect(me.statusCode).toBe(200)
     expect(me.json().mustChangePassword).toBe(true)
   })
+
+  it('clears mustChangePassword after a password change', async () => {
+    const { cookie } = await signIn()
+
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie },
+      payload: { currentPassword: 'changeme', newPassword: 'newpassword123' },
+    })
+    expect(changed.statusCode).toBe(200)
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { cookie },
+    })
+    expect(me.json().mustChangePassword).toBe(false)
+  })
 })
