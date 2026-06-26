@@ -8,10 +8,6 @@ import type { JSX } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { meQueryOptions } from '@/features/auth/queries'
 
-const isRedirectError = (error: unknown): boolean => {
-  return isRedirect(error)
-}
-
 const AppLayout = (): JSX.Element => {
   return (
     <DashboardShell>
@@ -25,10 +21,13 @@ export const Route = createFileRoute('/_app')({
     try {
       const me = await context.queryClient.ensureQueryData(meQueryOptions)
       if (me.mustChangePassword) {
-        throw redirect({ to: '/change-password' })
+        throw redirect({
+          to: '/login',
+          search: { redirect: location.href },
+        })
       }
     } catch (error) {
-      if (error instanceof Response || isRedirectError(error)) {
+      if (error instanceof Response || isRedirect(error)) {
         throw error
       }
       throw redirect({

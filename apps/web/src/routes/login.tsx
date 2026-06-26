@@ -5,11 +5,16 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { AuthLayout } from '@/components/auth/auth-layout'
 import { AuthForegroundCard } from '@/components/auth/auth-foreground-card'
 import { SignInForm } from '@/features/auth/sign-in-form'
 import { TwoFactorForm } from '@/features/auth/two-factor-form'
-import { meQueryOptions } from '@/features/auth/queries'
+import { ChangePasswordForm } from '@/features/auth/change-password-form'
+import { type Me, meKey, meQueryOptions } from '@/features/auth/queries'
+
+type Step = 'credentials' | 'twoFactor' | 'changePassword'
 
 interface LoginSearch {
   redirect?: string
@@ -17,11 +22,44 @@ interface LoginSearch {
 
 const LoginPage = (): JSX.Element => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { redirect: redirectTo } = Route.useSearch()
-  const [step, setStep] = useState<'credentials' | 'twoFactor'>('credentials')
+  const [step, setStep] = useState<Step>(() => {
+    const me = queryClient.getQueryData<Me>(meKey)
+    return me?.mustChangePassword ? 'changePassword' : 'credentials'
+  })
 
-  const onComplete = (): void => {
+  const finish = (): void => {
     void navigate({ to: redirectTo ?? '/' })
+  }
+
+  // sign-in / 2FA have refreshed the me query by now; a forced account moves to
+  // the change-password step, everyone else goes through to the dashboard
+  const afterAuth = (): void => {
+    const me = queryClient.getQueryData<Me>(meKey)
+    if (me?.mustChangePassword) {
+      setStep('changePassword')
+      return
+    }
+    finish()
+  }
+
+  if (step === 'changePassword') {
+    return (
+      <AuthLayout>
+        <AuthForegroundCard
+          title="Update your password"
+          subtitle="Set a new password before continuing to the dashboard."
+        >
+          <ChangePasswordForm
+            onComplete={() => {
+              toast.success('Password updated')
+              finish()
+            }}
+          />
+        </AuthForegroundCard>
+      </AuthLayout>
+    )
   }
 
   if (step === 'twoFactor') {
@@ -31,7 +69,7 @@ const LoginPage = (): JSX.Element => {
           title="Two-factor authentication"
           subtitle="Enter the code from your authenticator app."
         >
-          <TwoFactorForm onComplete={onComplete} />
+          <TwoFactorForm onComplete={afterAuth} />
         </AuthForegroundCard>
       </AuthLayout>
     )
@@ -47,7 +85,7 @@ const LoginPage = (): JSX.Element => {
           onTwoFactorRequired={() => {
             setStep('twoFactor')
           }}
-          onComplete={onComplete}
+          onComplete={afterAuth}
         />
       </AuthForegroundCard>
     </AuthLayout>
@@ -65,11 +103,10 @@ export const Route = createFileRoute('/login')({
   beforeLoad: async ({ context, search }) => {
     try {
       const me = await context.queryClient.ensureQueryData(meQueryOptions)
-      throw redirect({
-        to: me.mustChangePassword
-          ? '/change-password'
-          : (search.redirect ?? '/'),
-      })
+      // a forced account stays on /login to render the change-password step
+      if (!me.mustChangePassword) {
+        throw redirect({ to: search.redirect ?? '/' })
+      }
     } catch (error) {
       if (isRedirect(error)) {
         throw error
