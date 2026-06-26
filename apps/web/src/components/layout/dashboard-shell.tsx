@@ -2,7 +2,7 @@ import type { ComponentType, JSX, ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { IconLayoutDashboard, IconUsers } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
-import { useAuth } from '@/lib/auth'
+import { useSignOut } from '@/features/auth/mutations'
 
 interface NavItem {
   to: string
@@ -28,7 +28,7 @@ export const DashboardShell = ({
 }: {
   children: ReactNode
 }): JSX.Element => {
-  const { logout } = useAuth()
+  const signOut = useSignOut()
 
   return (
     <div className="flex min-h-screen">
@@ -58,7 +58,7 @@ export const DashboardShell = ({
             size="sm"
             className="w-full justify-start text-muted-foreground"
             onClick={() => {
-              logout()
+              signOut.mutate()
             }}
           >
             Sign out
