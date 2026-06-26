@@ -21,7 +21,6 @@ export const user = pgTable('user', {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
   twoFactorEnabled: boolean('two_factor_enabled').default(false),
-  mustChangePassword: boolean('must_change_password').default(false),
 })
 
 export const account = pgTable(
@@ -44,6 +43,7 @@ export const account = pgTable(
     updatedAt: timestamp('updated_at')
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    mustChangePassword: boolean('must_change_password').default(false),
   },
   (table) => [index('account_userId_idx').on(table.userId)]
 )

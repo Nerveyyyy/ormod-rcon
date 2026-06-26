@@ -1,5 +1,5 @@
 {
-  "id": "ddd6e49c-4980-42b5-80f3-215a31884445",
+  "id": "8963dd4a-ba89-4934-a587-288e84e75677",
   "prevId": "63ed87bf-5fc2-4475-aaea-913896223101",
   "version": "7",
   "dialect": "postgresql",
@@ -86,6 +86,13 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
+        },
+        "must_change_password": {
+          "name": "must_change_password",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
         }
       },
       "indexes": {
@@ -766,13 +773,6 @@
         },
         "two_factor_enabled": {
           "name": "two_factor_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        },
-        "must_change_password": {
-          "name": "must_change_password",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,

@@ -32,7 +32,8 @@ describe('generated auth schema', () => {
     expect(columnNames(user)).not.toContain('banned')
   })
 
-  it('adds the mustChangePassword field', () => {
-    expect(columnNames(user)).toContain('must_change_password')
+  it('adds the mustChangePassword field on the credential account', () => {
+    expect(columnNames(account)).toContain('must_change_password')
+    expect(columnNames(user)).not.toContain('must_change_password')
   })
 })

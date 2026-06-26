@@ -2,7 +2,7 @@ import { uuidv7 } from 'uuidv7'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { captcha, organization, twoFactor } from 'better-auth/plugins'
-import { createAuthMiddleware } from 'better-auth/api'
+import { createAuthMiddleware, isAPIError } from 'better-auth/api'
 import { apiKey } from '@better-auth/api-key'
 import { redisStorage } from '@better-auth/redis-storage'
 import type { BetterAuthOptions, BetterAuthPlugin } from 'better-auth'
@@ -33,7 +33,7 @@ export const authBaseOptions = {
     enabled: true,
     disableSignUp: true,
   },
-  user: {
+  account: {
     additionalFields: {
       mustChangePassword: {
         type: 'boolean',
@@ -48,13 +48,21 @@ export const authBaseOptions = {
       if (ctx.path !== '/change-password') {
         return
       }
+      if (isAPIError(ctx.context.returned)) {
+        return
+      }
       const userId = ctx.context.session?.user?.id
       if (!userId) {
         return
       }
-      await ctx.context.internalAdapter.updateUser(userId, {
+      const accounts = await ctx.context.internalAdapter.findAccounts(userId)
+      const credential = accounts.find((a) => a.providerId === 'credential')
+      if (!credential) {
+        return
+      }
+      await ctx.context.internalAdapter.updateAccount(credential.id, {
         mustChangePassword: false,
-      })
+      } as Parameters<typeof ctx.context.internalAdapter.updateAccount>[1])
     }),
   },
   session: {

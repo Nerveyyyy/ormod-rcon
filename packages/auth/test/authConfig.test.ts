@@ -46,7 +46,7 @@ describe('auth config', () => {
   })
 
   it('declares the mustChangePassword field, not client-settable', () => {
-    const field = authBaseOptions.user.additionalFields.mustChangePassword
+    const field = authBaseOptions.account.additionalFields.mustChangePassword
     expect(field.type).toBe('boolean')
     expect(field.input).toBe(false)
     expect(field.defaultValue).toBe(false)

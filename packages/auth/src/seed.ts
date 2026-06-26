@@ -20,15 +20,15 @@ export const seedOwner = async (
     email: SEEDED_OWNER_EMAIL,
     name: 'Owner',
     emailVerified: true,
-    mustChangePassword: true,
-  } as Parameters<typeof ctx.internalAdapter.createUser>[0])
+  })
   const hashed = await ctx.password.hash(password)
   await ctx.internalAdapter.linkAccount({
     accountId: created.id,
     providerId: 'credential',
     password: hashed,
     userId: created.id,
-  })
+    mustChangePassword: true,
+  } as Parameters<typeof ctx.internalAdapter.linkAccount>[0])
 
   const organizationId = uuidv7()
   await db.insert(organization).values({
