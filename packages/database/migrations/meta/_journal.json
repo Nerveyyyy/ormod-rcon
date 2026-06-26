@@ -8,6 +8,13 @@
       "when": 1782429671784,
       "tag": "0000_flowery_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782479460247,
+      "tag": "0001_brave_shadowcat",
+      "breakpoints": true
     }
   ]
 }

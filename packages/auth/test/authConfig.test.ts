@@ -40,4 +40,15 @@ describe('auth config', () => {
     expect(API_KEY_RATE_LIMIT.timeWindow).toBe(60_000)
     expect(API_KEY_RATE_LIMIT.maxRequests).toBe(600)
   })
+
+  it('closes public sign-up', () => {
+    expect(authBaseOptions.emailAndPassword.disableSignUp).toBe(true)
+  })
+
+  it('declares the mustChangePassword field, not client-settable', () => {
+    const field = authBaseOptions.user.additionalFields.mustChangePassword
+    expect(field.type).toBe('boolean')
+    expect(field.input).toBe(false)
+    expect(field.defaultValue).toBe(false)
+  })
 })

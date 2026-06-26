@@ -30,6 +30,17 @@ export const authBaseOptions = {
   appName: 'ormod-rcon',
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
+  },
+  user: {
+    additionalFields: {
+      mustChangePassword: {
+        type: 'boolean',
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
+    },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7,
