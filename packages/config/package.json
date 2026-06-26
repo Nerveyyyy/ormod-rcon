@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./typescript/base.json": "./typescript/base.json",
+    "./typescript/build.json": "./typescript/build.json",
     "./biome/base.json": "./biome/base.json"
   }
 }

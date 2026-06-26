@@ -6,11 +6,11 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./crypto": {
-      "types": "./dist/crypto.d.ts",
+      "types": "./src/crypto.ts",
       "default": "./dist/crypto.js"
     }
   },
@@ -22,7 +22,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "db:check": "drizzle-kit check",
