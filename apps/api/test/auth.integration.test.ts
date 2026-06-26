@@ -140,4 +140,25 @@ describe.skipIf(!RUN)('first-time setup', () => {
     })
     expect(me.json().mustChangePassword).toBe(false)
   })
+
+  it('self-heals a half-seed missing the org and membership', async () => {
+    const { seedOwner } = await import('@ormod/auth')
+    const { member, organization } = await import('@ormod/database')
+
+    await app.db.delete(member)
+    await app.db.delete(organization)
+
+    const seeded = await seedOwner(app.auth, app.db, 'changeme')
+    expect(seeded).toBe(false)
+
+    const orgs = await app.db
+      .select({ slug: organization.slug })
+      .from(organization)
+    expect(orgs).toHaveLength(1)
+    expect(orgs[0]?.slug).toBe('ormod')
+
+    const members = await app.db.select({ role: member.role }).from(member)
+    expect(members).toHaveLength(1)
+    expect(members[0]?.role).toBe('owner')
+  })
 })
