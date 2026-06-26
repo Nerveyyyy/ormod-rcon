@@ -1,0 +1,108 @@
+name: ormod
+
+services:
+  postgres:
+    container_name: ormod-postgres
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ormod
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ormod']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    container_name: ormod-redis
+    image: redis:8-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redisinsight:
+    container_name: ormod-redisinsight
+    image: redis/redisinsight:latest
+    profiles:
+      - tools
+    ports:
+      - '5540:5540'
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      - redis
+
+  adminer:
+    container_name: ormod-adminer
+    image: adminer:latest
+    profiles:
+      - tools
+    ports:
+      - '8080:8080'
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+
+  migrate:
+    container_name: ormod-migrate
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command:
+      - node
+      - -e
+      - import('@ormod/database').then(({ runMigrations }) => runMigrations(process.env.DATABASE_URL)).then(() => process.exit(0)).catch((err) => { console.error(err); process.exit(1) })
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ormod
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    container_name: ormod-api
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      # .env carries localhost URLs for host dev; inside the compose network the
+      # api reaches the datastores by service name, so override just these two.
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ormod
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '3000:3000'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  redis-data:
+  redisinsight-data:
